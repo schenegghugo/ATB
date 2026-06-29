@@ -23,7 +23,9 @@
 #include "core/Grid.h"
 #include "core/Spells.h"
 #include "data/BuildRepository.h"
+#include "data/CatalogJson.h"
 #include "render/BuildEditorScreen.h"
+#include "render/ContentPaths.h"
 #include "render/Renderer.h"
 
 #include "raylib.h"
@@ -87,6 +89,26 @@ std::string spellLabel(const Entity& u, int slot) {
 
 int main() {
     Session session;
+
+    // Load the spell catalog from data/catalog.json. Policy:
+    //   - found & valid    -> use it
+    //   - absent           -> fall back to the built-in default (with a notice)
+    //   - present & invalid -> fail loudly before opening a window (never
+    //                          silently fall back — that would hide corruption)
+    if (std::optional<std::string> path = render::findContent("catalog.json")) {
+        CatalogLoad load = loadCatalogFromFile(*path);
+        if (!load.ok) {
+            TraceLog(LOG_ERROR, "Catalog '%s' is invalid:", path->c_str());
+            for (const std::string& e : load.errors) TraceLog(LOG_ERROR, "  - %s", e.c_str());
+            return 1;
+        }
+        session.catalog = std::move(load.catalog);
+        TraceLog(LOG_INFO, "Loaded catalog '%s' v%s (sha256 %.12s…)", path->c_str(),
+                 load.version.c_str(), load.sha256.c_str());
+    } else {
+        TraceLog(LOG_WARNING, "No data/catalog.json found — using the built-in default catalog.");
+    }
+
     session.repo->save(pyromancerBuild()); // seed the store (stands in for the DB)
     session.repo->save(bruiserBuild());
 

@@ -247,19 +247,24 @@ the file/`sha256` checks. `tb_sha256_demo` (known-answer vectors). Enum coverage
 is compile-time (`static_assert`s, 1.2). CI also runs a **drift guard**:
 regenerate `data/catalog.json` and `diff` it against the committed file.
 
-### 1.6 ☐ Wire into the app + data-path resolution
-`Session` loads `data/catalog.json`. **Policy:** valid → use; *absent* → fall
-back to `makeDefaultCatalog()` with a notice; *malformed* → fail loudly (never
-silently fall back — that hides corruption). Resolve where `data/` lives
-relative to the binary — **shared with sprite packs**, so solve it once.
+### 1.6 ☑ Wire into the app + data-path resolution
+`main.cpp` loads the catalog **before `InitWindow`** via the new
+`render/ContentPaths.{h,cpp}` resolver (`$ATB_DATA_DIR` → `<exe>/data` →
+`<exe>/../data` → `<exe>/../../data` → `./data`; uses Raylib's
+`GetApplicationDirectory`, frontend-only). **Policy verified end-to-end:** valid
+→ use it (logs version + sha256); *absent* → fall back to `makeDefaultCatalog()`
+with a `WARNING`; *malformed* → log every contextual error and exit 1 before a
+window opens (no silent fallback). The path resolver is **shared with sprite
+packs** (Phase 2). `core/` untouched; headless build/tests unaffected.
 
-**Acceptance:** the game and all demos run off `data/catalog.json`; a bad file is
-rejected with a clear, contextual error; `core/` is untouched.
+**Acceptance:** ☑ the game runs off `data/catalog.json`; a bad file is rejected
+with clear, contextual errors before launch; `core/` is untouched.
 
-**Phase 1 status:** 1.1–1.5 done — the JSON layer, enum tables, loader/validator,
-generator + `sha256`, and the committed `data/catalog.json` (with CI drift guard)
-are all in and green. **Remaining: 1.6** (wire `Session` to the file + shared
-data-path resolution).
+**Phase 1 complete.** ✅ The catalog is now data-driven: hand-rolled JSON layer
+(1.1), enum tables (1.2), strict loader/validator (1.3), generator + `sha256` +
+file loader (1.4), round-trip/validation tests + CI drift guard (1.5), and the
+app wired to the file with a safe load policy (1.6). Content modding is unlocked
+and the PvP trust anchor (`sha256`) is in place.
 
 ---
 

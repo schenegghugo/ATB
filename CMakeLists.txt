@@ -111,6 +111,7 @@ add_executable(tactical_battler
     src/main.cpp
     src/render/Renderer.cpp
     src/render/BuildEditorScreen.cpp
+    src/render/ContentPaths.cpp
 )
 target_link_libraries(tactical_battler PRIVATE tb_core raylib)
 
