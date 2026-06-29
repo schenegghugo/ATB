@@ -9,6 +9,11 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
+# Build the Raylib graphical client. Turn OFF for headless/server/CI builds:
+# `core/` + the demos need no graphics, so -DTB_BUILD_GUI=OFF skips Raylib
+# entirely (no fetch, no GL/X11) and builds in seconds.
+option(TB_BUILD_GUI "Build the Raylib graphical client" ON)
+
 # ---------------------------------------------------------------------------
 # Headless gameplay core — no Raylib dependency. This is the heart of the game
 # and can be linked into tests / a server build with zero graphics.
@@ -46,7 +51,9 @@ target_link_libraries(tb_balance PRIVATE tb_core)
 
 # ---------------------------------------------------------------------------
 # Raylib (graphical frontend). Use a system install if present, otherwise fetch.
+# Skipped entirely when TB_BUILD_GUI is OFF (headless/server/CI builds).
 # ---------------------------------------------------------------------------
+if(TB_BUILD_GUI)
 find_package(raylib 4.5 QUIET)
 if(NOT raylib_FOUND)
     include(FetchContent)
@@ -92,3 +99,4 @@ target_link_libraries(tactical_battler PRIVATE tb_core raylib)
 if(UNIX AND NOT APPLE)
     target_link_libraries(tactical_battler PRIVATE m pthread dl)
 endif()
+endif() # TB_BUILD_GUI

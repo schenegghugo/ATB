@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  headless:
+    name: Headless core + tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: sudo apt-get update && sudo apt-get install -y cmake g++ ninja-build
+
+      - name: Configure (no GUI, no Raylib)
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DTB_BUILD_GUI=OFF
+
+      - name: Build core + headless binaries
+        run: cmake --build build -j
+
+      - name: Smoke + assertion tests
+        run: |
+          set -e
+          ./build/tb_headless
+          ./build/tb_build_demo
+          ./build/tb_spells_demo
+          ./build/tb_ai_demo
+
+      - name: Balance sanity (fixed seed, fast)
+        run: ./build/tb_balance 200 1
+
+  gui-build:
+    name: GUI compiles (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install GUI deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ ninja-build \
+            libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev \
+            libxcursor-dev libxi-dev libwayland-dev libxkbcommon-dev \
+            wayland-protocols
+
+      - name: Configure + build full client
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target tactical_battler -j
