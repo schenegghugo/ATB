@@ -1,0 +1,6 @@
+/build/
+*.o
+*.a
+tb_headless
+tactical_battler
+balance_report.txt

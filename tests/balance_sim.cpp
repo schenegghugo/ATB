@@ -1,0 +1,359 @@
+//
+// balance_sim.cpp — Monte-Carlo balance harness + detailed report.
+//
+// Generates random classless builds, runs thousands of AI-vs-AI matches on
+// random arenas, and writes a full report (stdout + file) covering outcomes,
+// how matches end, length distribution, per-spell win rates with confidence
+// intervals, cost-efficiency, stat-investment, and spell-pair synergies.
+//
+//   usage: tb_balance [matches] [seed] [outfile]
+//          defaults: 4000  12345  balance_report.txt
+//
+// NOTE: the planner casts every spell except Portal (its step-on-entry teleport
+// needs deeper lookahead), so Portal's numbers reflect point opportunity-cost.
+//
+#include "core/AI.h"
+#include "core/Battle.h"
+#include "core/Build.h"
+#include "core/Grid.h"
+#include "core/Spells.h"
+
+#include <algorithm>
+#include <array>
+#include <chrono>
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <fstream>
+#include <iostream>
+#include <random>
+#include <sstream>
+#include <string>
+#include <vector>
+
+using namespace tb;
+
+namespace {
+
+constexpr int kMaxSpellId = 12; // ids 1..11
+constexpr int kHalfTurnCap = 120;
+
+bool isOffensive(int id) {
+    return id == spellid::Attack || id == spellid::Fireball || id == spellid::Poison ||
+           id == spellid::Knockback || id == spellid::Harpoon;
+}
+
+// ---- Build generation ------------------------------------------------------
+struct Build {
+    CharacterBuild def;
+    int spellPts = 0;
+    int statPts = 0;
+};
+
+int statCost(const StatAllocation& s, const BuildRules& r) {
+    return s.hpPurchases * r.hpCost + s.bonusAp * r.apCost + s.bonusMp * r.mpCost;
+}
+
+Build randomBuild(std::mt19937& rng, const SpellCatalog& catalog, const BuildRules& rules) {
+    CharacterBuild b;
+    b.name = "rnd";
+    std::vector<int> ids;
+    for (const SpellDef& d : catalog.all()) ids.push_back(d.id);
+    std::shuffle(ids.begin(), ids.end(), rng);
+    for (int id : ids) {
+        b.spellIds.push_back(id);
+        if (!validateBuild(b, catalog, rules).ok) b.spellIds.pop_back();
+    }
+    if (!std::any_of(b.spellIds.begin(), b.spellIds.end(), isOffensive)) {
+        b.spellIds.clear();
+        b.spellIds.push_back(spellid::Attack);
+    }
+    std::uniform_int_distribution<int> pick(0, 2);
+    for (int guard = 0; guard < 24; ++guard) {
+        StatAllocation trial = b.stats;
+        switch (pick(rng)) {
+            case 0: ++trial.hpPurchases; break;
+            case 1: ++trial.bonusAp; break;
+            default: ++trial.bonusMp; break;
+        }
+        CharacterBuild probe = b;
+        probe.stats = trial;
+        if (validateBuild(probe, catalog, rules).ok) b.stats = trial;
+    }
+    Build out;
+    out.def = b;
+    out.statPts = statCost(b.stats, rules);
+    for (int id : b.spellIds)
+        if (const SpellDef* d = catalog.find(id)) out.spellPts += d->buildCost;
+    return out;
+}
+
+// ---- Match simulation ------------------------------------------------------
+void takeTurn(Battle& b) { runEnemyTurn(b, /*autoEndTurn=*/true); }
+
+struct Outcome {
+    int result = 0; // +1 A (first actor), -1 B, 0 draw
+    int length = 0;
+    DamageSource source = DamageSource::Spell;
+};
+
+Outcome runMatch(const SpellCatalog& catalog, const BuildRules& rules, const CharacterBuild& A,
+                 const CharacterBuild& B, unsigned seed) {
+    ArenaConfig cfg;
+    cfg.seed = seed;
+    Grid grid = generateArena(cfg);
+    std::vector<Entity> roster;
+    roster.push_back(instantiate(A, catalog, Faction::Player, cfg.playerSpawn, rules));
+    roster.push_back(instantiate(B, catalog, Faction::Enemy, cfg.enemySpawn, rules));
+    Battle battle(std::move(grid), std::move(roster));
+
+    Outcome o;
+    for (; o.length < kHalfTurnCap && battle.phase() != Phase::Finished; ++o.length) takeTurn(battle);
+    auto w = battle.winner();
+    if (w) {
+        o.result = (*w == Faction::Player) ? 1 : -1;
+        o.source = battle.lastDeathSource();
+    }
+    return o;
+}
+
+// ---- Stats helpers ---------------------------------------------------------
+struct CI { double mean, lo, hi; };
+CI wilson(long wins, long n) {
+    if (n == 0) return {0, 0, 0};
+    const double z = 1.96, p = static_cast<double>(wins) / n;
+    const double d = 1.0 + z * z / n;
+    const double c = (p + z * z / (2.0 * n)) / d;
+    const double m = z * std::sqrt(p * (1 - p) / n + z * z / (4.0 * n * n)) / d;
+    return {p, std::max(0.0, c - m), std::min(1.0, c + m)};
+}
+double pct(double f) { return 100.0 * f; }
+std::string bar(double frac, int width = 22) {
+    int n = static_cast<int>(std::lround(frac * width));
+    return std::string(std::max(0, n), '#') + std::string(std::max(0, width - n), '.');
+}
+double percentile(const std::vector<int>& sorted, double q) {
+    if (sorted.empty()) return 0;
+    double idx = q * (sorted.size() - 1);
+    size_t lo = static_cast<size_t>(idx);
+    double frac = idx - lo;
+    if (lo + 1 >= sorted.size()) return sorted[lo];
+    return sorted[lo] * (1 - frac) + sorted[lo + 1] * frac;
+}
+
+struct SideAgg {
+    std::array<long, kMaxSpellId> appears{}, wins{};
+    std::array<std::array<long, kMaxSpellId>, kMaxSpellId> pairN{}, pairW{};
+    // stat presence
+    long hpAppear = 0, hpWin = 0, apAppear = 0, apWin = 0, mpAppear = 0, mpWin = 0;
+    long noStatAppear = 0, noStatWin = 0;
+    std::array<long, 4> bucketN{}, bucketW{}; // by statPts: 0, 1-3, 4-6, 7+
+};
+
+void foldSide(SideAgg& g, const Build& b, bool won) {
+    const auto& ids = b.def.spellIds;
+    for (int id : ids) { g.appears[id]++; if (won) g.wins[id]++; }
+    for (size_t i = 0; i < ids.size(); ++i)
+        for (size_t j = i + 1; j < ids.size(); ++j) {
+            int a = std::min(ids[i], ids[j]), c = std::max(ids[i], ids[j]);
+            g.pairN[a][c]++; if (won) g.pairW[a][c]++;
+        }
+    auto bump = [&](long& ap, long& wn, bool present) { if (present) { ap++; if (won) wn++; } };
+    bump(g.hpAppear, g.hpWin, b.def.stats.hpPurchases > 0);
+    bump(g.apAppear, g.apWin, b.def.stats.bonusAp > 0);
+    bump(g.mpAppear, g.mpWin, b.def.stats.bonusMp > 0);
+    if (b.statPts == 0) { g.noStatAppear++; if (won) g.noStatWin++; }
+    int bucket = b.statPts == 0 ? 0 : b.statPts <= 3 ? 1 : b.statPts <= 6 ? 2 : 3;
+    g.bucketN[bucket]++; if (won) g.bucketW[bucket]++;
+}
+
+} // namespace
+
+int main(int argc, char** argv) {
+    const int matches = argc > 1 ? std::atoi(argv[1]) : 4000;
+    const unsigned seed = argc > 2 ? static_cast<unsigned>(std::atoi(argv[2])) : 12345u;
+    const std::string outfile = argc > 3 ? argv[3] : "balance_report.txt";
+
+    SpellCatalog catalog = makeDefaultCatalog();
+    BuildRules rules{};
+    StormConfig storm{}; // defaults used by runMatch
+    std::mt19937 rng(seed);
+
+    long aWins = 0, bWins = 0, draws = 0;
+    long bySpell = 0, byStorm = 0, byCollision = 0;
+    long totalLen = 0;
+    std::vector<int> lengths;
+    lengths.reserve(matches);
+    SideAgg g;
+
+    const auto t0 = std::chrono::steady_clock::now();
+    for (int m = 0; m < matches; ++m) {
+        Build A = randomBuild(rng, catalog, rules);
+        Build B = randomBuild(rng, catalog, rules);
+        Outcome o = runMatch(catalog, rules, A.def, B.def, rng());
+
+        lengths.push_back(o.length);
+        totalLen += o.length;
+        if (o.result > 0) ++aWins;
+        else if (o.result < 0) ++bWins;
+        else ++draws;
+        if (o.result != 0) {
+            switch (o.source) {
+                case DamageSource::Spell: ++bySpell; break;
+                case DamageSource::Storm: ++byStorm; break;
+                case DamageSource::Collision: ++byCollision; break;
+            }
+        }
+        foldSide(g, A, o.result > 0);
+        foldSide(g, B, o.result < 0);
+    }
+    const double elapsed =
+        std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+    std::sort(lengths.begin(), lengths.end());
+
+    // ---- Compose report ----------------------------------------------------
+    std::ostringstream r;
+    auto line = [&](const std::string& s = "") { r << s << "\n"; };
+    auto rule = [&]() { r << std::string(74, '-') << "\n"; };
+
+    r << "================ TACTICAL BATTLER — BALANCE REPORT ================\n";
+    line();
+    line("RUN");
+    r << "  matches            " << matches << "\n";
+    r << "  seed               " << seed << "\n";
+    r << "  wall time          " << elapsed << " s  ("
+      << (elapsed > 0 ? matches / elapsed : 0) << " matches/s)\n";
+    r << "  point budget       " << rules.pointBudget << "\n";
+    r << "  fireball cost      " << catalog.find(spellid::Fireball)->buildCost << " pt\n";
+    r << "  closing ring       from round " << storm.startRound << ", " << storm.damage
+      << " dmg/turn outside the safe square\n";
+    line();
+    rule();
+    line("OUTCOMES   (A = first actor; symmetric matchups, so A% over 50 = first-move edge)");
+    auto outRow = [&](const char* name, long w) {
+        CI c = wilson(w, matches);
+        char buf[160];
+        std::snprintf(buf, sizeof buf, "  %s  %s  %5.1f%%  [%4.1f–%4.1f]  n=%ld", name,
+                      bar(c.mean).c_str(), pct(c.mean), pct(c.lo), pct(c.hi), w);
+        r << buf << "\n";
+    };
+    outRow("A wins (1st)", aWins);
+    outRow("B wins (2nd)", bWins);
+    outRow("draws (cap) ", draws);
+    line();
+    line("HOW DECISIVE MATCHES END");
+    long dec = aWins + bWins;
+    auto endRow = [&](const char* name, long c) {
+        double f = dec ? double(c) / dec : 0;
+        char buf[160];
+        std::snprintf(buf, sizeof buf, "  %s  %s  %5.1f%%  n=%ld", name, bar(f).c_str(), pct(f), c);
+        r << buf << "\n";
+    };
+    endRow("spell kill    ", bySpell);
+    endRow("ring (storm)  ", byStorm);
+    endRow("collision     ", byCollision);
+    line();
+    line("MATCH LENGTH (half-turns)");
+    {
+        char buf[200];
+        std::snprintf(buf, sizeof buf,
+                      "  min %d   p10 %.0f   median %.0f   mean %.1f   p90 %.0f   max %d",
+                      lengths.front(), percentile(lengths, .10), percentile(lengths, .50),
+                      (double)totalLen / matches, percentile(lengths, .90), lengths.back());
+        r << buf << "\n";
+    }
+    {
+        const int bw = 8, nb = 7; // buckets of 8 half-turns, last is overflow
+        std::array<long, 7> hist{};
+        for (int v : lengths) hist[std::min(v / bw, nb - 1)]++;
+        for (int i = 0; i < nb; ++i) {
+            int lo = i * bw, hi = lo + bw - 1;
+            char label[24];
+            if (i == nb - 1) std::snprintf(label, sizeof label, "%2d+   ", lo);
+            else std::snprintf(label, sizeof label, "%2d-%-2d ", lo, hi);
+            r << "  " << label << bar(double(hist[i]) / matches) << "  " << hist[i] << "\n";
+        }
+    }
+    line();
+    rule();
+    line("PER-SPELL  (win rate of builds containing the spell, 95% Wilson CI)");
+    line("  spell        cost   pick%   winrate  [   95% CI   ]   lift   val/pt");
+    struct Row { int id; double wr, lo, hi, pick; long n; };
+    std::vector<Row> rows;
+    for (const SpellDef& d : catalog.all()) {
+        CI c = wilson(g.wins[d.id], g.appears[d.id]);
+        rows.push_back({d.id, c.mean, c.lo, c.hi, double(g.appears[d.id]) / (2.0 * matches),
+                        g.appears[d.id]});
+    }
+    std::sort(rows.begin(), rows.end(), [](const Row& a, const Row& b) { return a.wr > b.wr; });
+    for (const Row& row : rows) {
+        const SpellDef* d = catalog.find(row.id);
+        double lift = pct(row.wr) - 50.0;
+        double valPerPt = d->buildCost ? lift / d->buildCost : 0.0;
+        char buf[160];
+        std::snprintf(buf, sizeof buf,
+                      "  %-10s   %2dpt  %5.1f%%  %6.1f%%  [%5.1f–%5.1f]  %+5.1f  %+6.2f%s",
+                      d->key.c_str(), d->buildCost, pct(row.pick), pct(row.wr), pct(row.lo),
+                      pct(row.hi), lift, valPerPt, row.id == spellid::Portal ? "  (AI-unused)" : "");
+        r << buf << "\n";
+    }
+    line();
+    line("STAT INVESTMENT");
+    auto statRow = [&](const char* name, long w, long n) {
+        CI c = wilson(w, n);
+        char buf[160];
+        std::snprintf(buf, sizeof buf, "  %s  %5.1f%%  [%4.1f–%4.1f]  n=%ld", name, pct(c.mean),
+                      pct(c.lo), pct(c.hi), n);
+        r << buf << "\n";
+    };
+    statRow("bought +HP   ", g.hpWin, g.hpAppear);
+    statRow("bought +AP   ", g.apWin, g.apAppear);
+    statRow("bought +MP   ", g.mpWin, g.mpAppear);
+    statRow("no stat spend", g.noStatWin, g.noStatAppear);
+    {
+        const char* names[4] = {"0 pts ", "1-3pts", "4-6pts", "7+ pts"};
+        r << "  by stat-point spend:\n";
+        for (int i = 0; i < 4; ++i)
+            statRow(names[i], g.bucketW[i], g.bucketN[i]);
+    }
+    line();
+    line("TOP SPELL SYNERGIES  (pairs co-picked >=" "30 times, by joint win rate)");
+    struct Pair { int a, b; double wr; long n; };
+    std::vector<Pair> pairs;
+    for (int a = 0; a < kMaxSpellId; ++a)
+        for (int b = a + 1; b < kMaxSpellId; ++b)
+            if (g.pairN[a][b] >= 30)
+                pairs.push_back({a, b, double(g.pairW[a][b]) / g.pairN[a][b], g.pairN[a][b]});
+    std::sort(pairs.begin(), pairs.end(), [](const Pair& x, const Pair& y) { return x.wr > y.wr; });
+    line("  pair                       winrate   n     vs solo-avg");
+    auto solo = [&](int id) { return double(g.wins[id]) / std::max<long>(1, g.appears[id]); };
+    for (size_t i = 0; i < pairs.size() && i < 12; ++i) {
+        const Pair& p = pairs[i];
+        double soloAvg = (solo(p.a) + solo(p.b)) / 2.0;
+        char buf[160];
+        std::snprintf(buf, sizeof buf, "  %-10s + %-10s   %5.1f%%  %4ld   %+5.1f",
+                      catalog.find(p.a)->key.c_str(), catalog.find(p.b)->key.c_str(), pct(p.wr),
+                      p.n, pct(p.wr - soloAvg));
+        r << buf << "\n";
+    }
+    line();
+    rule();
+    line("READING IT");
+    line("  - lift = winrate - 50%. val/pt = lift per build point (cost efficiency).");
+    line("  - 'vs solo-avg' > 0 means the pair wins more than its two spells do alone");
+    line("    (emergent synergy, e.g. poison + invisible).");
+    line("  - Non-overlapping CIs between two spells => a real difference, not noise.");
+    line("  - Portal is AI-unused; treat its row as a point opportunity-cost baseline.");
+    line("  - Build generator fills spells first, stats with leftover points, so the stat");
+    line("    section compares lean+stats builds against spell-crammed ones (a real signal:");
+    line("    extra spells you're too AP-starved to cast lose to durability).");
+
+    // ---- Emit --------------------------------------------------------------
+    std::cout << r.str();
+    std::ofstream f(outfile);
+    if (f) {
+        f << r.str();
+        std::cout << "\n(report written to " << outfile << ")\n";
+    }
+    return 0;
+}
