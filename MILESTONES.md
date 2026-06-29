@@ -204,22 +204,33 @@ fields are range/integrality-checked by the mapper. Covered by `tb_json_demo`
 (30 checks: types, escapes, `\u`/surrogates, strict errors, round-trip) and wired
 into CI. Builds clean under `-Wall -Wextra`; `core/` untouched.
 
-### 1.2 ☐ `data/SpellEnums.h` — the extension point
+### 1.2 ☑ `data/SpellEnums.h` — the extension point
 One `{enum, string}` table per enum (`TargetShape`, `Effect::Type`,
-`StatusEffect::Kind`, `GroundKind`) + generic `toString` / `fromString<E>`
-helpers. Adding a core enum value = one new row (covers future `healOverTime`,
-new shapes, etc.). A test asserts every enum value has a mapping.
+`StatusEffect::Kind`, `GroundKind`) + generic `constexpr toString` /
+`fromString<E>` helpers. Adding a core enum value = one new row (covers future
+`healOverTime`, new shapes, etc.). **Compile-time `static_assert`s** enforce
+per-table integrity (round-trips, no duplicate keys/values, expected counts), so
+an inconsistent table fails the build; `tb_enums_demo` adds runtime checks incl.
+the unknown-string path (12 checks). Wired into CI; header-only, `core/`
+untouched.
 
-### 1.3 ☐ `data/CatalogJson.{h,cpp}` — map JSON ↔ `SpellCatalog`
-`CatalogLoad loadCatalogFromString/FromFile(...)` and
+### 1.3 ☑ `data/CatalogJson.{h,cpp}` — map JSON ↔ `SpellCatalog`
+`CatalogLoad loadCatalogFromString(...)` (→ `{ok, catalog, version, errors}`) and
 `serializeCatalog(catalog, version)`. **Strict validation** collecting *all*
-errors with context (`spell "poison" → effect[1]: ...`): unique/positive ids,
-unique keys, `minRange ≤ maxRange`, valid enums, required per-type payloads,
-**unknown fields rejected**. `core/`'s `SpellCatalog` API is unchanged.
+errors with context (`spells[2] "poison": effect[1]: ...`): unique/positive ids,
+unique keys, non-negative costs/ranges, `minRange ≤ maxRange`, valid enums,
+required-and-exclusive per-type effect payloads, integer/range checks,
+**unknown fields rejected**. Optional fields default to the struct defaults
+(name → capitalized key). `core/` untouched.
 
 Schema versioning: `schema` (int, structural — bump only on breaking change) is
 distinct from `version` (author content label). Adding enum strings is
 backward-compatible and needs no `schema` bump.
+
+Covered by `tb_catalog_demo` (28 checks): default-catalog byte-identical
+round-trip (serialize→load→serialize), field-level fidelity, hand-authored
+defaults, and 12 malformed-input rejections. Wired into CI; builds clean under
+`-Wall -Wextra`. (`loadCatalogFromFile` + `sha256` land in 1.4.)
 
 ### 1.4 ☐ `makeDefaultCatalog()` becomes the generator + `sha256`
 A `tb_catalog_gen` target emits `data/catalog.json` from `makeDefaultCatalog()`
@@ -273,18 +284,33 @@ contributor pool (artists). Can overlap Phase 1. See `ARCHITECTURE.md` §6.
 - **v1**: static `rect` per key + palette, one atlas page, hot-reload. Animation
   (`anim`/`cast`) fields are reserved in the manifest but optional.
 
-### 2.3 ☐ Animations (after the static seam works)
-- A **clip** = ordered atlas sub-rects + `fps` + `loop`. **Ambient** (`anim`,
-  loops) vs **event** (`cast`, later `hit`/`death`, played once on the matching
-  engine state-delta, then back to ambient). Cheap — no extra texture binds.
+### 2.3 ☐ Combat log + structured engine event stream
+- The engine emits a typed, ordered **event stream** as it resolves a turn
+  (`Move`, `Cast`, `Damage`, `Heal`, `Status`, `Death`, `Storm`, …) — pure data,
+  deterministic, no I/O. A small `Battle` addition (append to a log vector); it
+  does **not** change resolution outcomes. Replaces the ad-hoc status strings
+  `main.cpp` builds today.
+- GUI: a scrolling **combat log panel** renders events as text
+  ("Pyromancer casts Fireball → 14 dmg to Bruiser", deaths, poison ticks, ring
+  damage), with scrollback + autoscroll.
+- **Shared infrastructure:** the same stream drives animation event-clips (2.4),
+  and is the natural basis for **replays** (Phase 5) and **PvP state deltas**
+  (Phase 4). Build it once, here.
 
-### 2.4 ☐ Ship a `packs/default/` example
+### 2.4 ☐ Animations (after the static seam works)
+- A **clip** = ordered atlas sub-rects + `fps` + `loop`. **Ambient** (`anim`,
+  loops) vs **event** (`cast`, later `hit`/`death`, played once when the matching
+  **engine event** from 2.3 arrives, then back to ambient). Cheap — no extra
+  texture binds.
+
+### 2.5 ☐ Ship a `packs/default/` example
 A copy-able starter (an atlas + manifest, or palette-only) + a short
 `docs/sprite-packs.md` authoring guide (incl. how to export an atlas from
 TexturePacker / free-tex-packer or hand-author rects).
 
 **Acceptance:** spells are clickable; a partial pack restyles only what it
-defines and everything else falls back cleanly; no server/authority code touched.
+defines and everything else falls back cleanly; the combat log narrates the
+fight; no server/authority code touched.
 
 ---
 
@@ -369,8 +395,16 @@ client outcomes.
 SQLite (the `BuildRepository` / `schema.sql` seam) for accounts, results,
 ratings. Custom lobbies pin a host catalog by hash.
 
+### 4.6 ☐ Lobby & in-match chat
+Text chat over the existing transport (4.4): lobby chat + in-match chat. The
+server relays messages scoped to the lobby/match, with basic safety levers
+(rate-limit, per-user mute, server-side length cap). Purely additive on the
+netcode — no engine involvement. GUI: a chat panel sharing the HUD with the
+combat log (2.3).
+
 **Acceptance:** two clients play an authoritative match on the self-hosted
-server; a tampered client cannot affect the outcome.
+server; a tampered client cannot affect the outcome; players can chat in the
+lobby and during the match.
 
 ---
 

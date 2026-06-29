@@ -26,6 +26,7 @@ add_library(tb_core STATIC
     src/core/Build.cpp
     src/data/BuildRepository.cpp
     src/data/Json.cpp
+    src/data/CatalogJson.cpp
 )
 target_include_directories(tb_core PUBLIC src)
 target_compile_options(tb_core PRIVATE
@@ -49,6 +50,12 @@ target_link_libraries(tb_ai_demo PRIVATE tb_core)
 
 add_executable(tb_json_demo tests/json_demo.cpp)
 target_link_libraries(tb_json_demo PRIVATE tb_core)
+
+add_executable(tb_enums_demo tests/enums_demo.cpp)
+target_link_libraries(tb_enums_demo PRIVATE tb_core)
+
+add_executable(tb_catalog_demo tests/catalog_demo.cpp)
+target_link_libraries(tb_catalog_demo PRIVATE tb_core)
 
 add_executable(tb_balance tests/balance_sim.cpp)
 target_link_libraries(tb_balance PRIVATE tb_core)

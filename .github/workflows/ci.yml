@@ -25,6 +25,8 @@ jobs:
         run: |
           set -e
           ./build/tb_json_demo
+          ./build/tb_enums_demo
+          ./build/tb_catalog_demo
           ./build/tb_headless
           ./build/tb_build_demo
           ./build/tb_spells_demo
