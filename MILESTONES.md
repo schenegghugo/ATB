@@ -8,6 +8,10 @@ this file is the *sequence* and the *step-by-step* for getting there.
 **Phase order:** CI + contributing → catalog loader (with hash) → spell bar +
 sprite packs → pluggable AI → networked PvP → replays.
 
+Off the critical path, a **Web/WASM build** (see *Parallel track* below) can be
+picked up anytime now that the GUI exists — it's frontend-only and independent of
+the content and PvP work.
+
 **The one rule:** do not start any netcode before the catalog loader, content
 hash, and serialization round-trip tests exist (Phase 1 + the first step of
 Phase 4). PvP without those is built on sand.
@@ -22,7 +26,7 @@ The highest-leverage work, and the easiest to skip. A public sandbox lives or
 dies on whether a stranger can contribute without you hand-reviewing every line.
 CI is what makes the "fork → edit a spell → open a PR" path *safe to merge*.
 
-### 0.1 ☐ Add a `TB_BUILD_GUI` CMake option (prerequisite for fast CI)
+### 0.1 ☑ Add a `TB_BUILD_GUI` CMake option (prerequisite for fast CI)
 
 CI should build and test the headless core **without** dragging in Raylib (which
 FetchContent would clone + compile — slow and brittle on a runner). This also
@@ -50,7 +54,7 @@ endif()
 builds `tb_core` + all five headless binaries and **never fetches Raylib**.
 `-DTB_BUILD_GUI=ON` (the default) still builds the full game.
 
-### 0.2 ☐ Confirm every test fails loudly
+### 0.2 ☑ Confirm every test fails loudly
 
 CI gates on exit codes. Current state:
 
@@ -62,7 +66,7 @@ CI gates on exit codes. Current state:
 **Acceptance:** introducing a deliberate regression makes at least one binary
 exit non-zero.
 
-### 0.3 ☐ Add the CI workflow
+### 0.3 ☑ Add the CI workflow
 
 Create `.github/workflows/ci.yml`:
 
@@ -111,7 +115,7 @@ Notes:
 **Acceptance:** the workflow is green on `main` and on a PR; a PR that breaks a
 test goes red.
 
-### 0.4 ☐ (Optional) GUI compile job
+### 0.4 ☑ (Optional) GUI compile job
 
 Catches `render/` breakage. Slower (compiles Raylib), so keep it a separate job;
 consider caching `build/_deps` later if it drags.
@@ -139,30 +143,45 @@ consider caching `build/_deps` later if it drags.
 job is compile-only by design. `main.cpp` already bails cleanly when there's no
 display.)
 
-### 0.5 ☐ Turn on branch protection
+### 0.5 ☑ Turn on branch protection
 
-On GitHub: **Settings → Branches → Add branch ruleset** for `main` →
+A branch ruleset (**Settings → Rules → Rulesets → New branch ruleset**) is
+active on the default branch. Recorded configuration:
 
-1. Require a pull request before merging.
-2. Require status checks to pass → select **`Headless core + tests`**.
-3. (Optional) require the check be up to date with `main`.
+- **Name:** `protect-main`; **Enforcement:** Active.
+- **Target:** include default branch.
+- **Rules:** restrict deletions ON; block force pushes ON; require a pull
+  request before merging ON; require status checks to pass ON.
+- **Pull request:** required approvals **0** (solo maintainer — can't self-approve;
+  PR + green CI is the gate); require conversation resolution ON; merge method
+  **squash**.
+- **Required status check:** `Headless core + tests` (the CI job name), with
+  "require branches up to date" ON.
+- **Bypass:** Repository admin (Always) — the maintainer can push directly;
+  external contributors are fully gated.
 
-**Acceptance:** you cannot push a red commit straight to `main`.
+Note for future checks: a status check only appears in the selector after it has
+reported at least once, so the workflow must have run before it can be required.
 
-### 0.6 ☐ `CONTRIBUTING.md` + good first issues
+**Acceptance:** ☑ a red commit cannot be merged into `main` via PR; direct pushes
+to `main` are blocked for non-admins.
 
-- `CONTRIBUTING.md`: how to build (`cmake -S . -B build && cmake --build build`),
-  how to run the tests, the `core/` "no graphics, no DB" rule, and a pointer to
-  `ARCHITECTURE.md` before extending the engine or adding content.
-- File 2–3 **good first issues** from the known backlog:
+### 0.6 ◐ `CONTRIBUTING.md` + good first issues
+
+- ☑ `CONTRIBUTING.md` — build/test instructions (incl. `-DTB_BUILD_GUI=OFF`), the
+  `core/` "no graphics, no DB" rule + determinism invariant, contribution-type
+  table, PR/CI process, code style, and a **WebAssembly/itch.io** "help wanted"
+  section (pure C++20 core + Raylib's Emscripten support → in-browser build).
+- ☐ File 2–3 **good first issues** from the known backlog (do on GitHub):
   - *Fireball radius buff* — weakest attack (~43%); tune in `makeDefaultCatalog`.
   - *Teach the AI to use Portal* — currently unused (its step-on-entry mechanic
     needs deeper planning than the beam reaches; see `AI.cpp`).
   - *Add a new spell from existing effects* — pure data, no engine change.
 - (Optional) issue + PR templates.
 
-**Phase 0 done when:** PRs are gated by green CI on `main`, and a newcomer has a
-documented build/test path and a labelled on-ramp.
+**Phase 0 status:** CI (0.1–0.4) and the branch ruleset (0.5) are live — PRs are
+gated by green CI and `main` is protected. **Remaining: 0.6** (CONTRIBUTING.md +
+good first issues) to finish the newcomer on-ramp.
 
 ---
 
@@ -230,6 +249,42 @@ A copy-able starter (re-declaring the current palette) + a short
 
 **Acceptance:** spells are clickable; a partial pack restyles only what it
 defines and everything else falls back cleanly; no server/authority code touched.
+
+---
+
+## Parallel track — Web / WASM build
+
+Not on the linear critical path: this can happen anytime now that the graphical
+client exists, and it's a great, self-contained contribution. The payoff is a
+**browser-playable build shareable on itch.io** (or any static host) — the
+lowest-friction way for people to try the sandbox.
+
+Why it's feasible with no engine changes: `core/` is pure, portable C++20 (no
+platform syscalls in resolution) and Raylib has first-class Emscripten/HTML5
+support, so the same code compiles to WebAssembly.
+
+### W.1 ☐ Emscripten toolchain + web Raylib
+Stand up `emsdk`; configure Raylib for the web target (`-DPLATFORM=Web`). Output
+is `.wasm` + `.js` + `.html`.
+
+### W.2 ☐ Adapt the frontend main loop
+Move the per-frame body from the blocking `while (!WindowShouldClose())` loop into
+an `emscripten_set_main_loop` callback (browsers can't block). `core/` is
+untouched — this is purely `main.cpp`/`render/`.
+
+### W.3 ☐ Package assets
+Bundle sprite packs / data files via `--preload-file` into the Emscripten virtual
+filesystem.
+
+### W.4 ☐ Build-system + CI
+Add a web/Emscripten path to `CMakeLists.txt` beside the native build, and wire a
+web-build job into CI so it can't rot.
+
+### W.5 ☐ Publish
+Upload the `.html` / `.wasm` / `.js` bundle to itch.io as an HTML5 game.
+
+**Acceptance:** the game runs in a browser from a static bundle; native builds are
+unaffected.
 
 ---
 

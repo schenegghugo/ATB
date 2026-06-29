@@ -39,6 +39,11 @@ database dependencies. That same library runs:
 - inside the balance simulator (`tb_balance`, ~1,260 full AI-vs-AI matches/sec),
 - and — by design — inside a **dedicated match server** (see §7), unchanged.
 
+Configuring with `-DTB_BUILD_GUI=OFF` builds exactly this headless slice (core +
+demos) and skips Raylib entirely — no fetch, no GL/X11. **CI runs that build on
+every PR** and exercises the demo/assertion suite, so a change that breaks the
+headless boundary or a test can't be merged.
+
 If you ever find yourself wanting to `#include` Raylib or a socket library from
 `core/`, stop: the thing you want belongs in a higher layer, handed *into* the
 core as data or pulled *out* of it through an accessor.
@@ -553,6 +558,13 @@ Ordered roughly by how much each unlocks the sandbox vision.
 8. **Content/balance backlog** — Portal is AI-unused (its step-on-entry mechanic
    needs deeper planning than the beam search reaches); Fireball is the weakest
    attack (radius-buff candidate). Good first issues.
+
+**Parallel track — Web/WASM build.** Independent of the sequence above and
+available now that the GUI exists: because `core/` is portable C++20 and Raylib
+supports Emscripten/HTML5, the game can compile to **WebAssembly** for a
+browser-playable build shareable on itch.io. Frontend + build-system work only —
+`core/` is untouched (the main loop moves to an `emscripten_set_main_loop`
+callback). See `MILESTONES.md` and `CONTRIBUTING.md` for the breakdown.
 
 Anything in this list is additive: none of it requires changing the engine's
 combat resolution, because the seams described above already anticipate it.

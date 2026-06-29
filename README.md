@@ -88,6 +88,15 @@ cmake --build build -j
 ./build/tb_balance [N] [seed]  # Monte-Carlo balance report over N random matches
 ```
 
+For a **headless / server / CI build**, add `-DTB_BUILD_GUI=OFF`: this skips
+Raylib entirely (no fetch, no GL/X11) and builds `tb_core` plus the demos in
+seconds. This is exactly what the CI pipeline runs.
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DTB_BUILD_GUI=OFF
+cmake --build build -j
+```
+
 ### Direct compile (headless core only, no Raylib needed)
 
 ```bash
@@ -197,6 +206,19 @@ step-on-entry mechanic needs deeper planning than the beam chases.
 boundary, the data-driven content model, the trust model for moddable
 content, sprite/asset packs, and the server-authoritative PvP plan. Read it
 before extending the engine or adding content.
+[`MILESTONES.md`](MILESTONES.md) is the phased execution plan and the current
+status of each piece.
+
+Every pull request is gated by CI (`.github/workflows/ci.yml`): it builds the
+headless core (`-DTB_BUILD_GUI=OFF`) and runs the demo/assertion suite, so a
+change that breaks a test can't be merged. Run the same checks locally before
+opening a PR:
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DTB_BUILD_GUI=OFF
+cmake --build build -j
+./build/tb_headless && ./build/tb_build_demo && ./build/tb_spells_demo && ./build/tb_ai_demo
+```
 
 ## License
 
