@@ -25,6 +25,7 @@ add_library(tb_core STATIC
     src/core/Spells.cpp
     src/core/Build.cpp
     src/data/BuildRepository.cpp
+    src/data/Json.cpp
 )
 target_include_directories(tb_core PUBLIC src)
 target_compile_options(tb_core PRIVATE
@@ -45,6 +46,9 @@ target_link_libraries(tb_spells_demo PRIVATE tb_core)
 
 add_executable(tb_ai_demo tests/ai_demo.cpp)
 target_link_libraries(tb_ai_demo PRIVATE tb_core)
+
+add_executable(tb_json_demo tests/json_demo.cpp)
+target_link_libraries(tb_json_demo PRIVATE tb_core)
 
 add_executable(tb_balance tests/balance_sim.cpp)
 target_link_libraries(tb_balance PRIVATE tb_core)

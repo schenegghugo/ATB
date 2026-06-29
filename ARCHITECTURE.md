@@ -263,33 +263,80 @@ gracefully so a pack that doesn't supply it just falls back to the `Faction`
 tint. It is purely cosmetic — it never affects resolution, so it carries no
 trust weight even though it can be authored in data.
 
-### Pack format
+### Pack format (atlas-based)
 
-A pack is a directory with a manifest and image files:
+Raylib draws sub-rectangles of a *bound* texture, so the canonical format is a
+**texture atlas** — one image holding many sprites — not hundreds of singular
+files (which would force a GPU texture bind per sprite, the slow path). One atlas
+= one bound `Texture2D`, so sprites batch into far fewer draw calls, animations
+are just sub-rects advancing on the same texture, and there's one decode/upload
+instead of hundreds of file opens (which also shrinks WASM web builds — fewer
+files to preload).
+
+A pack is a directory with a manifest, one or more atlas images, and an optional
+palette:
 
 ```
 mypack/
-  pack.json              ← manifest: name, version, tileSize, key → sprite map
-  tiles/wall.png
-  tiles/floor.png
-  units/pyromancer.png
-  ground/portal.png
-  spells/fireball.png    ← icon and/or cast VFX
+  pack.json        ← manifest: meta + atlas list + key → sprite map + palette
+  atlas.png        ← the packed sprite sheet (a pack may have several pages)
 ```
 
-`pack.json` maps each semantic key to a texture plus draw params (anchor, scale,
-and — optionally — animation `frames` + `fps`). A pack may instead (or also)
-ship just a **palette** (a set of colors) for users who want to re-theme without
-drawing sprites — the manifest carries both, and either is optional.
+`pack.json` (parsed by the shared `data/Json` layer, §‑Phase‑1) maps each
+**semantic key** to a sprite — which atlas page, the sub-rectangle, an anchor,
+and optionally animation clips:
+
+```jsonc
+{
+  "schema": 1,
+  "name": "Pixel Dungeon", "version": "1.0.0",
+  "tileSize": 32,
+  "atlases": { "main": "atlas.png" },
+  "palette": { "wall": "#464e60" },          // optional: re-theme primitives
+  "sprites": {
+    "tiles.wall":       { "atlas": "main", "rect": [0, 0, 32, 32] },
+    "units.pyromancer": { "atlas": "main", "rect": [0, 64, 32, 48], "anchor": "bottom",
+                          "anim": { "rects": [[0,64,32,48],[32,64,32,48]], "fps": 4, "loop": true } },
+    "spells.fireball":  { "atlas": "main", "rect": [0, 96, 32, 32],
+                          "cast": { "rects": [[0,96,32,32],[32,96,32,32],[64,96,32,32]],
+                                    "fps": 12, "loop": false } }
+  }
+}
+```
+
+- `rect` = `[x, y, w, h]` into the named atlas (the static / first frame).
+- `anchor` = `center` (default) | `bottom` (stand a tall sprite on its tile).
+- `anim` / event clips (`cast`, later `hit`/`death`) — see *Animations* below.
+- A pack may ship **only a `palette`** and no sprites — a pure re-theme, no art.
+
+Atlases can come from any packer (TexturePacker, free-tex-packer) or be hand-
+drawn; only the rect coordinates matter. Loose per-file PNGs stay a possible
+*authoring* convenience (the engine can pack a folder into a runtime atlas), but
+the canonical on-disk and in-VRAM form is the atlas.
+
+### Animations
+
+A **clip** is an ordered list of atlas sub-rects plus `fps` and `loop`. Two
+sources drive them:
+
+- **Ambient** (`anim`) — loops while a unit simply exists (idle / flap).
+- **Event** (`cast`, later `hit` / `death` / `move`) — played once when the
+  engine reports that event, then the sprite returns to its ambient state. The
+  engine surfaces these as state deltas the renderer already sees (a cast, a
+  damage application); the renderer maps delta → clip.
+
+Because clips are just rects on the already-bound atlas, animation costs no extra
+texture loads or binds. Static-only packs are fully valid — a still sprite is
+just a one-frame clip.
 
 ### Resolution + fallback (packs are incremental)
 
 The renderer resolves each key through the active pack:
 
 ```
-draw(key):  pack has a sprite for key?  → blit the texture
-            else pack has a palette color?  → fill the primitive in that color
-            else  → the built-in default primitive
+draw(key):  pack binds a sprite (atlas rect / clip) for key?  → blit from the atlas
+            else pack has a palette color for key?            → fill the primitive
+            else                                              → built-in primitive
 ```
 
 Because every key falls back independently, a pack can restyle **just the
@@ -325,15 +372,16 @@ Casting is unchanged — right-click the target tile. The bar only replaces the
 memorise-the-numbers burden.
 
 **Icon resolution** follows the same fallback ladder as everything else, so the
-bar is usable with zero custom art:
+bar is usable with zero custom art. The icon is just the spell's atlas sprite
+(the `rect` of its `spells.<key>` entry):
 
 ```
-spells.<key>.icon in the active pack  →  built-in default icon  →  procedural
+spells.<key> sprite in the active pack  →  built-in default icon  →  procedural
 badge (the hotkey digit + a short name on a faction-tinted chip)
 ```
 
-The same icon is reused in the **editor's skill dictionary** — one asset, both
-screens.
+The same atlas sprite is reused in the **editor's skill dictionary** — one
+frame, both screens.
 
 **Resolving the icon key without touching `core/`.** `Entity.spells[i]` is a
 `Spell` (combat data only) — it deliberately carries no catalog slug or id. The
@@ -353,10 +401,13 @@ off the active `Entity`.
 
 ### v1 scope vs later
 
-- **v1**: static sprites + palette, manifest-driven, fallback to primitives;
-  clickable spell bar with procedural-badge fallback for icons.
-- **Later**: animation frames, per-spell cast VFX/particles, sound packs (the
-  same key→asset manifest idea, mapping events like "fireball cast" → a sound).
+- **v1**: atlas-based packs (static `rect` per key) + palette, manifest-driven,
+  fallback to primitives; clickable spell bar with procedural-badge fallback for
+  icons. One atlas page, no animation required.
+- **Later**: ambient `anim` + event clips (`cast`/`hit`/`death`), multi-page
+  atlases, runtime packing of loose PNGs, particles, and sound packs (the same
+  key→asset manifest idea, mapping events like "fireball cast" → a sound). The
+  manifest already reserves `anim`/`cast`, so adding these is additive.
 
 ---
 

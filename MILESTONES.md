@@ -195,11 +195,14 @@ path — lock the data format early. See `ARCHITECTURE.md` §4.
 generic layer + a catalog-specific mapper. Enum↔string mappings are centralised
 so a new `core/` enum value is a *one-line* format change.
 
-### 1.1 ☐ `data/Json.{h,cpp}` — minimal generic JSON reader/writer
-A schema-agnostic `JsonValue` (null/bool/number/string/array/object), `parse()`
-→ value-or-error, and a pretty `dump()`. **Reused by the sprite-pack `pack.json`
-loader in Phase 2** — this is the project's JSON layer, not throwaway. Numbers
-parse as double; integer fields are range/integrality-checked by the mapper.
+### 1.1 ☑ `data/Json.{h,cpp}` — minimal generic JSON reader/writer
+A schema-agnostic `json::Value` (null/bool/number/string/array/object), `parse()`
+→ value-or-error (with line:col), and a deterministic, insertion-ordered `dump()`
+(pretty or compact). **Reused by the sprite-pack `pack.json` loader in Phase 2** —
+this is the project's JSON layer, not throwaway. Numbers parse as double; integer
+fields are range/integrality-checked by the mapper. Covered by `tb_json_demo`
+(30 checks: types, escapes, `\u`/surrogates, strict errors, round-trip) and wired
+into CI. Builds clean under `-Wall -Wextra`; `core/` untouched.
 
 ### 1.2 ☐ `data/SpellEnums.h` — the extension point
 One `{enum, string}` table per enum (`TargetShape`, `Effect::Type`,
@@ -257,17 +260,28 @@ contributor pool (artists). Can overlap Phase 1. See `ARCHITECTURE.md` §6.
 - Icon-key resolution needs **no core change**:
   `slot → build.spellIds[slot] → catalog.find(id)->key`.
 
-### 2.2 ☐ Sprite/asset pack seam
+### 2.2 ☐ Sprite/asset pack seam — **atlas-based**
+- **Atlas-first** (Raylib batches sub-rects of one bound texture — singular files
+  would force a bind per sprite). A pack = `pack.json` + one or more atlas PNGs.
+- `pack.json` (parsed by the **reused `data/Json` layer from 1.1**) maps each
+  semantic key → `{ atlas, rect:[x,y,w,h], anchor, anim?, cast? }`. Keys reuse
+  existing enums/slugs (`TileType`, `Faction`, `GroundKind`, `StatusEffect::Kind`,
+  spell `key`); add the optional cosmetic `appearanceKey`.
 - Route every renderer draw through a pack lookup with the fallback ladder:
-  `pack sprite → pack palette color → built-in primitive`. The current primitive
+  `atlas sprite → pack palette color → built-in primitive`. The current primitive
   renderer becomes the default/fallback pack and is never removed.
-- Keys reuse existing enums/slugs (`TileType`, `Faction`, `GroundKind`,
-  `StatusEffect::Kind`, spell `key`); add the optional cosmetic `appearanceKey`.
-- `pack.json` manifest + image files; hot-reload for iteration.
+- **v1**: static `rect` per key + palette, one atlas page, hot-reload. Animation
+  (`anim`/`cast`) fields are reserved in the manifest but optional.
 
-### 2.3 ☐ Ship a `packs/default/` example
-A copy-able starter (re-declaring the current palette) + a short
-`docs/sprite-packs.md` authoring guide.
+### 2.3 ☐ Animations (after the static seam works)
+- A **clip** = ordered atlas sub-rects + `fps` + `loop`. **Ambient** (`anim`,
+  loops) vs **event** (`cast`, later `hit`/`death`, played once on the matching
+  engine state-delta, then back to ambient). Cheap — no extra texture binds.
+
+### 2.4 ☐ Ship a `packs/default/` example
+A copy-able starter (an atlas + manifest, or palette-only) + a short
+`docs/sprite-packs.md` authoring guide (incl. how to export an atlas from
+TexturePacker / free-tex-packer or hand-author rects).
 
 **Acceptance:** spells are clickable; a partial pack restyles only what it
 defines and everything else falls back cleanly; no server/authority code touched.
@@ -296,7 +310,8 @@ untouched — this is purely `main.cpp`/`render/`.
 
 ### W.3 ☐ Package assets
 Bundle sprite packs / data files via `--preload-file` into the Emscripten virtual
-filesystem.
+filesystem. The **atlas format helps here** — one `atlas.png` per pack instead of
+hundreds of singular sprites means far fewer files to preload and fetch.
 
 ### W.4 ☐ Build-system + CI
 Add a web/Emscripten path to `CMakeLists.txt` beside the native build, and wire a

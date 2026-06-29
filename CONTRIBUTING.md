@@ -55,7 +55,7 @@ enforces:
 | Want to… | Where | Notes |
 |----------|-------|-------|
 | **Add / tweak a spell** | the catalog (`makeDefaultCatalog`, later `data/catalog.json`) | Pure data — combine existing `Effect`s. No engine change. |
-| **Draw sprites / re-theme** | a sprite pack (`render/`, see ARCHITECTURE §6) | Client-only, no recompile of the engine. Great first contribution for artists. |
+| **Draw sprites / re-theme** | an atlas-based sprite pack (`render/`, see ARCHITECTURE §6) | One `atlas.png` + a `pack.json` mapping keys → atlas rects (+ optional animations). Client-only, no engine recompile. Great first contribution for artists. |
 | **Write an AI** | `AI.cpp` (a pluggable `Brain` interface is planned) | Beam-search planner today; self-contained in `core/`. |
 | **Build a new frontend** | against the `Battle` read API | The engine never needs to know your frontend exists. |
 | **Tune balance** | `tb_balance` + spell costs | Back your change with before/after numbers from the simulator. |

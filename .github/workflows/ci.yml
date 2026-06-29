@@ -24,6 +24,7 @@ jobs:
       - name: Smoke + assertion tests
         run: |
           set -e
+          ./build/tb_json_demo
           ./build/tb_headless
           ./build/tb_build_demo
           ./build/tb_spells_demo
