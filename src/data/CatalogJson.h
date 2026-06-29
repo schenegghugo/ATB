@@ -26,11 +26,17 @@ struct CatalogLoad {
     bool ok = false;                  // true iff errors is empty
     SpellCatalog catalog;             // valid only when ok
     std::string version;              // author-declared content version
+    std::string sha256;               // hex digest of the source bytes (PvP anchor)
     std::vector<std::string> errors;  // all problems found, each with context
 };
 
 // Parse + validate a catalog document. Never throws; collects every error.
+// `sha256` is set to the digest of `json` regardless of validity.
 [[nodiscard]] CatalogLoad loadCatalogFromString(const std::string& json);
+
+// Read a catalog file and load it. On a missing/unreadable file, returns a
+// CatalogLoad with ok=false and a single explanatory error.
+[[nodiscard]] CatalogLoad loadCatalogFromFile(const std::string& path);
 
 // Serialize a catalog to canonical, deterministic JSON (the generator's output
 // and the round-trip target). `version` is written into the document.

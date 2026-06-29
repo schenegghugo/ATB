@@ -232,16 +232,20 @@ round-trip (serialize→load→serialize), field-level fidelity, hand-authored
 defaults, and 12 malformed-input rejections. Wired into CI; builds clean under
 `-Wall -Wextra`. (`loadCatalogFromFile` + `sha256` land in 1.4.)
 
-### 1.4 ☐ `makeDefaultCatalog()` becomes the generator + `sha256`
-A `tb_catalog_gen` target emits `data/catalog.json` from `makeDefaultCatalog()`
-so file and code can't drift. Hand-rolled `sha256Hex(bytes)` (dep-free; the
-server needs it too) hashes the exact file bytes — the PvP handshake anchor
-(§5/§7).
+### 1.4 ☑ `makeDefaultCatalog()` becomes the generator + `sha256`
+`tb_catalog_gen [out] [version]` emits `data/catalog.json` (top-level `data/` =
+runtime content; `src/data/` = code) from `makeDefaultCatalog()`, so file and
+code can't drift. Hand-rolled `data/Sha256.{h,cpp}` (`sha256Hex`, dep-free; the
+server needs it too) hashes the exact bytes — the PvP handshake anchor (§5/§7) —
+and `CatalogLoad.sha256` carries it. `loadCatalogFromFile(path)` added. The
+committed `data/catalog.json` is generated and in sync.
 
-### 1.5 ☐ Round-trip test (`catalog_demo`, wired into CI)
-`serialize(makeDefaultCatalog()) → load → assert equal`. Plus the enum-coverage
-test (1.2) and a clutch of malformed-input cases that must fail with clear
-errors.
+### 1.5 ☑ Round-trip + validation tests, wired into CI
+`tb_catalog_demo` (28 checks): byte-identical `serialize → load → serialize`,
+field-level fidelity, hand-authored defaults, 12 malformed-input rejections, and
+the file/`sha256` checks. `tb_sha256_demo` (known-answer vectors). Enum coverage
+is compile-time (`static_assert`s, 1.2). CI also runs a **drift guard**:
+regenerate `data/catalog.json` and `diff` it against the committed file.
 
 ### 1.6 ☐ Wire into the app + data-path resolution
 `Session` loads `data/catalog.json`. **Policy:** valid → use; *absent* → fall
@@ -251,6 +255,11 @@ relative to the binary — **shared with sprite packs**, so solve it once.
 
 **Acceptance:** the game and all demos run off `data/catalog.json`; a bad file is
 rejected with a clear, contextual error; `core/` is untouched.
+
+**Phase 1 status:** 1.1–1.5 done — the JSON layer, enum tables, loader/validator,
+generator + `sha256`, and the committed `data/catalog.json` (with CI drift guard)
+are all in and green. **Remaining: 1.6** (wire `Session` to the file + shared
+data-path resolution).
 
 ---
 

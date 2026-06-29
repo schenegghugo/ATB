@@ -7,8 +7,10 @@
 //
 #include "core/Spells.h"
 #include "data/CatalogJson.h"
+#include "data/Sha256.h"
 
 #include <cstdio>
+#include <fstream>
 #include <string>
 
 using namespace tb;
@@ -126,6 +128,24 @@ int main() {
                               R"({"id":1,"key":"b","buildCost":1,"apCost":1,"effects":[{"type":"damage","amount":1}]}]})",
                           "duplicate id"),
               "duplicate id across spells");
+    }
+
+    std::printf("Content hash + file loader\n");
+    {
+        const std::string json = serializeCatalog(makeDefaultCatalog(), "1.0.0");
+        CatalogLoad fromStr = loadCatalogFromString(json);
+        CHECK(fromStr.sha256 == sha256Hex(json), "load reports sha256 of the source bytes");
+        CHECK(fromStr.sha256.size() == 64, "sha256 is a 64-char hex digest");
+
+        const char* path = "/tmp/atb_catalog_demo.json";
+        { std::ofstream(path, std::ios::binary) << json; }
+        CatalogLoad fromFile = loadCatalogFromFile(path);
+        CHECK(fromFile.ok, "loadCatalogFromFile loads a written catalog");
+        CHECK(fromFile.sha256 == fromStr.sha256, "file and string hashes agree");
+        CHECK(fromFile.catalog.all().size() == 11, "file load has all 11 spells");
+
+        CatalogLoad missing = loadCatalogFromFile("/tmp/atb_does_not_exist_42.json");
+        CHECK(!missing.ok && !missing.errors.empty(), "missing file -> ok=false with an error");
     }
 
     std::printf(g_fails == 0 ? "\nALL PASS (0 failures)\n" : "\n%d FAILURE(S)\n", g_fails);

@@ -27,6 +27,7 @@ add_library(tb_core STATIC
     src/data/BuildRepository.cpp
     src/data/Json.cpp
     src/data/CatalogJson.cpp
+    src/data/Sha256.cpp
 )
 target_include_directories(tb_core PUBLIC src)
 target_compile_options(tb_core PRIVATE
@@ -56,6 +57,13 @@ target_link_libraries(tb_enums_demo PRIVATE tb_core)
 
 add_executable(tb_catalog_demo tests/catalog_demo.cpp)
 target_link_libraries(tb_catalog_demo PRIVATE tb_core)
+
+add_executable(tb_sha256_demo tests/sha256_demo.cpp)
+target_link_libraries(tb_sha256_demo PRIVATE tb_core)
+
+# Generator: writes data/catalog.json from the compiled default catalog.
+add_executable(tb_catalog_gen tools/catalog_gen.cpp)
+target_link_libraries(tb_catalog_gen PRIVATE tb_core)
 
 add_executable(tb_balance tests/balance_sim.cpp)
 target_link_libraries(tb_balance PRIVATE tb_core)

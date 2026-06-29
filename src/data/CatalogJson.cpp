@@ -1,14 +1,17 @@
 #include "CatalogJson.h"
 
 #include "Json.h"
+#include "Sha256.h"
 #include "SpellEnums.h"
 
 #include <cctype>
 #include <cmath>
+#include <fstream>
 #include <initializer_list>
 #include <limits>
 #include <optional>
 #include <set>
+#include <sstream>
 #include <string>
 
 namespace tb {
@@ -257,6 +260,7 @@ void parseSpell(const json::Value& sp, std::size_t idx, SpellDef& out, std::set<
 
 CatalogLoad loadCatalogFromString(const std::string& text) {
     CatalogLoad result;
+    result.sha256 = sha256Hex(text);
 
     json::ParseResult pr = json::parse(text);
     if (!pr.ok) {
@@ -357,6 +361,18 @@ std::string serializeCatalog(const SpellCatalog& catalog, const std::string& ver
     }
     root.set("spells", std::move(spells));
     return json::dump(root, /*pretty=*/true);
+}
+
+CatalogLoad loadCatalogFromFile(const std::string& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) {
+        CatalogLoad result;
+        result.errors.push_back("could not open catalog file: " + path);
+        return result;
+    }
+    std::ostringstream ss;
+    ss << in.rdbuf();
+    return loadCatalogFromString(ss.str());
 }
 
 } // namespace tb

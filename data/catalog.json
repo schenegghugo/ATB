@@ -1,0 +1,251 @@
+{
+  "schema": 1,
+  "version": "1.0.0",
+  "spells": [
+    {
+      "id": 1,
+      "key": "attack",
+      "name": "Attack",
+      "buildCost": 1,
+      "apCost": 3,
+      "minRange": 1,
+      "maxRange": 6,
+      "needsLineOfSight": true,
+      "shape": "single",
+      "radius": 0,
+      "cooldown": 0,
+      "effects": [
+        {
+          "type": "damage",
+          "amount": 15
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "key": "fireball",
+      "name": "Fireball",
+      "buildCost": 3,
+      "apCost": 4,
+      "minRange": 2,
+      "maxRange": 6,
+      "needsLineOfSight": true,
+      "shape": "circle",
+      "radius": 1,
+      "cooldown": 2,
+      "effects": [
+        {
+          "type": "damage",
+          "amount": 14
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "key": "poison",
+      "name": "Poison",
+      "buildCost": 3,
+      "apCost": 3,
+      "minRange": 1,
+      "maxRange": 5,
+      "needsLineOfSight": true,
+      "shape": "single",
+      "radius": 0,
+      "cooldown": 2,
+      "effects": [
+        {
+          "type": "damage",
+          "amount": 4
+        },
+        {
+          "type": "applyStatus",
+          "status": {
+            "kind": "damageOverTime",
+            "magnitude": 7,
+            "turns": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "key": "knockback",
+      "name": "Knockback",
+      "buildCost": 2,
+      "apCost": 2,
+      "minRange": 1,
+      "maxRange": 2,
+      "needsLineOfSight": true,
+      "shape": "single",
+      "radius": 0,
+      "cooldown": 1,
+      "effects": [
+        {
+          "type": "damage",
+          "amount": 6
+        },
+        {
+          "type": "push",
+          "amount": 2
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "key": "harpoon",
+      "name": "Harpoon",
+      "buildCost": 2,
+      "apCost": 3,
+      "minRange": 2,
+      "maxRange": 6,
+      "needsLineOfSight": true,
+      "shape": "single",
+      "radius": 0,
+      "cooldown": 1,
+      "effects": [
+        {
+          "type": "pull",
+          "amount": 3
+        },
+        {
+          "type": "damage",
+          "amount": 4
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "key": "bulwark",
+      "name": "Bulwark",
+      "buildCost": 2,
+      "apCost": 2,
+      "minRange": 0,
+      "maxRange": 2,
+      "needsLineOfSight": false,
+      "shape": "single",
+      "radius": 0,
+      "cooldown": 3,
+      "effects": [
+        {
+          "type": "applyStatus",
+          "status": {
+            "kind": "shield",
+            "magnitude": 20,
+            "turns": 2
+          }
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "key": "mend",
+      "name": "Mend",
+      "buildCost": 2,
+      "apCost": 2,
+      "minRange": 0,
+      "maxRange": 3,
+      "needsLineOfSight": false,
+      "shape": "single",
+      "radius": 0,
+      "cooldown": 2,
+      "effects": [
+        {
+          "type": "heal",
+          "amount": 18
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "key": "shelter",
+      "name": "Shelter",
+      "buildCost": 3,
+      "apCost": 3,
+      "minRange": 1,
+      "maxRange": 5,
+      "needsLineOfSight": true,
+      "shape": "line",
+      "radius": 4,
+      "cooldown": 4,
+      "effects": [
+        {
+          "type": "spawn",
+          "ground": {
+            "kind": "wall",
+            "duration": 3,
+            "magnitude": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "key": "invisible",
+      "name": "Invisible",
+      "buildCost": 3,
+      "apCost": 2,
+      "minRange": 0,
+      "maxRange": 0,
+      "needsLineOfSight": false,
+      "shape": "single",
+      "radius": 0,
+      "cooldown": 5,
+      "effects": [
+        {
+          "type": "applyStatus",
+          "status": {
+            "kind": "invisible",
+            "magnitude": 0,
+            "turns": 2
+          }
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "key": "portal",
+      "name": "Portal",
+      "buildCost": 3,
+      "apCost": 3,
+      "minRange": 2,
+      "maxRange": 8,
+      "needsLineOfSight": false,
+      "shape": "single",
+      "radius": 0,
+      "cooldown": 4,
+      "effects": [
+        {
+          "type": "spawn",
+          "ground": {
+            "kind": "portal",
+            "duration": 3,
+            "magnitude": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "key": "glyph",
+      "name": "Glyph",
+      "buildCost": 3,
+      "apCost": 3,
+      "minRange": 1,
+      "maxRange": 5,
+      "needsLineOfSight": true,
+      "shape": "circle",
+      "radius": 3,
+      "cooldown": 3,
+      "effects": [
+        {
+          "type": "spawn",
+          "ground": {
+            "kind": "glyph",
+            "duration": 3,
+            "magnitude": 2
+          }
+        }
+      ]
+    }
+  ]
+}
