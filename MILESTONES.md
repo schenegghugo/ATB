@@ -191,30 +191,52 @@ Unblocks content modding **and** is the trust anchor for PvP. The longer spells
 live only as compiled C++, the more contributor habits ossify around the wrong
 path — lock the data format early. See `ARCHITECTURE.md` §4.
 
-### 1.1 ☐ Define the JSON schema
-Mirror `SpellDef` (id, key, buildCost) + `Spell` (apCost, ranges, LOS, shape,
-radius, cooldown, effects[]). Effects carry their `type` + payload
-(`status` / `ground`). Document it; reject unknown fields.
+**Decision: hand-rolled JSON** (no third-party dep), split into a reusable
+generic layer + a catalog-specific mapper. Enum↔string mappings are centralised
+so a new `core/` enum value is a *one-line* format change.
 
-### 1.2 ☐ Write the loader in `data/`
-`loadCatalog(path) -> SpellCatalog` with **strict validation** — malformed or
-unknown-field files fail *loudly* at load, never silently coerced. `core/`'s
-`SpellCatalog` API is unchanged; only the source of entries moves.
+### 1.1 ☐ `data/Json.{h,cpp}` — minimal generic JSON reader/writer
+A schema-agnostic `JsonValue` (null/bool/number/string/array/object), `parse()`
+→ value-or-error, and a pretty `dump()`. **Reused by the sprite-pack `pack.json`
+loader in Phase 2** — this is the project's JSON layer, not throwaway. Numbers
+parse as double; integer fields are range/integrality-checked by the mapper.
 
-### 1.3 ☐ `makeDefaultCatalog()` becomes the generator
-Keep it as the compiled fallback, and add a path to *emit* `data/catalog.json`
-from it so the official file and the code can't drift.
+### 1.2 ☐ `data/SpellEnums.h` — the extension point
+One `{enum, string}` table per enum (`TargetShape`, `Effect::Type`,
+`StatusEffect::Kind`, `GroundKind`) + generic `toString` / `fromString<E>`
+helpers. Adding a core enum value = one new row (covers future `healOverTime`,
+new shapes, etc.). A test asserts every enum value has a mapping.
 
-### 1.4 ☐ Catalog version + `sha256` content hash
-Add a declared version and a hash of the exact file bytes. Cheap to add now; it
-is the handshake anchor for ranked/custom PvP later (§5/§7).
+### 1.3 ☐ `data/CatalogJson.{h,cpp}` — map JSON ↔ `SpellCatalog`
+`CatalogLoad loadCatalogFromString/FromFile(...)` and
+`serializeCatalog(catalog, version)`. **Strict validation** collecting *all*
+errors with context (`spell "poison" → effect[1]: ...`): unique/positive ids,
+unique keys, `minRange ≤ maxRange`, valid enums, required per-type payloads,
+**unknown fields rejected**. `core/`'s `SpellCatalog` API is unchanged.
 
-### 1.5 ☐ Round-trip test
-`generate → load → compare` proves the file and `makeDefaultCatalog()` agree.
-Add to CI.
+Schema versioning: `schema` (int, structural — bump only on breaking change) is
+distinct from `version` (author content label). Adding enum strings is
+backward-compatible and needs no `schema` bump.
+
+### 1.4 ☐ `makeDefaultCatalog()` becomes the generator + `sha256`
+A `tb_catalog_gen` target emits `data/catalog.json` from `makeDefaultCatalog()`
+so file and code can't drift. Hand-rolled `sha256Hex(bytes)` (dep-free; the
+server needs it too) hashes the exact file bytes — the PvP handshake anchor
+(§5/§7).
+
+### 1.5 ☐ Round-trip test (`catalog_demo`, wired into CI)
+`serialize(makeDefaultCatalog()) → load → assert equal`. Plus the enum-coverage
+test (1.2) and a clutch of malformed-input cases that must fail with clear
+errors.
+
+### 1.6 ☐ Wire into the app + data-path resolution
+`Session` loads `data/catalog.json`. **Policy:** valid → use; *absent* → fall
+back to `makeDefaultCatalog()` with a notice; *malformed* → fail loudly (never
+silently fall back — that hides corruption). Resolve where `data/` lives
+relative to the binary — **shared with sprite packs**, so solve it once.
 
 **Acceptance:** the game and all demos run off `data/catalog.json`; a bad file is
-rejected with a clear error; `core/` is untouched.
+rejected with a clear, contextual error; `core/` is untouched.
 
 ---
 
