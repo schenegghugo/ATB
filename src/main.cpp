@@ -28,6 +28,7 @@
 #include "data/BuildRepository.h"
 #include "data/CatalogJson.h"
 #include "data/CreatureJson.h"
+#include "data/MapJson.h"
 #include "data/RulesetJson.h"
 #include "render/BuildEditorScreen.h"
 #include "render/ContentPaths.h"
@@ -51,6 +52,7 @@ struct Session {
     SpellCatalog catalog = makeDefaultCatalog();
     std::vector<Entity> creatures = makeDefaultCreatures(); // bestiary (Summon effects)
     Ruleset ruleset = makeDefaultRuleset();                 // economy + ring + arena + format
+    std::optional<Grid> staticArena;                        // set when rules.arena.map is used
     std::unique_ptr<BuildRepository> repo = std::make_unique<InMemoryBuildRepository>();
 };
 
@@ -137,6 +139,22 @@ int main() {
         TraceLog(LOG_WARNING, "No data/rules.json found — using the built-in default ruleset.");
     }
 
+    // Static map (if the ruleset names one): load data/maps/<map>.json once.
+    if (!session.ruleset.arena.map.empty()) {
+        const std::string rel = "maps/" + session.ruleset.arena.map + ".json";
+        std::optional<std::string> path = render::findContent(rel);
+        MapLoad load = path ? loadMapFromFile(*path) : MapLoad{};
+        if (!path) load.errors.push_back("map file not found: " + rel);
+        if (!load.ok) {
+            TraceLog(LOG_ERROR, "Arena map '%s' is invalid:", rel.c_str());
+            for (const std::string& e : load.errors) TraceLog(LOG_ERROR, "  - %s", e.c_str());
+            return 1;
+        }
+        session.staticArena = std::move(load.grid);
+        TraceLog(LOG_INFO, "Loaded static map '%s' (%dx%d)", rel.c_str(),
+                 session.staticArena->width(), session.staticArena->height());
+    }
+
     session.repo->save(pyromancerBuild()); // seed the store (stands in for the DB)
     session.repo->save(bruiserBuild());
 
@@ -172,7 +190,8 @@ int main() {
 
     auto enterBattle = [&]() {
         battle.emplace(buildMatch(session.ruleset, editor.playerTeam(), editor.enemyTeam(),
-                                  session.catalog, /*seed=*/0, session.creatures));
+                                  session.catalog, /*seed=*/0, session.creatures,
+                                  session.staticArena ? &*session.staticArena : nullptr));
         selectedSpell = 0;
         aiTimer = 0.0f;
         status = "Player turn — left-click move, 1-9 pick spell, right-click cast, Tab=editor.";
@@ -199,7 +218,8 @@ int main() {
         if (IsKeyPressed(KEY_TAB)) { state = AppState::Editor; continue; }
         if (IsKeyPressed(KEY_R)) {
             battle.emplace(buildMatch(session.ruleset, editor.playerTeam(), editor.enemyTeam(),
-                                      session.catalog, /*seed=*/0, session.creatures));
+                                      session.catalog, /*seed=*/0, session.creatures,
+                                      session.staticArena ? &*session.staticArena : nullptr));
             selectedSpell = 0;
             status = "New arena. Player turn.";
         }

@@ -20,7 +20,10 @@
 #include "core/Ruleset.h"
 #include "core/Spells.h"
 #include "data/CatalogJson.h"
+#include "data/MapJson.h"
 #include "data/RulesetJson.h"
+
+#include <optional>
 
 #include <algorithm>
 #include <array>
@@ -102,8 +105,8 @@ struct Outcome {
 
 Outcome runMatch(const Ruleset& ruleset, const SpellCatalog& catalog,
                  const std::vector<CharacterBuild>& A, const std::vector<CharacterBuild>& B,
-                 unsigned seed) {
-    Battle battle = buildMatch(ruleset, A, B, catalog, seed);
+                 unsigned seed, const Grid* staticArena) {
+    Battle battle = buildMatch(ruleset, A, B, catalog, seed, {}, staticArena);
 
     Outcome o;
     for (; o.length < kHalfTurnCap && battle.phase() != Phase::Finished; ++o.length) takeTurn(battle);
@@ -229,6 +232,22 @@ int main(int argc, char** argv) {
     }
     const BuildRules& rules = ruleset.economy;
     const StormConfig& storm = ruleset.closingRing;
+
+    // Static map (if the ruleset names one): all matches share it.
+    std::optional<Grid> staticArena;
+    if (!ruleset.arena.map.empty()) {
+        std::string mapDir = "data";
+        if (const char* dir = std::getenv("ATB_DATA_DIR"); dir && *dir) mapDir = dir;
+        const std::string mapPath = mapDir + "/maps/" + ruleset.arena.map + ".json";
+        MapLoad mload = loadMapFromFile(mapPath);
+        if (!mload.ok) {
+            std::fprintf(stderr, "balance: arena map '%s' is invalid:\n", mapPath.c_str());
+            for (const std::string& e : mload.errors) std::fprintf(stderr, "  - %s\n", e.c_str());
+            return 1;
+        }
+        staticArena = std::move(mload.grid);
+    }
+    const Grid* arenaPtr = staticArena ? &*staticArena : nullptr;
     std::mt19937 rng(seed);
 
     long aWins = 0, bWins = 0, draws = 0;
@@ -251,7 +270,7 @@ int main(int argc, char** argv) {
             defsA.push_back(teamA.back().def);
             defsB.push_back(teamB.back().def);
         }
-        Outcome o = runMatch(ruleset, catalog, defsA, defsB, rng());
+        Outcome o = runMatch(ruleset, catalog, defsA, defsB, rng(), arenaPtr);
 
         lengths.push_back(o.length);
         totalLen += o.length;

@@ -39,27 +39,32 @@ std::vector<Vec2i> teamSpawns(const Grid& g, int colX, int count, std::vector<Ve
 
 Battle buildMatch(const Ruleset& rules, const std::vector<CharacterBuild>& playerTeam,
                   const std::vector<CharacterBuild>& enemyTeam, const SpellCatalog& catalog,
-                  unsigned seed, std::vector<Entity> creatures) {
-    ArenaConfig cfg;
-    cfg.width = rules.arena.width;
-    cfg.height = rules.arena.height;
-    cfg.coverage = static_cast<float>(rules.arena.coverage);
-    cfg.seed = seed;
-    cfg.playerSpawn = {1, cfg.height / 2};
-    cfg.enemySpawn = {cfg.width - 2, cfg.height / 2};
-    Grid grid = generateArena(cfg);
+                  unsigned seed, std::vector<Entity> creatures, const Grid* staticArena) {
+    Grid grid;
+    if (staticArena) {
+        grid = *staticArena; // a loaded static map
+    } else {
+        ArenaConfig cfg;
+        cfg.width = rules.arena.width;
+        cfg.height = rules.arena.height;
+        cfg.coverage = static_cast<float>(rules.arena.coverage);
+        cfg.seed = seed;
+        cfg.playerSpawn = {1, cfg.height / 2};
+        cfg.enemySpawn = {cfg.width - 2, cfg.height / 2};
+        grid = generateArena(cfg);
+    }
 
     std::vector<Entity> roster;
     std::vector<Vec2i> occupied;
     auto placeTeam = [&](const std::vector<CharacterBuild>& team, Faction faction, int colX) {
         const std::vector<Vec2i> spawns = teamSpawns(grid, colX, static_cast<int>(team.size()), occupied);
         for (std::size_t i = 0; i < team.size(); ++i) {
-            const Vec2i pos = i < spawns.size() ? spawns[i] : Vec2i{colX, cfg.height / 2};
+            const Vec2i pos = i < spawns.size() ? spawns[i] : Vec2i{colX, grid.height() / 2};
             roster.push_back(instantiate(team[i], catalog, faction, pos, rules.economy));
         }
     };
     placeTeam(playerTeam, Faction::Player, 1);
-    placeTeam(enemyTeam, Faction::Enemy, cfg.width - 2);
+    placeTeam(enemyTeam, Faction::Enemy, grid.width() - 2);
 
     Battle battle(std::move(grid), std::move(roster), rules.closingRing);
     battle.setCreatures(std::move(creatures));

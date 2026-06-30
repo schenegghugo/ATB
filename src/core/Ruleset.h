@@ -16,11 +16,13 @@
 
 namespace tb {
 
-// Procedural-arena parameters. (R.4 will add a "static map" alternative here.)
+// Arena parameters. If `map` is set, that static map is loaded (data/maps/<map>.json)
+// instead of generating a random arena from width/height/coverage.
 struct ArenaRules {
     int width = 20;
     int height = 15;
-    double coverage = 0.18; // fraction of tiles that become wall/obstacle
+    double coverage = 0.18; // fraction of tiles that become wall/obstacle (random arenas)
+    std::string map;        // static map key; empty = procedurally generate
 };
 
 struct Ruleset {

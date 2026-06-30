@@ -32,6 +32,7 @@ add_library(tb_core STATIC
     src/data/CatalogJson.cpp
     src/data/CreatureJson.cpp
     src/data/RulesetJson.cpp
+    src/data/MapJson.cpp
     src/data/Sha256.cpp
 )
 target_include_directories(tb_core PUBLIC src)
@@ -71,6 +72,9 @@ target_link_libraries(tb_creature_demo PRIVATE tb_core)
 
 add_executable(tb_ruleset_demo tests/ruleset_demo.cpp)
 target_link_libraries(tb_ruleset_demo PRIVATE tb_core)
+
+add_executable(tb_map_demo tests/map_demo.cpp)
+target_link_libraries(tb_map_demo PRIVATE tb_core)
 
 add_executable(tb_sha256_demo tests/sha256_demo.cpp)
 target_link_libraries(tb_sha256_demo PRIVATE tb_core)

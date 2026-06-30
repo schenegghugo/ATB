@@ -30,6 +30,7 @@ jobs:
           ./build/tb_catalog_demo
           ./build/tb_creature_demo
           ./build/tb_ruleset_demo
+          ./build/tb_map_demo
           ./build/tb_headless
           ./build/tb_build_demo
           ./build/tb_spells_demo

@@ -126,10 +126,14 @@ RulesetLoad loadRulesetFromString(const std::string& text) {
     }
 
     if (const json::Value* arena = optObject(root, "arena", "root", e)) {
-        checkAllowed(*arena, {"width", "height", "coverage"}, "arena", e);
+        checkAllowed(*arena, {"width", "height", "coverage", "map"}, "arena", e);
         rs.arena.width = optInt(*arena, "width", rs.arena.width, "arena", e);
         rs.arena.height = optInt(*arena, "height", rs.arena.height, "arena", e);
         rs.arena.coverage = optDouble(*arena, "coverage", rs.arena.coverage, "arena", e);
+        if (const json::Value* mv = arena->find("map")) {
+            if (mv->isString()) rs.arena.map = mv->asString();
+            else e.push_back("arena: \"map\" must be a string");
+        }
         if (rs.arena.width < 1 || rs.arena.height < 1) e.push_back("arena: width/height must be >= 1");
         if (rs.arena.coverage < 0.0 || rs.arena.coverage > 1.0)
             e.push_back("arena: coverage must be between 0 and 1");
@@ -177,6 +181,7 @@ std::string serializeRuleset(const Ruleset& r, const std::string& version) {
     arena.set("width", Value(r.arena.width));
     arena.set("height", Value(r.arena.height));
     arena.set("coverage", Value(r.arena.coverage));
+    if (!r.arena.map.empty()) arena.set("map", Value(r.arena.map));
     root.set("arena", std::move(arena));
 
     return json::dump(root, /*pretty=*/true);

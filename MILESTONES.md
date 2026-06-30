@@ -480,10 +480,17 @@ Fight only enables when *every* player slot is valid. The editor takes the whole
 side. Verified: default 1v1 unchanged; a `teamSize:2` ruleset runs end-to-end in
 both the sim (4 entities/match) and the GUI.
 
-### R.4 ☐ Static maps
-A `Grid` serialization (`data/maps/*.json` — a tile grid) + loader + on-load
-reachability gate (player↔enemy connected) + a couple sample maps.
-`arena.type:"static"` loads one instead of generating.
+### R.4 ☑ Static maps
+`data/MapJson.{h,cpp}` loads a map authored as char rows (`.` walkable, `#` wall,
+`o` obstacle) → a `Grid`, with strict validation (equal-length rows, known chars,
+≥3×3) and an **on-load reachability gate** (the canonical spawns must be walkable
++ connected). Ruleset `arena.map` (a key) selects it: non-empty → load
+`data/maps/<map>.json` instead of generating. `buildMatch` takes an optional
+`const Grid*` (static arena); the game (`Session.staticArena`, loaded once) and
+the sim both resolve + load it (fail-loud on a bad map). Ships `data/maps/duel.json`
+(20×15). `tb_map_demo` (13 checks incl. ragged/blocked-off rejection + the sample
+validates), wired into CI. Verified end-to-end: static-map matches run in the sim
+and the GUI; default (random arena) unchanged.
 
 ### R.5 ☐ Ban enforcement + competitive / custom
 Bans grey-out/hide editor cards, reject in `validateBuild`, and drop from the

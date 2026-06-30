@@ -16,10 +16,13 @@
 
 namespace tb {
 
+// If `staticArena` is non-null it is used as the battlefield (a loaded static
+// map); otherwise the arena is generated from `rules.arena` + `seed`.
 [[nodiscard]] Battle buildMatch(const Ruleset& rules,
                                 const std::vector<CharacterBuild>& playerTeam,
                                 const std::vector<CharacterBuild>& enemyTeam,
                                 const SpellCatalog& catalog, unsigned seed,
-                                std::vector<Entity> creatures = {});
+                                std::vector<Entity> creatures = {},
+                                const Grid* staticArena = nullptr);
 
 } // namespace tb
