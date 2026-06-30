@@ -445,11 +445,16 @@ budget, base HP/AP/MP/Init + per-point costs); `bannedSpells` (by key);
 `closingRing` (= `StormConfig`: enabled / startRound / damage); `arena`
 (`random {w,h,coverage}` | `static {map}`).
 
-### R.1 ☐ `Ruleset` + `data/RulesetJson.{h,cpp}` + `data/rules.json`
-Struct + loader (mirror `CatalogJson`), generator (`tb_ruleset_gen`), drift guard,
-round-trip + malformed tests, hashable. Folds in economy + closingRing +
-bannedSpells + teamSize + random-arena params. **Supersedes the balance sim's
-`ATB_*` env-var HP overrides** (edit `rules.json` instead).
+### R.1 ☑ `Ruleset` + `data/RulesetJson.{h,cpp}` + `data/rules.json`
+`core/Ruleset.h` (`teamSize`, `economy` = `BuildRules`, `bannedSpells`,
+`closingRing` = `StormConfig`, `arena` {w,h,coverage}) + `makeDefaultRuleset()`.
+`StormConfig` moved to `core/Storm.h` (config, not engine). Loader mirrors
+`CatalogJson` (strict, all-errors-with-context; omitted blocks keep defaults);
+`tb_ruleset_gen` (`--check` + `--force` scaffold); committed `data/rules.json`
+(hashable, `--check`ed in CI). `tb_ruleset_demo` (20 checks: round-trip, partial
+overrides, 7 malformed). Bonus: `json::dump` now uses `std::to_chars` so
+`coverage` prints as `0.18` (shortest round-trip). **Wiring into game + sim is
+R.2** — the `ATB_*` env-var HP overrides stay until then.
 
 ### R.2 ☐ Unified `buildMatch(ruleset, teams, seed, …)` → `Battle`
 A shared match constructor (`core/Match.h`) used by **both** `main.cpp` (replaces

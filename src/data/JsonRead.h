@@ -53,6 +53,17 @@ inline int optInt(const json::Value& obj, const char* key, int def, const std::s
     return out;
 }
 
+inline double optDouble(const json::Value& obj, const char* key, double def, const std::string& ctx,
+                        Errors& e) {
+    const json::Value* v = obj.find(key);
+    if (!v) return def;
+    if (!v->isNumber()) {
+        e.push_back(ctx + ": \"" + key + "\" must be a number");
+        return def;
+    }
+    return v->asNumber();
+}
+
 inline bool optBool(const json::Value& obj, const char* key, bool def, const std::string& ctx,
                     Errors& e) {
     const json::Value* v = obj.find(key);

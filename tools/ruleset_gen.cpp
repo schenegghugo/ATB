@@ -1,0 +1,63 @@
+//
+// ruleset_gen.cpp — Scaffold / validate the match ruleset.
+//
+// data/rules.json is the SOURCE OF TRUTH (hand-editable). Two modes:
+//   tb_ruleset_gen --check [path=data/rules.json]   load + validate (CI gate)
+//   tb_ruleset_gen [--force] [out_path] [version]   (re)scaffold from makeDefaultRuleset()
+//
+// Scaffold mode REFUSES to overwrite an existing file; pass --force to clobber it
+// (bootstrap only — discards hand edits).
+//
+#include "core/Ruleset.h"
+#include "data/RulesetJson.h"
+#include "data/Sha256.h"
+
+#include <cstdio>
+#include <fstream>
+#include <string>
+#include <vector>
+
+int main(int argc, char** argv) {
+    if (argc > 1 && std::string(argv[1]) == "--check") {
+        const std::string path = argc > 2 ? argv[2] : "data/rules.json";
+        const tb::RulesetLoad load = tb::loadRulesetFromFile(path);
+        if (!load.ok) {
+            std::fprintf(stderr, "ruleset: '%s' is invalid:\n", path.c_str());
+            for (const std::string& e : load.errors) std::fprintf(stderr, "  - %s\n", e.c_str());
+            return 1;
+        }
+        std::printf("ok: %s — teamSize %d, %zu banned, v%s\n", path.c_str(),
+                    load.ruleset.teamSize, load.ruleset.bannedSpells.size(),
+                    load.version.c_str());
+        return 0;
+    }
+
+    bool force = false;
+    std::vector<std::string> pos;
+    for (int i = 1; i < argc; ++i) {
+        const std::string a = argv[i];
+        if (a == "--force") force = true;
+        else pos.push_back(a);
+    }
+    const std::string path = !pos.empty() ? pos[0] : "data/rules.json";
+    const std::string version = pos.size() > 1 ? pos[1] : "1.0.0";
+
+    if (!force && std::ifstream(path).good()) {
+        std::fprintf(stderr,
+                     "ruleset_gen: '%s' already exists — refusing to overwrite (source of truth). "
+                     "Pass --force to scaffold anyway (discards hand edits).\n",
+                     path.c_str());
+        return 1;
+    }
+
+    const std::string json = tb::serializeRuleset(tb::makeDefaultRuleset(), version);
+    std::ofstream out(path, std::ios::binary);
+    if (!out) {
+        std::fprintf(stderr, "ruleset_gen: cannot write %s\n", path.c_str());
+        return 1;
+    }
+    out << json;
+    std::printf("wrote %s (%zu bytes)\n", path.c_str(), json.size());
+    std::printf("sha256 %s\n", tb::sha256Hex(json).c_str());
+    return 0;
+}

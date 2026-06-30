@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "version": "1.0.0",
+  "format": {
+    "teamSize": 1
+  },
+  "economy": {
+    "pointBudget": 12,
+    "baseHp": 30,
+    "hpStep": 5,
+    "hpCost": 1,
+    "baseAp": 4,
+    "apCost": 3,
+    "baseMp": 3,
+    "mpCost": 2,
+    "baseInitiative": 5,
+    "initCost": 1
+  },
+  "bannedSpells": [],
+  "closingRing": {
+    "enabled": true,
+    "startRound": 5,
+    "damage": 8
+  },
+  "arena": {
+    "width": 20,
+    "height": 15,
+    "coverage": 0.18
+  }
+}

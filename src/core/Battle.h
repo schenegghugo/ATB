@@ -14,6 +14,7 @@
 #include "Combat.h" // DamageSource, StatusEffect, GroundKind/Spec, Effect, Spell
 #include "Entity.h" // EntityId, Faction, EntityKind, Control, Entity, EntitySnapshot
 #include "Grid.h"
+#include "Storm.h"  // StormConfig (match config, also embedded in the Ruleset)
 
 #include <cstdint>
 #include <optional>
@@ -42,15 +43,6 @@ struct GroundEffect {
 };
 
 enum class Phase : std::uint8_t { PlayerTurn, EnemyTurn, Finished };
-
-// Closing-ring ("storm"): from `startRound`, the safe square around the arena
-// centre shrinks one ring per round; units outside it take `damage` at their
-// turn start. Forces lingering opponents into conflict.
-struct StormConfig {
-    bool enabled = true;
-    int startRound = 5;
-    int damage = 8;
-};
 
 // ---------------------------------------------------------------------------
 class Battle {

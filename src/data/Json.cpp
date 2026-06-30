@@ -1,5 +1,6 @@
 #include "Json.h"
 
+#include <charconv>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -348,11 +349,17 @@ void escapeTo(std::string& out, const std::string& s) {
 
 void numberTo(std::string& out, double n) {
     // Integral values print without a fractional part (keeps the catalog tidy:
-    // 15, not 15.0). Non-integral values use a round-trippable representation.
+    // 15, not 15.0). Non-integral values use the *shortest* round-trippable form
+    // (so 0.18 prints as "0.18", not "0.17999999999999999").
     if (std::isfinite(n) && n == std::floor(n) && std::fabs(n) < 1e15) {
         out += std::to_string(static_cast<long long>(n));
+        return;
+    }
+    char buf[32];
+    const auto [ptr, ec] = std::to_chars(buf, buf + sizeof buf, n);
+    if (ec == std::errc{}) {
+        out.append(buf, ptr);
     } else {
-        char buf[32];
         std::snprintf(buf, sizeof buf, "%.17g", n);
         out += buf;
     }
