@@ -208,6 +208,19 @@ int main(int argc, char** argv) {
     }
 
     BuildRules rules{};
+    // Economy knobs overridable for balancing (no recompile). Sweep these and
+    // compare the "bought +HP" win rate + match-length distribution across runs:
+    //   ATB_BASE_HP   base HP every champion starts with
+    //   ATB_HP_STEP   HP granted per HP purchase
+    //   ATB_HP_COST   points each HP purchase costs
+    auto envInt = [](const char* k, int def) {
+        const char* v = std::getenv(k);
+        return (v && *v) ? std::atoi(v) : def;
+    };
+    rules.baseHp = std::max(1, envInt("ATB_BASE_HP", rules.baseHp));
+    rules.hpStep = std::max(0, envInt("ATB_HP_STEP", rules.hpStep));
+    rules.hpCost = std::max(1, envInt("ATB_HP_COST", rules.hpCost));
+
     StormConfig storm{}; // defaults used by runMatch
     std::mt19937 rng(seed);
 
@@ -258,6 +271,8 @@ int main(int argc, char** argv) {
     r << "  wall time          " << elapsed << " s  ("
       << (elapsed > 0 ? matches / elapsed : 0) << " matches/s)\n";
     r << "  point budget       " << rules.pointBudget << "\n";
+    r << "  HP economy         base " << rules.baseHp << ", +" << rules.hpStep << " HP per "
+      << rules.hpCost << " pt\n";
     r << "  catalog            " << catalogSource;
     if (!catalogVersion.empty()) r << "  (v" << catalogVersion << ")";
     r << "\n";

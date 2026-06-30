@@ -12,6 +12,11 @@ Off the critical path, a **Web/WASM build** (see *Parallel track* below) can be
 picked up anytime now that the GUI exists — it's frontend-only and independent of
 the content and PvP work.
 
+**Recommended next (data/engine):** the **Core split** (separate `core/` headers)
+→ the **Match rulesets** milestone (a datafied `rules.json` that unifies how the
+game and the balance sim build matches, and exposes format/bans/ring/arena to
+modders + competitive play). Both sections are below, ahead of Phase 2.
+
 **The one rule:** do not start any netcode before the catalog loader, content
 hash, and serialization round-trip tests exist (Phase 1 + the first step of
 Phase 4). PvP without those is built on sand.
@@ -396,6 +401,72 @@ predicates) and a right column of stat steppers — now including **+INIT**
 run-verified (no crash; harmless Wayland window-*position* warnings only).
 *(Follow-ups: spell-card icons once Phase-2 atlas lands; grid scroll for very
 large modded catalogs; secondary modifier-tag toggles.)*
+
+---
+
+## Core split — separate `core/` headers (do first)
+
+`Battle.h` mixes three concerns; split for clarity. Mechanical,
+**behaviour-preserving**, full-suite-verified.
+
+### CS.1 ☐ Split `Battle.h` into Combat / Entity / Battle
+- `core/Combat.h` — spell/effect **data model**: `Effect`, `TargetShape`, `Spell`,
+  `StatusEffect`, `GroundKind`, `GroundSpec`, `DamageSource`.
+- `core/Entity.h` — `EntityId`, `Faction`, `EntityKind`, `Control`, `Entity`,
+  `EntitySnapshot`.
+- `core/Battle.h` — the engine only: `Phase`, `GroundEffect`, `PendingRewind`,
+  `Battle`. (`Grid.h` stays = the arena terrain.)
+- Pure declaration moves + `#include` fixups across core/data/render/tests; **no
+  behaviour change** — acceptance is the whole suite (incl. byte-identical balance
+  determinism) passing unchanged. Clarifies *config vs engine* for the rulesets
+  below: `StormConfig` is config → it migrates into the `Ruleset`.
+
+---
+
+## Milestone: Match rulesets (datafied; unify game ↔ balance sim)
+
+A `Ruleset` + `data/rules.json`, loaded by the **same** Json + JsonRead +
+validation + generator + `sha256` + drift-guard machinery as the catalog /
+creatures. Goal: the game and the balance sim build matches **the same way**, and
+the match format is editable by modders / fixable for competitive play. Becomes
+the **third pinned artifact** (catalog + creatures + ruleset) in the trust model
+(`ARCHITECTURE.md` §5/§7).
+
+Ruleset fields: `format.teamSize` (1/2/3 → NvN); `economy` (= `BuildRules`:
+budget, base HP/AP/MP/Init + per-point costs); `bannedSpells` (by key);
+`closingRing` (= `StormConfig`: enabled / startRound / damage); `arena`
+(`random {w,h,coverage}` | `static {map}`).
+
+### R.1 ☐ `Ruleset` + `data/RulesetJson.{h,cpp}` + `data/rules.json`
+Struct + loader (mirror `CatalogJson`), generator (`tb_ruleset_gen`), drift guard,
+round-trip + malformed tests, hashable. Folds in economy + closingRing +
+bannedSpells + teamSize + random-arena params. **Supersedes the balance sim's
+`ATB_*` env-var HP overrides** (edit `rules.json` instead).
+
+### R.2 ☐ Unified `buildMatch(ruleset, teams, seed, …)` → `Battle`
+A shared match constructor (`core/Match.h`) used by **both** `main.cpp` (replaces
+`makeBattle`) and the balance sim (replaces `runMatch`'s roster build). Both load
+`data/rules.json`; `teamSize:1` reproduces today exactly. **This is the
+unification.**
+
+### R.3 ☐ Team formats 2v2 / 3v3
+The engine already runs N champions per team (victory = no living champion per
+team). Work: the sim generates `teamSize` builds per side; the **build editor**
+authors/selects a *team* of builds per side (the main new UI — rhymes with the
+future lobby).
+
+### R.4 ☐ Static maps
+A `Grid` serialization (`data/maps/*.json` — a tile grid) + loader + on-load
+reachability gate (player↔enemy connected) + a couple sample maps.
+`arena.type:"static"` loads one instead of generating.
+
+### R.5 ☐ Ban enforcement + competitive / custom
+Bans grey-out/hide editor cards, reject in `validateBuild`, and drop from the
+sim's random builds. Trust tie-in: **ranked** pins the *official* ruleset (fixed
+format, hashed); **custom** lobbies pin an *agreed* `rules.json` by hash (Phase 4
+lobby) — "competitive forces a format; custom allows agreed rulesets."
+
+**Sequence:** Core split (CS.1) → R.1 → R.2 (unify) → R.3 → R.4 → R.5.
 
 ---
 

@@ -60,6 +60,12 @@ core as data or pulled *out* of it through an accessor.
 | `Build` | Classless point-buy `CharacterBuild`: a budget spent across catalog skills and stat upgrades, validated, then *hydrated* into a live `Entity`. |
 | `AI` | A headless turn-level planner — beam-searches action sequences within the AP/MP budget, scoring end-of-turn states. |
 
+> **Planned (MILESTONES "Core split"):** `Battle.h` is being split by concern —
+> `core/Combat.h` (the spell/effect data model), `core/Entity.h` (`Entity` + its
+> kind/control/snapshot), and `core/Battle.h` (the engine only). `Grid` stays the
+> arena terrain; match *config* (the closing ring, economy, …) moves into the
+> `Ruleset` (below), leaving `Battle` as pure engine state + logic.
+
 ### The roster invariant
 
 `Battle` owns `std::vector<Entity> units_`, addressed by a stable
@@ -190,23 +196,32 @@ coupled but aren't:
 - **Authority** — *whose copy* of the content is canonical for a given match,
   and *who computes the outcome*. This is the only axis that matters.
 
-This applies to **content** (spells, builds — things that change *outcomes*).
-**Presentation** (sprites, sound, palette — things that change only what *your*
-screen shows) is a different category entirely and is trust-free; see §6.
+This applies to **content** (spells, builds — things that change *outcomes*) and
+to the **ruleset** (the match format — team size, banned spells, closing-ring,
+arena, economy). **Presentation** (sprites, sound, palette — things that change
+only what *your* screen shows) is a different category entirely and is trust-free;
+see §6.
 
-Content modding is therefore a **privilege tier**, not a global free-for-all:
+There are **three pinned, hashable artifacts**, all loaded by the same JSON +
+validation machinery: `catalog.json` (spells), `creatures.json` (the bestiary),
+and `rules.json` (the ruleset). A match is defined by *which versions* of these
+the server adjudicates with.
 
-| Tier | Catalog used | Authority | Mods? |
-|------|-------------|-----------|-------|
+Content + ruleset modding is therefore a **privilege tier**, not a global
+free-for-all:
+
+| Tier | Catalog / creatures / ruleset used | Authority | Mods? |
+|------|------------------------------------|-----------|-------|
 | **Local / sandbox** | anything on your disk | your machine | anything goes — it's yours |
-| **Custom lobby** | a catalog pinned by hash; the host uploads it, the server validates + caches it, joiners pull that exact file | dedicated server | consensual: everyone in the lobby ran the same hashed content |
-| **Ranked** | the server's reviewed official catalog only | dedicated server | none — official content only |
+| **Custom lobby** | a set pinned by hash; the host uploads it, the server validates + caches it, joiners pull those exact files | dedicated server | consensual: everyone in the lobby ran the same hashed content + ruleset |
+| **Ranked** | the server's reviewed **official** catalog + creatures + ruleset (fixed format) | dedicated server | none — official only |
 
-Your local `catalog.json` drives only **what your client draws and previews**.
-In a server match it has *no bearing on the outcome*, because the server
-adjudicates with its own catalog (§7). A hacked local file in ranked does
-nothing. You curate **ranked** content; you never have to curate the modding
-universe — custom lobbies pin their own content by hash.
+Your local files drive only **what your client draws and previews**. In a server
+match they have *no bearing on the outcome*, because the server adjudicates with
+its own catalog + creatures + ruleset (§7). A hacked local file in ranked does
+nothing. You curate the **official ranked** set; you never have to curate the
+modding universe — custom lobbies pin their own by hash. **Competitive forces a
+format; custom allows an agreed `rules.json`.**
 
 ---
 
@@ -421,11 +436,11 @@ _outcomes_.**
 
 ```
 client A ─┐                              dedicated server (runs tb_core)
-          ├─ handshake: agree catalog vX  (sha256 match or reject)
+          ├─ handshake: agree catalog + creatures + ruleset (sha256 match or reject)
 client B ─┘
           │  each submits a build (spell ids + stat spends)
-          ▼  server validates vs catalog + budget  ──► reject if illegal
-   server constructs a Battle in RAM
+          ▼  server validates vs catalog + ruleset (budget, bans) ──► reject if illegal
+   server builds the Battle from the ruleset (buildMatch) in RAM
           │
    turn loop:
      active client sends  INTENT:  "cast spell #3 at (5,7)"  /  "move to (8,4)"
@@ -485,11 +500,13 @@ illegal calls — networking wraps them, it doesn't rewrite them.
 3. **Transport + session (`net/`).** A WebSocket/TCP listener, message framing,
    heartbeats, and a connection→player mapping. Deliberately dumb: it moves bytes,
    it does not understand the game.
-4. **Lobby / matchmaking.** *Ranked*: queue, pair two players, pin the official
-   catalog version + hash, `validateBuild()` both, spawn a runner. *Custom*: a
-   host creates a lobby, uploads a catalog (server schema-validates + hashes +
-   caches it for the lobby's lifetime), shares a join code, joiners pull that
-   exact hashed file; the host picks arena seed / storm config.
+4. **Lobby / matchmaking.** *Ranked*: queue, pair players for the ruleset's
+   `teamSize`, pin the official catalog + creatures + **ruleset** (versions +
+   hashes), `validateBuild()` both vs the ruleset (budget + bans), spawn a runner.
+   *Custom*: a host creates a lobby, uploads a catalog/creatures/`rules.json`
+   (server schema-validates + hashes + caches for the lobby's lifetime), shares a
+   join code, joiners pull those exact hashed files; the **ruleset** is the agreed
+   format (no ad-hoc per-lobby toggles — it's all in `rules.json`).
 5. **Identity / persistence.** Lightweight accounts and a results/ratings store in
    SQLite — the `BuildRepository` + `schema.sql` seam already points here; this
    extends it with `matches` and `ratings`.
@@ -502,10 +519,11 @@ illegal calls — networking wraps them, it doesn't rewrite them.
 
 ### Trust checkpoints (where each check lives)
 
-1. **Handshake** — reject a client whose catalog version + `sha256` don't match
-   the match's pinned catalog (§4, §5).
-2. **Build admission** — `validateBuild(build, catalog, rules)` at match start;
-   reject on any error or budget overrun. Same function the editor runs live.
+1. **Handshake** — reject a client whose catalog / creatures / **ruleset**
+   versions + `sha256`s don't match the match's pinned set (§4, §5).
+2. **Build admission** — `validateBuild(build, catalog, ruleset)` at match start;
+   reject on any error, budget overrun, or **banned spell**. Same function the
+   editor runs live.
 3. **Per intent** — active-unit ownership *and* `Battle` legality, server-side,
    *before* mutating. The client's local preview is advisory only.
 4. **Never trust outcomes** — the wire carries intents, never
@@ -577,8 +595,9 @@ ever, for casual customs.
 | **Add a new _mechanic_** (something no `Effect` can express) | extend the `Effect`/`StatusEffect`/`GroundKind` vocabulary in `core/`, then resolve it in `Battle`. This is an *engine* change, reviewed accordingly. | core change |
 | **Write your own AI** | `AI.cpp` today. A pluggable `Brain` strategy interface (so alternatives drop in without forking) is planned. | compiled today; interface planned |
 | **Write a whole new frontend** (different engine, web, TUI…) | implement against the `Battle` read API (`grid()`, `units()`, `affectedTiles()`, …) and drive it with intents. `render/` + `main.cpp` are the reference frontend. | API stable |
+| **Change the match format** (team size, banned spells, closing-ring, arena, economy) | edit `data/rules.json` — read by both the game and the balance sim. | ruleset planned (MILESTONES "Match rulesets") |
 | **Swap persistence** | implement `BuildRepository` (in-memory and flat-file impls ship; `schema.sql` targets SQLite/Postgres). | seam in place |
-| **Tune balance** | `tb_balance [matches] [seed] [outfile]` — Monte-Carlo report over random builds/arenas. | works now |
+| **Tune balance** | `tb_balance [matches] [seed] [outfile]` — Monte-Carlo report; reads `data/catalog.json` (and `data/rules.json` once it lands). | works now |
 
 The read-only `Battle` API (`grid()`, `units()`, `unitAt()`, `affectedTiles()`,
 `unitsAt()`, `clearLineOfSight()`, storm/ring accessors) is deliberately rich so
@@ -609,6 +628,17 @@ Ordered roughly by how much each unlocks the sandbox vision.
 8. **Content/balance backlog** — Portal is AI-unused (its step-on-entry mechanic
    needs deeper planning than the beam search reaches); Fireball is the weakest
    attack (radius-buff candidate). Good first issues.
+
+*(Items 1–2 — catalog loader + content hash — are done; see MILESTONES Phase 1.
+Creatures.json followed the same pattern.)*
+
+**Match rulesets (next data/engine work).** `data/rules.json` — the **third
+pinned artifact** beside catalog + creatures — datafies the match format (team
+size, banned spells, closing-ring, arena, economy) and is read by **both** the
+game and the balance sim via a shared `buildMatch()`, so they construct matches
+identically. Preceded by a small **core split** (separate `Combat`/`Entity`/
+`Battle` headers). Full breakdown in `MILESTONES.md` ("Core split" + "Match
+rulesets").
 
 **Parallel track — Web/WASM build.** Independent of the sequence above and
 available now that the GUI exists: because `core/` is portable C++20 and Raylib

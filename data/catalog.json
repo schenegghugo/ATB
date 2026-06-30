@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "spells": [
     {
       "id": 1,
@@ -13,7 +13,7 @@
       "name": "Attack",
       "apCost": 3,
       "minRange": 1,
-      "maxRange": 6,
+      "maxRange": 3,
       "needsLineOfSight": true,
       "shape": "single",
       "radius": 0,
@@ -35,17 +35,17 @@
         "aoe"
       ],
       "name": "Fireball",
-      "apCost": 4,
+      "apCost": 3,
       "minRange": 2,
       "maxRange": 6,
       "needsLineOfSight": true,
       "shape": "circle",
       "radius": 1,
-      "cooldown": 2,
+      "cooldown": 0,
       "effects": [
         {
           "type": "damage",
-          "amount": 14
+          "amount": 15
         }
       ]
     },
@@ -70,7 +70,7 @@
       "effects": [
         {
           "type": "damage",
-          "amount": 4
+          "amount": 8
         },
         {
           "type": "applyStatus",
@@ -104,11 +104,11 @@
       "effects": [
         {
           "type": "damage",
-          "amount": 6
+          "amount": 8
         },
         {
           "type": "push",
-          "amount": 2
+          "amount": 6
         }
       ]
     },
@@ -134,11 +134,11 @@
       "effects": [
         {
           "type": "pull",
-          "amount": 3
+          "amount": 6
         },
         {
           "type": "damage",
-          "amount": 4
+          "amount": 8
         }
       ]
     },
@@ -163,7 +163,7 @@
           "type": "applyStatus",
           "status": {
             "kind": "shield",
-            "magnitude": 20,
+            "magnitude": 10,
             "turns": 2
           }
         }
@@ -178,7 +178,7 @@
         "buff"
       ],
       "name": "Mend",
-      "apCost": 2,
+      "apCost": 3,
       "minRange": 0,
       "maxRange": 3,
       "needsLineOfSight": false,
@@ -188,7 +188,7 @@
       "effects": [
         {
           "type": "heal",
-          "amount": 18
+          "amount": 15
         }
       ]
     },
@@ -235,7 +235,7 @@
       "needsLineOfSight": false,
       "shape": "single",
       "radius": 0,
-      "cooldown": 5,
+      "cooldown": 4,
       "effects": [
         {
           "type": "applyStatus",
@@ -263,7 +263,7 @@
       "needsLineOfSight": false,
       "shape": "single",
       "radius": 0,
-      "cooldown": 4,
+      "cooldown": 3,
       "effects": [
         {
           "type": "spawn",
