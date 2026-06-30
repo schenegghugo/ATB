@@ -6,6 +6,10 @@
       "id": 1,
       "key": "attack",
       "buildCost": 1,
+      "tags": [
+        "damage",
+        "single"
+      ],
       "name": "Attack",
       "apCost": 3,
       "minRange": 1,
@@ -25,6 +29,11 @@
       "id": 2,
       "key": "fireball",
       "buildCost": 3,
+      "tags": [
+        "damage",
+        "ranged",
+        "aoe"
+      ],
       "name": "Fireball",
       "apCost": 4,
       "minRange": 2,
@@ -44,6 +53,12 @@
       "id": 3,
       "key": "poison",
       "buildCost": 3,
+      "tags": [
+        "damage",
+        "debuff",
+        "dot",
+        "single"
+      ],
       "name": "Poison",
       "apCost": 3,
       "minRange": 1,
@@ -71,6 +86,13 @@
       "id": 4,
       "key": "knockback",
       "buildCost": 2,
+      "tags": [
+        "damage",
+        "debuff",
+        "mobility",
+        "melee",
+        "single"
+      ],
       "name": "Knockback",
       "apCost": 2,
       "minRange": 1,
@@ -94,6 +116,13 @@
       "id": 5,
       "key": "harpoon",
       "buildCost": 2,
+      "tags": [
+        "damage",
+        "debuff",
+        "mobility",
+        "ranged",
+        "single"
+      ],
       "name": "Harpoon",
       "apCost": 3,
       "minRange": 2,
@@ -117,6 +146,10 @@
       "id": 6,
       "key": "bulwark",
       "buildCost": 2,
+      "tags": [
+        "support",
+        "buff"
+      ],
       "name": "Bulwark",
       "apCost": 2,
       "minRange": 0,
@@ -140,6 +173,10 @@
       "id": 7,
       "key": "mend",
       "buildCost": 2,
+      "tags": [
+        "support",
+        "buff"
+      ],
       "name": "Mend",
       "apCost": 2,
       "minRange": 0,
@@ -159,6 +196,10 @@
       "id": 8,
       "key": "shelter",
       "buildCost": 3,
+      "tags": [
+        "support",
+        "terrain"
+      ],
       "name": "Shelter",
       "apCost": 3,
       "minRange": 1,
@@ -182,6 +223,11 @@
       "id": 9,
       "key": "invisible",
       "buildCost": 3,
+      "tags": [
+        "support",
+        "buff",
+        "mobility"
+      ],
       "name": "Invisible",
       "apCost": 2,
       "minRange": 0,
@@ -205,6 +251,11 @@
       "id": 10,
       "key": "portal",
       "buildCost": 3,
+      "tags": [
+        "support",
+        "mobility",
+        "terrain"
+      ],
       "name": "Portal",
       "apCost": 3,
       "minRange": 2,
@@ -228,6 +279,11 @@
       "id": 11,
       "key": "glyph",
       "buildCost": 3,
+      "tags": [
+        "support",
+        "terrain",
+        "debuff"
+      ],
       "name": "Glyph",
       "apCost": 3,
       "minRange": 1,
@@ -251,6 +307,10 @@
       "id": 12,
       "key": "rewind",
       "buildCost": 3,
+      "tags": [
+        "support",
+        "buff"
+      ],
       "name": "Rewind",
       "apCost": 3,
       "minRange": 0,
@@ -274,6 +334,9 @@
       "id": 13,
       "key": "bomb",
       "buildCost": 3,
+      "tags": [
+        "summon"
+      ],
       "name": "Bomb",
       "apCost": 3,
       "minRange": 1,
@@ -293,6 +356,9 @@
       "id": 14,
       "key": "blocker",
       "buildCost": 4,
+      "tags": [
+        "summon"
+      ],
       "name": "Blocker",
       "apCost": 4,
       "minRange": 1,
@@ -312,6 +378,10 @@
       "id": 15,
       "key": "healer",
       "buildCost": 4,
+      "tags": [
+        "summon",
+        "support"
+      ],
       "name": "Healer",
       "apCost": 4,
       "minRange": 1,
@@ -331,6 +401,9 @@
       "id": 16,
       "key": "brute",
       "buildCost": 4,
+      "tags": [
+        "summon"
+      ],
       "name": "Brute",
       "apCost": 4,
       "minRange": 1,

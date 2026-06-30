@@ -356,6 +356,33 @@ heuristics so champions actually cast Summon spells.
 
 ---
 
+## Build editor revamp (spell tags + bigger, filterable picker)
+
+### BE.0 ☑ Bugfix — balance sim crash on the grown catalog
+`balance_sim` indexed fixed `std::array<,12>` by spell id; new ids (12–16)
+overflowed → segfault (CI's `tb_balance 200 1`). Now sized from the catalog's max
+id (vectors) with bounds guards, so it grows with the catalog. Verified across
+seeds incl. seed 1.
+
+### BE.1 ☑ Free-form spell `tags`
+`SpellDef.tags` (`std::vector<std::string>`) — **free-form** (no controlled
+vocabulary, fully moddable), serialized/validated by `CatalogJson` (array of
+unique non-empty strings). Official catalog authored per the taxonomy
+(category: `damage`/`support`/`summon` + modifiers `aoe`/`single`/`melee`/`ranged`/
+`dot`/`buff`/`debuff`/`terrain`/`mobility`). A `tb_catalog_demo` **consistency
+test** enforces that *derivable* tags can't lie (`aoe`⇒non-Single shape,
+`single`⇒Single, `summon`⇒Summon effect, `dot`⇒DoT, `damage`⇒Damage/DoT);
+intent tags (buff/debuff/support/…) are unchecked. `data/catalog.json` regenerated.
+
+### BE.2 ☐ Editor UI: bigger window + filterable card grid
+Resize the window per-screen (`SetWindowSize`: wide editor / arena-sized battle).
+Replace the vertical spell list with a **card grid** (icon + name + cost),
+**category filter chips** (All / Damage / Effects / Support / Summon) + secondary
+tag toggles, and a loadout + budget side panel. Card icons reuse Phase-2's atlas
+frames (with the procedural-badge fallback), so this dovetails with the spell bar.
+
+---
+
 ## Phase 2 — Spell bar + sprite/asset packs (visible payoff)
 
 Pure `render/` + `main.cpp`, zero authority risk, recruits a *different*

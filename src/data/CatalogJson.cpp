@@ -32,8 +32,8 @@ void parseSpell(const json::Value& sp, std::size_t idx, SpellDef& out, std::set<
         return;
     }
     jsonread::checkAllowed(sp,
-                           {"id", "key", "name", "buildCost", "apCost", "minRange", "maxRange",
-                            "needsLineOfSight", "shape", "radius", "cooldown", "effects"},
+                           {"id", "key", "name", "buildCost", "tags", "apCost", "minRange",
+                            "maxRange", "needsLineOfSight", "shape", "radius", "cooldown", "effects"},
                            ctx, e);
 
     int id = 0;
@@ -57,6 +57,24 @@ void parseSpell(const json::Value& sp, std::size_t idx, SpellDef& out, std::set<
     if (jsonread::wantInt(sp, "buildCost", ctx, buildCost, e)) {
         if (buildCost < 0) e.push_back(ctx + ": \"buildCost\" must be >= 0");
         out.buildCost = buildCost;
+    }
+
+    // Tags: free-form (no controlled vocabulary), just a list of unique non-empty
+    // strings the build editor filters by.
+    if (const json::Value* tv = sp.find("tags")) {
+        if (!tv->isArray()) {
+            e.push_back(ctx + ": \"tags\" must be an array");
+        } else {
+            std::set<std::string> seenTags;
+            for (const json::Value& tag : tv->asArray()) {
+                if (!tag.isString() || tag.asString().empty())
+                    e.push_back(ctx + ": each tag must be a non-empty string");
+                else if (!seenTags.insert(tag.asString()).second)
+                    e.push_back(ctx + ": duplicate tag \"" + tag.asString() + "\"");
+                else
+                    out.tags.push_back(tag.asString());
+            }
+        }
     }
 
     Spell spell;
@@ -127,6 +145,9 @@ std::string serializeCatalog(const SpellCatalog& catalog, const std::string& ver
         s.set("id", Value(d.id));
         s.set("key", Value(d.key));
         s.set("buildCost", Value(d.buildCost));
+        Value tags = Value::makeArray();
+        for (const std::string& t : d.tags) tags.push_back(Value(t));
+        s.set("tags", std::move(tags));
         spelljson::writeSpellFields(s, d.spell); // name, apCost, ranges, …, effects
         spells.push_back(std::move(s));
     }

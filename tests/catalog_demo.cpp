@@ -148,6 +148,50 @@ int main() {
         CHECK(!missing.ok && !missing.errors.empty(), "missing file -> ok=false with an error");
     }
 
+    std::printf("Tags: round-trip + consistency with mechanics\n");
+    {
+        SpellCatalog cat = makeDefaultCatalog();
+        CatalogLoad load = loadCatalogFromString(serializeCatalog(cat, "1.0.0"));
+        auto has = [](const SpellDef* d, const char* t) {
+            for (const std::string& s : d->tags) if (s == t) return true;
+            return false;
+        };
+        const SpellDef* fb = load.ok ? load.catalog.findByKey("fireball") : nullptr;
+        CHECK(fb && has(fb, "damage") && has(fb, "aoe"), "fireball tags round-trip (damage, aoe)");
+        const SpellDef* bomb = load.ok ? load.catalog.findByKey("bomb") : nullptr;
+        CHECK(bomb && has(bomb, "summon"), "bomb tagged summon");
+
+        // Authored tags must not contradict mechanics (one-directional check: a tag
+        // making a mechanical claim has to be backed by the spell's data).
+        auto hasEffect = [](const Spell& sp, Effect::Type t) {
+            for (const Effect& fx : sp.effects) if (fx.type == t) return true;
+            return false;
+        };
+        auto hasDoT = [](const Spell& sp) {
+            for (const Effect& fx : sp.effects)
+                if (fx.type == Effect::Type::ApplyStatus &&
+                    fx.status.kind == StatusEffect::Kind::DamageOverTime)
+                    return true;
+            return false;
+        };
+        bool consistent = true;
+        for (const SpellDef& d : cat.all()) {
+            for (const std::string& t : d.tags) {
+                const bool bad =
+                    (t == "aoe" && d.spell.shape == TargetShape::Single) ||
+                    (t == "single" && d.spell.shape != TargetShape::Single) ||
+                    (t == "summon" && !hasEffect(d.spell, Effect::Type::Summon)) ||
+                    (t == "dot" && !hasDoT(d.spell)) ||
+                    (t == "damage" && !(hasEffect(d.spell, Effect::Type::Damage) || hasDoT(d.spell)));
+                if (bad) {
+                    std::printf("    inconsistent tag \"%s\" on \"%s\"\n", t.c_str(), d.key.c_str());
+                    consistent = false;
+                }
+            }
+        }
+        CHECK(consistent, "every derivable tag matches the spell's mechanics");
+    }
+
     std::printf(g_fails == 0 ? "\nALL PASS (0 failures)\n" : "\n%d FAILURE(S)\n", g_fails);
     return g_fails == 0 ? 0 : 1;
 }

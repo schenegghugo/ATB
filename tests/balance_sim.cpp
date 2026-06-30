@@ -35,7 +35,6 @@ using namespace tb;
 
 namespace {
 
-constexpr int kMaxSpellId = 12; // ids 1..11
 constexpr int kHalfTurnCap = 120;
 
 bool isOffensive(int id) {
@@ -142,21 +141,31 @@ double percentile(const std::vector<int>& sorted, double q) {
 }
 
 struct SideAgg {
-    std::array<long, kMaxSpellId> appears{}, wins{};
-    std::array<std::array<long, kMaxSpellId>, kMaxSpellId> pairN{}, pairW{};
+    // Indexed by spell id. Sized to the catalog's max id + 1 at construction so it
+    // grows with the catalog — a fixed-size array silently overflowed (and crashed)
+    // when new spells pushed ids past the old hard-coded bound.
+    std::vector<long> appears, wins;
+    std::vector<std::vector<long>> pairN, pairW;
     // stat presence
     long hpAppear = 0, hpWin = 0, apAppear = 0, apWin = 0, mpAppear = 0, mpWin = 0;
     long noStatAppear = 0, noStatWin = 0;
     std::array<long, 4> bucketN{}, bucketW{}; // by statPts: 0, 1-3, 4-6, 7+
+
+    explicit SideAgg(int idCount)
+        : appears(idCount, 0), wins(idCount, 0),
+          pairN(idCount, std::vector<long>(idCount, 0)),
+          pairW(idCount, std::vector<long>(idCount, 0)) {}
 };
 
 void foldSide(SideAgg& g, const Build& b, bool won) {
     const auto& ids = b.def.spellIds;
-    for (int id : ids) { g.appears[id]++; if (won) g.wins[id]++; }
+    const int n = static_cast<int>(g.appears.size());
+    for (int id : ids)
+        if (id >= 0 && id < n) { g.appears[id]++; if (won) g.wins[id]++; }
     for (size_t i = 0; i < ids.size(); ++i)
         for (size_t j = i + 1; j < ids.size(); ++j) {
             int a = std::min(ids[i], ids[j]), c = std::max(ids[i], ids[j]);
-            g.pairN[a][c]++; if (won) g.pairW[a][c]++;
+            if (a >= 0 && c < n) { g.pairN[a][c]++; if (won) g.pairW[a][c]++; }
         }
     auto bump = [&](long& ap, long& wn, bool present) { if (present) { ap++; if (won) wn++; } };
     bump(g.hpAppear, g.hpWin, b.def.stats.hpPurchases > 0);
@@ -184,7 +193,9 @@ int main(int argc, char** argv) {
     long totalLen = 0;
     std::vector<int> lengths;
     lengths.reserve(matches);
-    SideAgg g;
+    int maxSpellId = 0;
+    for (const SpellDef& d : catalog.all()) maxSpellId = std::max(maxSpellId, d.id);
+    SideAgg g(maxSpellId + 1);
 
     const auto t0 = std::chrono::steady_clock::now();
     for (int m = 0; m < matches; ++m) {
@@ -320,8 +331,9 @@ int main(int argc, char** argv) {
     line("TOP SPELL SYNERGIES  (pairs co-picked >=" "30 times, by joint win rate)");
     struct Pair { int a, b; double wr; long n; };
     std::vector<Pair> pairs;
-    for (int a = 0; a < kMaxSpellId; ++a)
-        for (int b = a + 1; b < kMaxSpellId; ++b)
+    const int idCount = static_cast<int>(g.appears.size());
+    for (int a = 0; a < idCount; ++a)
+        for (int b = a + 1; b < idCount; ++b)
             if (g.pairN[a][b] >= 30)
                 pairs.push_back({a, b, double(g.pairW[a][b]) / g.pairN[a][b], g.pairN[a][b]});
     std::sort(pairs.begin(), pairs.end(), [](const Pair& x, const Pair& y) { return x.wr > y.wr; });

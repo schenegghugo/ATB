@@ -44,6 +44,7 @@ struct SpellDef {
     std::string key;       // stable slug, e.g. "fireball"
     int buildCost = 0;     // points to include this spell in a build
     Spell spell;           // the gameplay data handed to an Entity
+    std::vector<std::string> tags; // free-form, for editor filtering (damage/aoe/support/…)
 };
 
 class SpellCatalog {
