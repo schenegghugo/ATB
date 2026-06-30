@@ -16,8 +16,11 @@
 #include "core/Battle.h"
 #include "core/Build.h"
 #include "core/Grid.h"
+#include "core/Match.h"
+#include "core/Ruleset.h"
 #include "core/Spells.h"
 #include "data/CatalogJson.h"
+#include "data/RulesetJson.h"
 
 #include <algorithm>
 #include <array>
@@ -97,15 +100,10 @@ struct Outcome {
     DamageSource source = DamageSource::Spell;
 };
 
-Outcome runMatch(const SpellCatalog& catalog, const BuildRules& rules, const CharacterBuild& A,
-                 const CharacterBuild& B, unsigned seed) {
-    ArenaConfig cfg;
-    cfg.seed = seed;
-    Grid grid = generateArena(cfg);
-    std::vector<Entity> roster;
-    roster.push_back(instantiate(A, catalog, Faction::Player, cfg.playerSpawn, rules));
-    roster.push_back(instantiate(B, catalog, Faction::Enemy, cfg.enemySpawn, rules));
-    Battle battle(std::move(grid), std::move(roster));
+Outcome runMatch(const Ruleset& ruleset, const SpellCatalog& catalog,
+                 const std::vector<CharacterBuild>& A, const std::vector<CharacterBuild>& B,
+                 unsigned seed) {
+    Battle battle = buildMatch(ruleset, A, B, catalog, seed);
 
     Outcome o;
     for (; o.length < kHalfTurnCap && battle.phase() != Phase::Finished; ++o.length) takeTurn(battle);
@@ -207,21 +205,30 @@ int main(int argc, char** argv) {
         catalogSource = "built-in (makeDefaultCatalog)";
     }
 
-    BuildRules rules{};
-    // Economy knobs overridable for balancing (no recompile). Sweep these and
-    // compare the "bought +HP" win rate + match-length distribution across runs:
-    //   ATB_BASE_HP   base HP every champion starts with
-    //   ATB_HP_STEP   HP granted per HP purchase
-    //   ATB_HP_COST   points each HP purchase costs
-    auto envInt = [](const char* k, int def) {
-        const char* v = std::getenv(k);
-        return (v && *v) ? std::atoi(v) : def;
-    };
-    rules.baseHp = std::max(1, envInt("ATB_BASE_HP", rules.baseHp));
-    rules.hpStep = std::max(0, envInt("ATB_HP_STEP", rules.hpStep));
-    rules.hpCost = std::max(1, envInt("ATB_HP_COST", rules.hpCost));
-
-    StormConfig storm{}; // defaults used by runMatch
+    // Unified rules: load data/rules.json (override the dir via ATB_DATA_DIR) so
+    // the sim and the game build matches the same way — tune the economy / ring /
+    // arena / team size by editing rules.json. Absent → compiled default;
+    // present-but-invalid → hard error.
+    std::string rulesPath = "data/rules.json";
+    if (const char* dir = std::getenv("ATB_DATA_DIR"); dir && *dir)
+        rulesPath = std::string(dir) + "/rules.json";
+    Ruleset ruleset;
+    std::string rulesetSource;
+    if (std::ifstream(rulesPath).good()) {
+        RulesetLoad load = loadRulesetFromFile(rulesPath);
+        if (!load.ok) {
+            std::fprintf(stderr, "balance: ruleset '%s' is invalid:\n", rulesPath.c_str());
+            for (const std::string& e : load.errors) std::fprintf(stderr, "  - %s\n", e.c_str());
+            return 1;
+        }
+        ruleset = std::move(load.ruleset);
+        rulesetSource = rulesPath;
+    } else {
+        ruleset = makeDefaultRuleset();
+        rulesetSource = "built-in (makeDefaultRuleset)";
+    }
+    const BuildRules& rules = ruleset.economy;
+    const StormConfig& storm = ruleset.closingRing;
     std::mt19937 rng(seed);
 
     long aWins = 0, bWins = 0, draws = 0;
@@ -233,11 +240,18 @@ int main(int argc, char** argv) {
     for (const SpellDef& d : catalog.all()) maxSpellId = std::max(maxSpellId, d.id);
     SideAgg g(maxSpellId + 1);
 
+    const int teamSize = ruleset.teamSize;
     const auto t0 = std::chrono::steady_clock::now();
     for (int m = 0; m < matches; ++m) {
-        Build A = randomBuild(rng, catalog, rules);
-        Build B = randomBuild(rng, catalog, rules);
-        Outcome o = runMatch(catalog, rules, A.def, B.def, rng());
+        std::vector<Build> teamA, teamB;
+        std::vector<CharacterBuild> defsA, defsB;
+        for (int t = 0; t < teamSize; ++t) {
+            teamA.push_back(randomBuild(rng, catalog, rules));
+            teamB.push_back(randomBuild(rng, catalog, rules));
+            defsA.push_back(teamA.back().def);
+            defsB.push_back(teamB.back().def);
+        }
+        Outcome o = runMatch(ruleset, catalog, defsA, defsB, rng());
 
         lengths.push_back(o.length);
         totalLen += o.length;
@@ -251,8 +265,8 @@ int main(int argc, char** argv) {
                 case DamageSource::Collision: ++byCollision; break;
             }
         }
-        foldSide(g, A, o.result > 0);
-        foldSide(g, B, o.result < 0);
+        for (const Build& a : teamA) foldSide(g, a, o.result > 0);
+        for (const Build& b : teamB) foldSide(g, b, o.result < 0);
     }
     const double elapsed =
         std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
@@ -270,6 +284,8 @@ int main(int argc, char** argv) {
     r << "  seed               " << seed << "\n";
     r << "  wall time          " << elapsed << " s  ("
       << (elapsed > 0 ? matches / elapsed : 0) << " matches/s)\n";
+    r << "  ruleset            " << rulesetSource << "\n";
+    r << "  format             " << teamSize << "v" << teamSize << "\n";
     r << "  point budget       " << rules.pointBudget << "\n";
     r << "  HP economy         base " << rules.baseHp << ", +" << rules.hpStep << " HP per "
       << rules.hpCost << " pt\n";

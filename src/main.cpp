@@ -22,10 +22,13 @@
 #include "core/Build.h"
 #include "core/Creatures.h"
 #include "core/Grid.h"
+#include "core/Match.h"
+#include "core/Ruleset.h"
 #include "core/Spells.h"
 #include "data/BuildRepository.h"
 #include "data/CatalogJson.h"
 #include "data/CreatureJson.h"
+#include "data/RulesetJson.h"
 #include "render/BuildEditorScreen.h"
 #include "render/ContentPaths.h"
 #include "render/Renderer.h"
@@ -47,7 +50,7 @@ enum class AppState { Editor, Battle };
 struct Session {
     SpellCatalog catalog = makeDefaultCatalog();
     std::vector<Entity> creatures = makeDefaultCreatures(); // bestiary (Summon effects)
-    BuildRules rules{};
+    Ruleset ruleset = makeDefaultRuleset();                 // economy + ring + arena + format
     std::unique_ptr<BuildRepository> repo = std::make_unique<InMemoryBuildRepository>();
 };
 
@@ -69,15 +72,12 @@ CharacterBuild bruiserBuild() {
     return b;
 }
 
-Battle makeBattle(Session& s, const ArenaConfig& cfg, const CharacterBuild& player,
+// One shared construction path (core/Match) drives both the game and the balance
+// sim: arena/economy/ring all come from the ruleset. (The editor authors a single
+// build per side today; multi-build teams for teamSize>1 land in R.3.)
+Battle makeBattle(Session& s, unsigned seed, const CharacterBuild& player,
                   const CharacterBuild& enemy) {
-    Grid grid = generateArena(cfg);
-    std::vector<Entity> roster;
-    roster.push_back(instantiate(player, s.catalog, Faction::Player, cfg.playerSpawn, s.rules));
-    roster.push_back(instantiate(enemy, s.catalog, Faction::Enemy, cfg.enemySpawn, s.rules));
-    Battle battle(std::move(grid), std::move(roster));
-    battle.setCreatures(s.creatures); // enable Summon effects (bombs / summons)
-    return battle;
+    return buildMatch(s.ruleset, {player}, {enemy}, s.catalog, seed, s.creatures);
 }
 
 std::string spellLabel(const Entity& u, int slot) {
@@ -130,16 +130,30 @@ int main() {
         TraceLog(LOG_WARNING, "No data/creatures.json found — using the built-in default bestiary.");
     }
 
+    // Same policy for the match ruleset (data/rules.json) — economy, ring, arena, format.
+    if (std::optional<std::string> path = render::findContent("rules.json")) {
+        RulesetLoad load = loadRulesetFromFile(*path);
+        if (!load.ok) {
+            TraceLog(LOG_ERROR, "Ruleset '%s' is invalid:", path->c_str());
+            for (const std::string& e : load.errors) TraceLog(LOG_ERROR, "  - %s", e.c_str());
+            return 1;
+        }
+        session.ruleset = std::move(load.ruleset);
+        TraceLog(LOG_INFO, "Loaded ruleset '%s' v%s (teamSize %d)", path->c_str(),
+                 load.version.c_str(), session.ruleset.teamSize);
+    } else {
+        TraceLog(LOG_WARNING, "No data/rules.json found — using the built-in default ruleset.");
+    }
+
     session.repo->save(pyromancerBuild()); // seed the store (stands in for the DB)
     session.repo->save(bruiserBuild());
 
     render::Layout layout;
-    ArenaConfig cfg;
-    // Open large enough for both the arena and the (responsive) build editor; the
-    // editor reads the live window size each frame, so it adapts to resizes /
-    // tiling window managers (e.g. Sway, which ignores fixed-size requests).
-    const int arenaW = layout.screenWidth(Grid(cfg.width, cfg.height));
-    const int arenaH = layout.screenHeight(Grid(cfg.width, cfg.height));
+    // Open large enough for both the arena (sized from the ruleset) and the
+    // (responsive) build editor; the editor reads the live window size each frame,
+    // so it adapts to resizes / tiling window managers (e.g. Sway).
+    const int arenaW = layout.screenWidth(Grid(session.ruleset.arena.width, session.ruleset.arena.height));
+    const int arenaH = layout.screenHeight(Grid(session.ruleset.arena.width, session.ruleset.arena.height));
     const int sw = std::max(arenaW, 1180);
     const int sh = std::max(arenaH, 720);
 
@@ -154,7 +168,7 @@ int main() {
     }
     SetTargetFPS(60);
 
-    render::BuildEditorScreen editor(session.catalog, *session.repo, session.rules);
+    render::BuildEditorScreen editor(session.catalog, *session.repo, session.ruleset.economy);
 
     AppState state = AppState::Editor;
     std::optional<Battle> battle;
@@ -166,8 +180,7 @@ int main() {
     float aiTimer = 0.0f;
 
     auto enterBattle = [&]() {
-        cfg.seed = 0;
-        battle.emplace(makeBattle(session, cfg, playerBuild, editor.enemyBuild()));
+        battle.emplace(makeBattle(session, /*seed=*/0, playerBuild, editor.enemyBuild()));
         selectedSpell = 0;
         aiTimer = 0.0f;
         status = "Player turn — left-click move, 1-9 pick spell, right-click cast, Tab=editor.";
@@ -194,8 +207,7 @@ int main() {
 
         if (IsKeyPressed(KEY_TAB)) { state = AppState::Editor; continue; }
         if (IsKeyPressed(KEY_R)) {
-            cfg.seed = 0;
-            battle.emplace(makeBattle(session, cfg, playerBuild, editor.enemyBuild()));
+            battle.emplace(makeBattle(session, /*seed=*/0, playerBuild, editor.enemyBuild()));
             selectedSpell = 0;
             status = "New arena. Player turn.";
         }

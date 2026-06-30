@@ -24,6 +24,7 @@ add_library(tb_core STATIC
     src/core/AI.cpp
     src/core/Spells.cpp
     src/core/Creatures.cpp
+    src/core/Match.cpp
     src/core/Build.cpp
     src/data/BuildRepository.cpp
     src/data/Json.cpp

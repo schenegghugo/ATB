@@ -456,11 +456,18 @@ overrides, 7 malformed). Bonus: `json::dump` now uses `std::to_chars` so
 `coverage` prints as `0.18` (shortest round-trip). **Wiring into game + sim is
 R.2** — the `ATB_*` env-var HP overrides stay until then.
 
-### R.2 ☐ Unified `buildMatch(ruleset, teams, seed, …)` → `Battle`
-A shared match constructor (`core/Match.h`) used by **both** `main.cpp` (replaces
-`makeBattle`) and the balance sim (replaces `runMatch`'s roster build). Both load
-`data/rules.json`; `teamSize:1` reproduces today exactly. **This is the
-unification.**
+### R.2 ☑ Unified `buildMatch(ruleset, teams, seed, …)` → `Battle`
+`core/Match.{h,cpp}` `buildMatch()` is the single construction path: arena from
+`rules.arena`, economy from `rules.economy`, ring from `rules.closingRing`, roster
+placed from the two teams' builds (`teamSpawns` spreads N champions; `teamSize:1`
+yields the historical spawns, so balance stays byte-deterministic). **Both** the
+game (`main.cpp` → `makeBattle` now one-lines `buildMatch`; `Session` carries a
+`Ruleset`; window sized from `rules.arena`; editor validates against
+`rules.economy`) and the balance sim load `data/rules.json` (same
+valid/absent/fail-loud policy) and call `buildMatch`. The sim generates
+`teamSize` builds per side (2v2 verified) and reports the ruleset source + format.
+**Removed the `ATB_*` env-var HP overrides** — tune via `rules.json` now. *(The
+editor still authors one build per side; teams for `teamSize>1` are R.3.)*
 
 ### R.3 ☐ Team formats 2v2 / 3v3
 The engine already runs N champions per team (victory = no living champion per
