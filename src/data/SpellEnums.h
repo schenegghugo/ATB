@@ -10,7 +10,8 @@
 // Adding string values is backward-compatible (old files still parse); only a
 // structural change bumps the catalog `schema`.
 //
-#include "../core/Battle.h" // TargetShape, Effect::Type, StatusEffect::Kind, GroundKind
+#include "../core/Combat.h" // TargetShape, Effect::Type, StatusEffect::Kind, GroundKind
+#include "../core/Entity.h" // EntityKind
 
 #include <cstddef>
 #include <iterator>

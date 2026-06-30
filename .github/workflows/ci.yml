@@ -38,14 +38,10 @@ jobs:
       - name: Balance sanity (fixed seed, fast)
         run: ./build/tb_balance 200 1
 
-      - name: Data files are in sync with the code
+      - name: Data files load + validate (data is canonical, hand-editable)
         run: |
-          ./build/tb_catalog_gen /tmp/catalog.gen.json 1.0.0 >/dev/null
-          diff -u data/catalog.json /tmp/catalog.gen.json \
-            || (echo "data/catalog.json is stale — run tb_catalog_gen and commit" && exit 1)
-          ./build/tb_creature_gen /tmp/creatures.gen.json 1.0.0 >/dev/null
-          diff -u data/creatures.json /tmp/creatures.gen.json \
-            || (echo "data/creatures.json is stale — run tb_creature_gen and commit" && exit 1)
+          ./build/tb_catalog_gen --check data/catalog.json
+          ./build/tb_creature_gen --check data/creatures.json
 
   gui-build:
     name: GUI compiles (Linux)

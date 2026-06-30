@@ -5,7 +5,7 @@
 // spells, statuses, fuse, onDeath). Built on the same Json + SpellJson + enum
 // machinery as the spell catalog. core/ is untouched.
 //
-#include "../core/Battle.h"
+#include "../core/Entity.h" // Entity (a creature prototype)
 
 #include <string>
 #include <vector>

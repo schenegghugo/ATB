@@ -238,9 +238,11 @@ defaults, and 12 malformed-input rejections. Wired into CI; builds clean under
 `-Wall -Wextra`. (`loadCatalogFromFile` + `sha256` land in 1.4.)
 
 ### 1.4 ☑ `makeDefaultCatalog()` becomes the generator + `sha256`
-`tb_catalog_gen [out] [version]` emits `data/catalog.json` (top-level `data/` =
-runtime content; `src/data/` = code) from `makeDefaultCatalog()`, so file and
-code can't drift. Hand-rolled `data/Sha256.{h,cpp}` (`sha256Hex`, dep-free; the
+`tb_catalog_gen` scaffolds `data/catalog.json` (top-level `data/` = runtime
+content; `src/data/` = code) from `makeDefaultCatalog()`. **The data file is the
+source of truth** (hand-editable); the compiled seed is the absent-file fallback +
+a bootstrap scaffold — they may diverge, and that's fine. Hand-rolled
+`data/Sha256.{h,cpp}` (`sha256Hex`, dep-free; the
 server needs it too) hashes the exact bytes — the PvP handshake anchor (§5/§7) —
 and `CatalogLoad.sha256` carries it. `loadCatalogFromFile(path)` added. The
 committed `data/catalog.json` is generated and in sync.
@@ -249,8 +251,11 @@ committed `data/catalog.json` is generated and in sync.
 `tb_catalog_demo` (28 checks): byte-identical `serialize → load → serialize`,
 field-level fidelity, hand-authored defaults, 12 malformed-input rejections, and
 the file/`sha256` checks. `tb_sha256_demo` (known-answer vectors). Enum coverage
-is compile-time (`static_assert`s, 1.2). CI also runs a **drift guard**:
-regenerate `data/catalog.json` and `diff` it against the committed file.
+is compile-time (`static_assert`s, 1.2). CI runs a **validity check** —
+`tb_catalog_gen --check data/catalog.json` (and the creatures equivalent) — so the
+committed, hand-editable data files must load + validate. *(Originally a
+regenerate-and-diff drift guard; flipped once the data file became canonical and
+balance values are tuned by editing the JSON directly.)*
 
 ### 1.6 ☑ Wire into the app + data-path resolution
 `main.cpp` loads the catalog **before `InitWindow`** via the new
@@ -322,9 +327,10 @@ are baked in below.
   same valid/absent/malformed policy as the catalog. The Spell/Effect/Status ↔
   JSON mapping was **factored into `data/SpellJson.{h,cpp}` + `data/JsonRead.h`**
   and shared by the catalog and creature loaders (no duplication). `EntityKind`
-  got its `SpellEnums` table. `makeDefaultCreatures()` stays as the compiled seed
-  + generator. Covered by `tb_creature_demo` (round-trip + field fidelity +
-  malformed) with a CI drift guard; `core/` untouched.
+  got its `SpellEnums` table. `makeDefaultCreatures()` stays as the compiled
+  fallback/scaffold (the data file is canonical). Covered by `tb_creature_demo`
+  (round-trip + field fidelity + malformed) + a CI validity check
+  (`tb_creature_gen --check`); `core/` untouched.
 
 **Bombs** ☑ — an `Object` template (`core/Creatures.cpp`): HP 12; ignition =
 self-`DamageOverTime` 4/turn; `onDeath` = radius-1 `Damage` 20 (**friendly fire
@@ -409,17 +415,19 @@ large modded catalogs; secondary modifier-tag toggles.)*
 `Battle.h` mixes three concerns; split for clarity. Mechanical,
 **behaviour-preserving**, full-suite-verified.
 
-### CS.1 ☐ Split `Battle.h` into Combat / Entity / Battle
+### CS.1 ☑ Split `Battle.h` into Combat / Entity / Battle
 - `core/Combat.h` — spell/effect **data model**: `Effect`, `TargetShape`, `Spell`,
   `StatusEffect`, `GroundKind`, `GroundSpec`, `DamageSource`.
 - `core/Entity.h` — `EntityId`, `Faction`, `EntityKind`, `Control`, `Entity`,
-  `EntitySnapshot`.
+  `EntitySnapshot` (includes `Combat.h` + `Grid.h`).
 - `core/Battle.h` — the engine only: `Phase`, `GroundEffect`, `PendingRewind`,
-  `Battle`. (`Grid.h` stays = the arena terrain.)
-- Pure declaration moves + `#include` fixups across core/data/render/tests; **no
-  behaviour change** — acceptance is the whole suite (incl. byte-identical balance
-  determinism) passing unchanged. Clarifies *config vs engine* for the rulesets
-  below: `StormConfig` is config → it migrates into the `Ruleset`.
+  `Battle` (re-includes `Combat.h` + `Entity.h`, so existing `#include "Battle.h"`
+  still resolves everything). `Grid.h` stays = the arena terrain.
+- Data-layer headers narrowed to their real deps (`Spells.h`→`Combat.h`,
+  `Build.h`/`Creatures.h`/`CreatureJson.h`→`Entity.h`, `SpellJson.h`→`Combat.h`,
+  `SpellEnums.h`→`Combat.h`+`Entity.h`). **No behaviour change** — full suite,
+  `--check`, balance determinism, and the GUI all pass unchanged. `StormConfig`
+  still lives in `Battle.h`; it migrates into the `Ruleset` in R.1.
 
 ---
 

@@ -8,7 +8,7 @@
 // template keyed by its `name`; Battle::spawnCreature copies it, sets team + pos,
 // and inserts it into the live roster.
 //
-#include "Battle.h"
+#include "Entity.h" // Entity (a creature prototype)
 
 #include <vector>
 

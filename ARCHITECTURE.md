@@ -141,14 +141,12 @@ budget, then hydrated into an `Entity`. The gameplay core never sees a "class".
 
 The **catalog** is the dictionary of all spells the game knows about.
 
-**Today:** `makeDefaultCatalog()` constructs the 11-spell catalog in C++. It is
-compiled into the binary. Builds reference spells by stable id
-(`spellid::Fireball == 2`, etc.), which are also the primary keys in
-`data/schema.sql`.
-
-**Target:** the engine loads the catalog from a **versioned JSON file**
-(`data/catalog.json`), and `makeDefaultCatalog()` becomes the seed that
-*generates* that file. The shift is small but unlocks the whole vision:
+**Status: shipped.** The engine loads the catalog from a **versioned JSON file**
+(`data/catalog.json`) via `data/CatalogJson`. **That file is the source of truth**
+— hand-editable, the thing balance/content is tuned in. `makeDefaultCatalog()`
+remains in C++ as the *absent-file fallback* and a *scaffold* (`tb_catalog_gen`)
+to bootstrap a fresh file; it may diverge from the committed file, and that's
+expected. Builds reference spells by stable id.
 
 ```
    data/catalog.json            ← the canonical content (versioned, hashable)
@@ -160,13 +158,17 @@ compiled into the binary. Builds reference spells by stable id
    CharacterBuild → hydrate → Entity → Battle      ← core/ is untouched
 ```
 
-Two pieces get added alongside the loader:
+The loader carries:
 
-1. **A catalog version + content hash.** Every catalog file declares a version
-   and the server/client agree on a `sha256` of the exact bytes at handshake.
-   This is the anchor for trust (§5).
+1. **A version + content hash.** The file declares a `version`; the loader
+   computes a `sha256` of the exact bytes — the trust anchor for the handshake
+   (§5/§7).
 2. **Strict schema validation.** A malformed or unknown-field file is rejected
-   *loudly* at load, never silently coerced. Bad data must fail fast.
+   *loudly* at load (all errors, with context), never silently coerced.
+3. **CI is a validity gate, not a drift gate.** Because the data file is
+   canonical, CI runs `tb_catalog_gen --check data/catalog.json` (it must load +
+   validate) rather than diffing it against the compiled seed. The same applies
+   to `creatures.json` (and `rules.json` once it lands).
 
 Crucially, **`core/` does not change** when this lands. `SpellCatalog` keeps its
 current interface; only *where the entries come from* moves from a compiled

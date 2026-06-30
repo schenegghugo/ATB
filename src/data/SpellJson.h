@@ -6,7 +6,7 @@
 // creature's innate `spells` + `onDeath`) both serialize the same Spell/Effect
 // shapes, so the mapping lives here once. Strict + contextual error reporting.
 //
-#include "../core/Battle.h" // Spell, Effect
+#include "../core/Combat.h" // Spell, Effect, StatusEffect
 #include "Json.h"
 
 #include <string>

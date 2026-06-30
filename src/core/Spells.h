@@ -11,7 +11,7 @@
 // Classless by design: characters are built by spending points from this
 // dictionary, never by picking a class.
 //
-#include "Battle.h"
+#include "Combat.h" // Spell
 
 #include <optional>
 #include <string>

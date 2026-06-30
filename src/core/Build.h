@@ -9,7 +9,7 @@
 //
 // `instantiate()` turns a build + catalog into a runtime Entity for a Battle.
 //
-#include "Battle.h"
+#include "Entity.h" // Entity, Faction (instantiate's output)
 #include "Spells.h"
 
 #include <optional>

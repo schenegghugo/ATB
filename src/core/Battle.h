@@ -11,6 +11,8 @@
 // index *is* a permanent, stable EntityId. (When summons land, swap the index
 // for a free-list behind this same typedef — no public API churn.)
 //
+#include "Combat.h" // DamageSource, StatusEffect, GroundKind/Spec, Effect, Spell
+#include "Entity.h" // EntityId, Faction, EntityKind, Control, Entity, EntitySnapshot
 #include "Grid.h"
 
 #include <cstdint>
@@ -20,107 +22,6 @@
 
 namespace tb {
 
-using EntityId = std::uint16_t;
-
-enum class Faction : std::uint8_t { Player, Enemy };
-
-[[nodiscard]] constexpr Faction opposing(Faction f) {
-    return f == Faction::Player ? Faction::Enemy : Faction::Player;
-}
-
-// Role in the roster. Only Champions count for victory; Summons are AI-driven
-// helpers; Objects (e.g. bombs) are inert and just tick/auto-end their turn.
-enum class EntityKind : std::uint8_t { Champion, Summon, Object };
-
-// Who decides a unit's turn: the local player, the AI planner, or nobody (an
-// inert object whose turn simply passes).
-enum class Control : std::uint8_t { Player, AI, Inert };
-
-// What dealt a lethal blow — lets analysis attribute how matches end.
-enum class DamageSource : std::uint8_t { Spell, Storm, Collision };
-
-// --- Status effects ---------------------------------------------------------
-// Carried per-entity, ticked at the owner's turn start. Buffs feed the AP/MP
-// reset; DamageOverTime applies on tick; Shield absorbs incoming damage.
-struct StatusEffect {
-    enum class Kind : std::uint8_t { DamageOverTime, Shield, ApBuff, MpBuff, Invisible, Rewind };
-    Kind kind = Kind::DamageOverTime;
-    int magnitude = 0;       // dmg/turn, absorb pool, or +AP/+MP (unused for Invisible/Rewind)
-    int remainingTurns = 0;  // decremented after each of the owner's turns
-};
-
-// --- Ground effects (persistent battlefield features) -----------------------
-// Spawned by spells onto tiles, with a turn duration. Walls block movement/LOS;
-// Glyphs repel anyone entering; Portals teleport anyone entering to an exit.
-enum class GroundKind : std::uint8_t { Wall, Glyph, Portal };
-
-// Authoring payload carried by an Effect of type Spawn.
-struct GroundSpec {
-    GroundKind kind = GroundKind::Wall;
-    int duration = 2;   // turns the feature persists
-    int magnitude = 0;  // Glyph: repel distance
-};
-
-// --- Spell / effect data ----------------------------------------------------
-struct Effect {
-    enum class Type : std::uint8_t { Damage, Heal, Push, Pull, ApplyStatus, Spawn, Summon };
-    Type type = Type::Damage;
-    int amount = 0;            // damage / heal / forced-move distance
-    StatusEffect status{};     // used when type == ApplyStatus
-    GroundSpec ground{};       // used when type == Spawn
-    std::string creature{};    // creature template key, used when type == Summon
-};
-
-enum class TargetShape : std::uint8_t { Single, Line, Cross, Circle };
-
-struct Spell {
-    std::string name;
-    int apCost = 0;
-    int minRange = 1;
-    int maxRange = 1;          // Manhattan range
-    bool needsLineOfSight = true;
-    TargetShape shape = TargetShape::Single;
-    int radius = 0;            // for Cross / Circle / Line length
-    int cooldown = 0;          // turns before the caster may reuse it (0 = every turn)
-    std::vector<Effect> effects;
-};
-
-// Spell construction lives in the catalog (Spells.h) — Battle is pure mechanics.
-
-// --- Entity -----------------------------------------------------------------
-struct Entity {
-    std::string name;
-    Faction team = Faction::Player;
-    EntityKind kind = EntityKind::Champion; // Champions decide victory (see checkVictory)
-    Vec2i pos;
-    int hp = 0, maxHp = 0;
-    int ap = 0, maxAp = 0; // action points (spells)
-    int mp = 0, maxMp = 0; // movement points (tiles)
-    int initiative = 0;    // higher acts earlier
-    std::vector<StatusEffect> statuses;
-    std::vector<Spell> spells;
-    std::vector<int> spellCooldowns; // remaining turns per spell slot (parallel to spells)
-    Spell onDeath;                   // resolved at the entity's tile when it dies (empty = none)
-    int fuse = 0;                    // >0: detonates (dies -> onDeath) when it counts down to 0
-
-    [[nodiscard]] bool alive() const { return hp > 0; }
-    [[nodiscard]] bool isChampion() const { return kind == EntityKind::Champion; }
-    [[nodiscard]] bool hasStatus(StatusEffect::Kind k) const {
-        for (const StatusEffect& s : statuses)
-            if (s.kind == k) return true;
-        return false;
-    }
-    [[nodiscard]] bool invisible() const { return hasStatus(StatusEffect::Kind::Invisible); }
-};
-
-// --- Rewind -----------------------------------------------------------------
-// Snapshot of a unit's restorable state, captured when Rewind is applied.
-struct EntitySnapshot {
-    Vec2i pos;
-    int hp = 0;
-    std::vector<StatusEffect> statuses;
-    std::vector<int> spellCooldowns;
-};
 // A pending Rewind: when `turnsLeft` hits 0 at the target's turn start, restore
 // `snap` (unless the target is dead by then — Rewind does not revive).
 struct PendingRewind {
