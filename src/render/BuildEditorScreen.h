@@ -10,6 +10,7 @@
 // between BeginDrawing()/EndDrawing()).
 //
 #include "../core/Build.h"
+#include "../core/Ruleset.h"
 #include "../core/Spells.h"
 #include "../data/BuildRepository.h"
 
@@ -22,15 +23,20 @@ class BuildEditorScreen {
 public:
     enum class Result { None, Fight };
 
-    BuildEditorScreen(const SpellCatalog& catalog, BuildRepository& repo, BuildRules rules);
+    // `ruleset` supplies the economy (validation/budget) and teamSize (how many
+    // builds per side the editor authors).
+    BuildEditorScreen(const SpellCatalog& catalog, BuildRepository& repo, Ruleset ruleset);
 
     // One frame of input + drawing. Returns Fight when the user launches a match.
     Result runFrame(int screenW, int screenH);
 
-    [[nodiscard]] const CharacterBuild& playerBuild() const { return player_; }
-    [[nodiscard]] CharacterBuild enemyBuild() const; // loaded from the selected preset
+    // The authored player team and the picked enemy team (each sized to teamSize).
+    [[nodiscard]] const std::vector<CharacterBuild>& playerTeam() const { return playerTeam_; }
+    [[nodiscard]] std::vector<CharacterBuild> enemyTeam() const;
 
 private:
+    [[nodiscard]] CharacterBuild& cur() { return playerTeam_[playerSlot_]; }
+    [[nodiscard]] const CharacterBuild& cur() const { return playerTeam_[playerSlot_]; }
     [[nodiscard]] bool hasSpell(int id) const;
     [[nodiscard]] bool matchesFilter(const SpellDef& d) const;
     void toggleSpell(int id);
@@ -38,11 +44,12 @@ private:
 
     const SpellCatalog& catalog_;
     BuildRepository& repo_;
-    BuildRules rules_;
+    Ruleset ruleset_;
 
-    CharacterBuild player_;
+    std::vector<CharacterBuild> playerTeam_; // one per slot (size = teamSize)
+    int playerSlot_ = 0;                     // which player slot is being edited
+    std::vector<int> enemyPicks_;            // index into savedNames_ per enemy slot
     std::vector<std::string> savedNames_;
-    int enemyIdx_ = 0;
     bool editingName_ = false;
     int filter_ = 0; // category filter: 0=All 1=Damage 2=Effects 3=Support 4=Summon
     std::string statusMsg_;

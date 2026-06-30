@@ -52,43 +52,66 @@ const char* shapeName(TargetShape s) {
 } // namespace
 
 BuildEditorScreen::BuildEditorScreen(const SpellCatalog& catalog, BuildRepository& repo,
-                                     BuildRules rules)
-    : catalog_(catalog), repo_(repo), rules_(rules) {
+                                     Ruleset ruleset)
+    : catalog_(catalog), repo_(repo), ruleset_(std::move(ruleset)) {
+    const int n = ruleset_.teamSize > 0 ? ruleset_.teamSize : 1;
+    playerTeam_.resize(static_cast<std::size_t>(n));
     if (auto seed = repo_.load("Pyromancer")) {
-        player_ = *seed;
+        playerTeam_[0] = *seed;
     } else {
-        player_.name = "Hero";
-        player_.spellIds = {spellid::Attack};
+        playerTeam_[0].name = "Hero";
+        playerTeam_[0].spellIds = {spellid::Attack};
+    }
+    for (int i = 1; i < n; ++i) {
+        playerTeam_[i].name = "Hero " + std::to_string(i + 1);
+        playerTeam_[i].spellIds = {spellid::Attack};
     }
     refreshSaved();
-    auto it = std::find(savedNames_.begin(), savedNames_.end(), std::string("Bruiser"));
-    if (it != savedNames_.end()) enemyIdx_ = static_cast<int>(it - savedNames_.begin());
+    int bruiser = 0;
+    for (int i = 0; i < static_cast<int>(savedNames_.size()); ++i)
+        if (savedNames_[i] == "Bruiser") bruiser = i;
+    enemyPicks_.assign(static_cast<std::size_t>(n), bruiser);
 }
 
 void BuildEditorScreen::refreshSaved() {
     savedNames_ = repo_.list();
-    if (enemyIdx_ >= static_cast<int>(savedNames_.size())) enemyIdx_ = 0;
+    for (int& pick : enemyPicks_)
+        if (pick >= static_cast<int>(savedNames_.size())) pick = 0;
 }
 
 bool BuildEditorScreen::hasSpell(int id) const {
-    return std::find(player_.spellIds.begin(), player_.spellIds.end(), id) !=
-           player_.spellIds.end();
+    const auto& ids = cur().spellIds;
+    return std::find(ids.begin(), ids.end(), id) != ids.end();
 }
 
 void BuildEditorScreen::toggleSpell(int id) {
-    auto it = std::find(player_.spellIds.begin(), player_.spellIds.end(), id);
-    if (it != player_.spellIds.end()) player_.spellIds.erase(it);
-    else player_.spellIds.push_back(id);
+    auto& ids = cur().spellIds;
+    auto it = std::find(ids.begin(), ids.end(), id);
+    if (it != ids.end()) ids.erase(it);
+    else ids.push_back(id);
 }
 
-CharacterBuild BuildEditorScreen::enemyBuild() const {
-    if (!savedNames_.empty()) {
-        if (auto b = repo_.load(savedNames_[enemyIdx_])) return *b;
+std::vector<CharacterBuild> BuildEditorScreen::enemyTeam() const {
+    std::vector<CharacterBuild> out;
+    for (int idx : enemyPicks_) {
+        if (idx >= 0 && idx < static_cast<int>(savedNames_.size())) {
+            if (auto b = repo_.load(savedNames_[idx])) {
+                out.push_back(*b);
+                continue;
+            }
+        }
+        CharacterBuild dummy;
+        dummy.name = "Dummy";
+        dummy.spellIds = {spellid::Attack};
+        out.push_back(dummy);
     }
-    CharacterBuild fallback;
-    fallback.name = "Dummy";
-    fallback.spellIds = {spellid::Attack};
-    return fallback;
+    if (out.empty()) {
+        CharacterBuild dummy;
+        dummy.name = "Dummy";
+        dummy.spellIds = {spellid::Attack};
+        out.push_back(dummy);
+    }
+    return out;
 }
 
 bool BuildEditorScreen::matchesFilter(const SpellDef& d) const {
@@ -116,33 +139,47 @@ BuildEditorScreen::Result BuildEditorScreen::runFrame(int screenW, int screenH) 
     const float rightX = W - rightW - pad;  // everything left of this is the grid
 
     DrawText("BUILD EDITOR", 16, 10, 22, kText);
-    DrawText("Classless point-buy — filter the dictionary, click cards to add / remove.", 16, 36,
-             14, kMuted);
 
-    const BuildValidation val = validateBuild(player_, catalog_, rules_);
+    const BuildValidation val = validateBuild(cur(), catalog_, ruleset_.economy);
 
-    // --- Name field (top-right) ---------------------------------------------
+    // --- Name field (top-right) edits the current slot ----------------------
     Rectangle nameRect{rightX, 10, rightW, 30};
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) editingName_ = hovered(nameRect, m);
     if (editingName_) {
         int key = GetCharPressed();
         while (key > 0) {
-            if (key >= 32 && key < 127 && player_.name.size() < 16)
-                player_.name.push_back(static_cast<char>(key));
+            if (key >= 32 && key < 127 && cur().name.size() < 16)
+                cur().name.push_back(static_cast<char>(key));
             key = GetCharPressed();
         }
-        if (IsKeyPressed(KEY_BACKSPACE) && !player_.name.empty()) player_.name.pop_back();
+        if (IsKeyPressed(KEY_BACKSPACE) && !cur().name.empty()) cur().name.pop_back();
         if (IsKeyPressed(KEY_ENTER)) editingName_ = false;
     }
     DrawRectangleRec(nameRect, editingName_ ? kPanelHot : kPanel);
     DrawRectangleLinesEx(nameRect, 1.0f, editingName_ ? kAccent : kLine);
-    DrawText(TextFormat("Name: %s%s", player_.name.c_str(), editingName_ ? "_" : ""),
+    DrawText(TextFormat("Name: %s%s", cur().name.c_str(), editingName_ ? "_" : ""),
              static_cast<int>(nameRect.x) + 8, static_cast<int>(nameRect.y) + 8, 16, kText);
+
+    // --- Player team slot tabs (author one champion at a time) --------------
+    DrawText("Your team:", 16, 44, 14, kMuted);
+    {
+        float tx = 104.0f;
+        for (int i = 0; i < static_cast<int>(playerTeam_.size()); ++i) {
+            const bool slotOk = validateBuild(playerTeam_[i], catalog_, ruleset_.economy).ok;
+            Rectangle tab{tx, 38, 34, 26};
+            const Color base = (i == playerSlot_) ? kAccent : (slotOk ? kPanel : kBad);
+            if (button(tab, TextFormat("%d", i + 1), m, base)) {
+                playerSlot_ = i;
+                editingName_ = false;
+            }
+            tx += 40.0f;
+        }
+    }
 
     // --- Category filter chips ----------------------------------------------
     static const char* kCats[] = {"All", "Damage", "Effects", "Support", "Summon"};
     float chipX = 16.0f;
-    const float chipY = 62.0f;
+    const float chipY = 74.0f;
     for (int i = 0; i < 5; ++i) {
         const float cw = static_cast<float>(MeasureText(kCats[i], 16)) + 22;
         Rectangle chip{chipX, chipY, cw, 28};
@@ -151,7 +188,7 @@ BuildEditorScreen::Result BuildEditorScreen::runFrame(int screenW, int screenH) 
     }
 
     // --- Spell card grid -----------------------------------------------------
-    const float gx0 = 16.0f, gy0 = 100.0f;
+    const float gx0 = 16.0f, gy0 = 112.0f;
     const float gridW = rightX - pad - gx0;
     const float cardW = 172.0f, cardH = 80.0f, gap = 10.0f;
     const int cols = std::max(1, static_cast<int>((gridW + gap) / (cardW + gap)));
@@ -203,10 +240,10 @@ BuildEditorScreen::Result BuildEditorScreen::runFrame(int screenW, int screenH) 
     float sy = 56.0f;
     DrawText("Stat upgrades", static_cast<int>(rightX), static_cast<int>(sy), 16, kMuted);
     sy += 24;
-    stepper(sy, "+HP", player_.stats.hpPurchases, rules_.hpCost, "x%d"); sy += 38;
-    stepper(sy, "+AP", player_.stats.bonusAp, rules_.apCost, "+%d"); sy += 38;
-    stepper(sy, "+MP", player_.stats.bonusMp, rules_.mpCost, "+%d"); sy += 38;
-    stepper(sy, "+INIT", player_.stats.bonusInitiative, rules_.initCost, "+%d"); sy += 46;
+    stepper(sy, "+HP", cur().stats.hpPurchases, ruleset_.economy.hpCost, "x%d"); sy += 38;
+    stepper(sy, "+AP", cur().stats.bonusAp, ruleset_.economy.apCost, "+%d"); sy += 38;
+    stepper(sy, "+MP", cur().stats.bonusMp, ruleset_.economy.mpCost, "+%d"); sy += 38;
+    stepper(sy, "+INIT", cur().stats.bonusInitiative, ruleset_.economy.initCost, "+%d"); sy += 46;
 
     // --- Budget + validation -------------------------------------------------
     Rectangle barBg{rightX, sy, rightW, 22};
@@ -226,25 +263,37 @@ BuildEditorScreen::Result BuildEditorScreen::runFrame(int screenW, int screenH) 
         ey += 17;
     }
 
+    // --- Enemy team pickers (one slot per teamSize) -------------------------
+    DrawText("Enemy team:", 16, static_cast<int>(H) - 78, 14, kMuted);
+    {
+        float ex = 110.0f;
+        for (int i = 0; i < static_cast<int>(enemyPicks_.size()); ++i) {
+            const char* nm = savedNames_.empty() ? "(none)" : savedNames_[enemyPicks_[i]].c_str();
+            Rectangle pk{ex, H - 82, 150, 26};
+            if (button(pk, TextFormat("%d: %s >", i + 1, nm), m, kPanel, !savedNames_.empty()))
+                enemyPicks_[i] = (enemyPicks_[i] + 1) % static_cast<int>(savedNames_.size());
+            ex += 158.0f;
+        }
+    }
+
     // --- Bottom action bar ---------------------------------------------------
+    bool teamValid = true;
+    for (const CharacterBuild& b : playerTeam_)
+        if (!validateBuild(b, catalog_, ruleset_.economy).ok) teamValid = false;
+
     const float by = H - 44;
-    Rectangle saveBtn{16, by, 110, 32};
-    Rectangle enemyBtn{136, by, 250, 32};
+    Rectangle saveBtn{16, by, 130, 32};
     Rectangle fightBtn{W - 156, by, 140, 32};
 
-    if (button(saveBtn, "Save", m, kPanel, val.ok)) {
-        repo_.save(player_);
+    if (button(saveBtn, "Save Slot", m, kPanel, val.ok)) {
+        repo_.save(cur());
         refreshSaved();
-        statusMsg_ = "Saved '" + player_.name + "'.";
+        statusMsg_ = "Saved '" + cur().name + "'.";
     }
-    const char* enemyName = savedNames_.empty() ? "(none)" : savedNames_[enemyIdx_].c_str();
-    if (button(enemyBtn, TextFormat("Enemy: %s  >", enemyName), m, kPanel, !savedNames_.empty()))
-        enemyIdx_ = (enemyIdx_ + 1) % static_cast<int>(savedNames_.size());
-    if (button(fightBtn, "Fight >", m, kAccent, val.ok)) result = Result::Fight;
+    if (button(fightBtn, "Fight >", m, kAccent, teamValid)) result = Result::Fight;
 
     if (!statusMsg_.empty())
-        DrawText(statusMsg_.c_str(), static_cast<int>(enemyBtn.x), static_cast<int>(by) - 20, 14,
-                 kMuted);
+        DrawText(statusMsg_.c_str(), 160, static_cast<int>(by) + 8, 14, kMuted);
 
     return result;
 }

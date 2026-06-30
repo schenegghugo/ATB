@@ -72,14 +72,6 @@ CharacterBuild bruiserBuild() {
     return b;
 }
 
-// One shared construction path (core/Match) drives both the game and the balance
-// sim: arena/economy/ring all come from the ruleset. (The editor authors a single
-// build per side today; multi-build teams for teamSize>1 land in R.3.)
-Battle makeBattle(Session& s, unsigned seed, const CharacterBuild& player,
-                  const CharacterBuild& enemy) {
-    return buildMatch(s.ruleset, {player}, {enemy}, s.catalog, seed, s.creatures);
-}
-
 std::string spellLabel(const Entity& u, int slot) {
     if (slot < 0 || slot >= static_cast<int>(u.spells.size())) return "";
     const Spell& sp = u.spells[slot];
@@ -168,11 +160,10 @@ int main() {
     }
     SetTargetFPS(60);
 
-    render::BuildEditorScreen editor(session.catalog, *session.repo, session.ruleset.economy);
+    render::BuildEditorScreen editor(session.catalog, *session.repo, session.ruleset);
 
     AppState state = AppState::Editor;
     std::optional<Battle> battle;
-    CharacterBuild playerBuild;
     std::string status;
     int selectedSpell = 0;
 
@@ -180,7 +171,8 @@ int main() {
     float aiTimer = 0.0f;
 
     auto enterBattle = [&]() {
-        battle.emplace(makeBattle(session, /*seed=*/0, playerBuild, editor.enemyBuild()));
+        battle.emplace(buildMatch(session.ruleset, editor.playerTeam(), editor.enemyTeam(),
+                                  session.catalog, /*seed=*/0, session.creatures));
         selectedSpell = 0;
         aiTimer = 0.0f;
         status = "Player turn — left-click move, 1-9 pick spell, right-click cast, Tab=editor.";
@@ -194,7 +186,6 @@ int main() {
             BeginDrawing();
             if (editor.runFrame(GetScreenWidth(), GetScreenHeight()) ==
                 render::BuildEditorScreen::Result::Fight) {
-                playerBuild = editor.playerBuild();
                 enterBattle();
             }
             EndDrawing();
@@ -207,7 +198,8 @@ int main() {
 
         if (IsKeyPressed(KEY_TAB)) { state = AppState::Editor; continue; }
         if (IsKeyPressed(KEY_R)) {
-            battle.emplace(makeBattle(session, /*seed=*/0, playerBuild, editor.enemyBuild()));
+            battle.emplace(buildMatch(session.ruleset, editor.playerTeam(), editor.enemyTeam(),
+                                      session.catalog, /*seed=*/0, session.creatures));
             selectedSpell = 0;
             status = "New arena. Player turn.";
         }

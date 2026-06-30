@@ -469,11 +469,16 @@ valid/absent/fail-loud policy) and call `buildMatch`. The sim generates
 **Removed the `ATB_*` env-var HP overrides** — tune via `rules.json` now. *(The
 editor still authors one build per side; teams for `teamSize>1` are R.3.)*
 
-### R.3 ☐ Team formats 2v2 / 3v3
-The engine already runs N champions per team (victory = no living champion per
-team). Work: the sim generates `teamSize` builds per side; the **build editor**
-authors/selects a *team* of builds per side (the main new UI — rhymes with the
-future lobby).
+### R.3 ☑ Team formats 2v2 / 3v3
+The game now honours `rules.json` `teamSize`. The editor authors a **team of
+builds**: player **slot tabs** (`1 2 3`, tinted red when a slot is over budget) to
+edit each champion in turn, and a row of **enemy slot pickers** (each cycles the
+saved builds). `playerTeam()` / `enemyTeam()` feed the shared `buildMatch`, so
+Fight only enables when *every* player slot is valid. The editor takes the whole
+`Ruleset` (economy + teamSize). `core/` + sim already supported N champions
+(victory = no living champion per team); the sim generates `teamSize` builds per
+side. Verified: default 1v1 unchanged; a `teamSize:2` ruleset runs end-to-end in
+both the sim (4 entities/match) and the GUI.
 
 ### R.4 ☐ Static maps
 A `Grid` serialization (`data/maps/*.json` — a tile grid) + loader + on-load
