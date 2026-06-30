@@ -23,10 +23,13 @@ add_library(tb_core STATIC
     src/core/Battle.cpp
     src/core/AI.cpp
     src/core/Spells.cpp
+    src/core/Creatures.cpp
     src/core/Build.cpp
     src/data/BuildRepository.cpp
     src/data/Json.cpp
+    src/data/SpellJson.cpp
     src/data/CatalogJson.cpp
+    src/data/CreatureJson.cpp
     src/data/Sha256.cpp
 )
 target_include_directories(tb_core PUBLIC src)
@@ -49,6 +52,9 @@ target_link_libraries(tb_spells_demo PRIVATE tb_core)
 add_executable(tb_ai_demo tests/ai_demo.cpp)
 target_link_libraries(tb_ai_demo PRIVATE tb_core)
 
+add_executable(tb_roster_demo tests/roster_demo.cpp)
+target_link_libraries(tb_roster_demo PRIVATE tb_core)
+
 add_executable(tb_json_demo tests/json_demo.cpp)
 target_link_libraries(tb_json_demo PRIVATE tb_core)
 
@@ -58,12 +64,18 @@ target_link_libraries(tb_enums_demo PRIVATE tb_core)
 add_executable(tb_catalog_demo tests/catalog_demo.cpp)
 target_link_libraries(tb_catalog_demo PRIVATE tb_core)
 
+add_executable(tb_creature_demo tests/creature_demo.cpp)
+target_link_libraries(tb_creature_demo PRIVATE tb_core)
+
 add_executable(tb_sha256_demo tests/sha256_demo.cpp)
 target_link_libraries(tb_sha256_demo PRIVATE tb_core)
 
-# Generator: writes data/catalog.json from the compiled default catalog.
+# Generators: write data/catalog.json + data/creatures.json from compiled seeds.
 add_executable(tb_catalog_gen tools/catalog_gen.cpp)
 target_link_libraries(tb_catalog_gen PRIVATE tb_core)
+
+add_executable(tb_creature_gen tools/creature_gen.cpp)
+target_link_libraries(tb_creature_gen PRIVATE tb_core)
 
 add_executable(tb_balance tests/balance_sim.cpp)
 target_link_libraries(tb_balance PRIVATE tb_core)

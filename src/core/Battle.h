@@ -28,6 +28,14 @@ enum class Faction : std::uint8_t { Player, Enemy };
     return f == Faction::Player ? Faction::Enemy : Faction::Player;
 }
 
+// Role in the roster. Only Champions count for victory; Summons are AI-driven
+// helpers; Objects (e.g. bombs) are inert and just tick/auto-end their turn.
+enum class EntityKind : std::uint8_t { Champion, Summon, Object };
+
+// Who decides a unit's turn: the local player, the AI planner, or nobody (an
+// inert object whose turn simply passes).
+enum class Control : std::uint8_t { Player, AI, Inert };
+
 // What dealt a lethal blow — lets analysis attribute how matches end.
 enum class DamageSource : std::uint8_t { Spell, Storm, Collision };
 
@@ -35,9 +43,9 @@ enum class DamageSource : std::uint8_t { Spell, Storm, Collision };
 // Carried per-entity, ticked at the owner's turn start. Buffs feed the AP/MP
 // reset; DamageOverTime applies on tick; Shield absorbs incoming damage.
 struct StatusEffect {
-    enum class Kind : std::uint8_t { DamageOverTime, Shield, ApBuff, MpBuff, Invisible };
+    enum class Kind : std::uint8_t { DamageOverTime, Shield, ApBuff, MpBuff, Invisible, Rewind };
     Kind kind = Kind::DamageOverTime;
-    int magnitude = 0;       // dmg/turn, absorb pool, or +AP/+MP (unused for Invisible)
+    int magnitude = 0;       // dmg/turn, absorb pool, or +AP/+MP (unused for Invisible/Rewind)
     int remainingTurns = 0;  // decremented after each of the owner's turns
 };
 
@@ -55,11 +63,12 @@ struct GroundSpec {
 
 // --- Spell / effect data ----------------------------------------------------
 struct Effect {
-    enum class Type : std::uint8_t { Damage, Heal, Push, Pull, ApplyStatus, Spawn };
+    enum class Type : std::uint8_t { Damage, Heal, Push, Pull, ApplyStatus, Spawn, Summon };
     Type type = Type::Damage;
     int amount = 0;            // damage / heal / forced-move distance
     StatusEffect status{};     // used when type == ApplyStatus
     GroundSpec ground{};       // used when type == Spawn
+    std::string creature{};    // creature template key, used when type == Summon
 };
 
 enum class TargetShape : std::uint8_t { Single, Line, Cross, Circle };
@@ -82,6 +91,7 @@ struct Spell {
 struct Entity {
     std::string name;
     Faction team = Faction::Player;
+    EntityKind kind = EntityKind::Champion; // Champions decide victory (see checkVictory)
     Vec2i pos;
     int hp = 0, maxHp = 0;
     int ap = 0, maxAp = 0; // action points (spells)
@@ -90,14 +100,33 @@ struct Entity {
     std::vector<StatusEffect> statuses;
     std::vector<Spell> spells;
     std::vector<int> spellCooldowns; // remaining turns per spell slot (parallel to spells)
+    Spell onDeath;                   // resolved at the entity's tile when it dies (empty = none)
+    int fuse = 0;                    // >0: detonates (dies -> onDeath) when it counts down to 0
 
     [[nodiscard]] bool alive() const { return hp > 0; }
+    [[nodiscard]] bool isChampion() const { return kind == EntityKind::Champion; }
     [[nodiscard]] bool hasStatus(StatusEffect::Kind k) const {
         for (const StatusEffect& s : statuses)
             if (s.kind == k) return true;
         return false;
     }
     [[nodiscard]] bool invisible() const { return hasStatus(StatusEffect::Kind::Invisible); }
+};
+
+// --- Rewind -----------------------------------------------------------------
+// Snapshot of a unit's restorable state, captured when Rewind is applied.
+struct EntitySnapshot {
+    Vec2i pos;
+    int hp = 0;
+    std::vector<StatusEffect> statuses;
+    std::vector<int> spellCooldowns;
+};
+// A pending Rewind: when `turnsLeft` hits 0 at the target's turn start, restore
+// `snap` (unless the target is dead by then — Rewind does not revive).
+struct PendingRewind {
+    EntityId target = 0;
+    EntitySnapshot snap;
+    int turnsLeft = 0;
 };
 
 // A live ground feature on the battlefield (see GroundKind).
@@ -137,10 +166,28 @@ public:
 
     [[nodiscard]] EntityId activeUnit() const { return order_[turnIdx_]; }
     [[nodiscard]] bool controlledByPlayer(EntityId id) const {
-        return units_[id].team == Faction::Player;
+        return controlOf(id) == Control::Player;
+    }
+    // Who decides this unit's turn: the local player drives only their own
+    // Champions; Summons (either team) are AI; Objects are inert (auto-end).
+    [[nodiscard]] Control controlOf(EntityId id) const {
+        const Entity& e = units_[id];
+        if (e.kind == EntityKind::Object) return Control::Inert;
+        if (e.kind == EntityKind::Summon) return Control::AI;
+        return e.team == Faction::Player ? Control::Player : Control::AI;
     }
     [[nodiscard]] Phase phase() const;
     [[nodiscard]] std::optional<Faction> winner() const;
+
+    // Add an entity to the live roster mid-battle (summon/bomb). Inserts into the
+    // initiative order by initiative (ties by EntityId) without shifting the unit
+    // whose turn it currently is. Returns the new stable EntityId.
+    EntityId spawnEntity(Entity e);
+
+    // Register the prototypes a Summon effect can spawn (keyed by Entity::name).
+    // Content lives outside core (makeDefaultCreatures / creatures.json); the
+    // engine just spawns whatever it was given.
+    void setCreatures(std::vector<Entity> prototypes) { creatures_ = std::move(prototypes); }
 
     // --- Closing ring --------------------------------------------------------
     [[nodiscard]] int round() const { return round_; }
@@ -198,16 +245,27 @@ private:
     void checkVictory();
     void spawnGround(const GroundSpec& spec, Faction owner, Vec2i casterPos, Vec2i target,
                      const std::vector<Vec2i>& zone);
+    // Resolve a spell's effects over its zone (shared by cast() and death-
+    // triggered detonations). `casterPos` anchors directional/shape geometry.
+    void applySpellEffects(const Spell& sp, Faction casterTeam, Vec2i casterPos, Vec2i target);
+    // Spawn a registered creature prototype (by key) for `team` at `at`, if the
+    // tile is free. No-op if the key is unknown.
+    void spawnCreature(const std::string& key, Faction team, Vec2i at);
     void tickGround();              // age ground effects, drop the expired
     // Fire any ground effect on the unit's current tile (repel / teleport).
     // Only voluntary steps trigger; the resulting forced move / teleport does
     // not re-trigger, so chains can't loop.
     void onEnterTile(EntityId who);
+    // Tick this unit's pending Rewind (if any); restore the snapshot when it
+    // elapses, or fizzle if the unit is dead. Called at its turn start.
+    void rewindTick(EntityId id);
 
     Grid grid_;
     std::vector<Entity> units_;
     std::vector<EntityId> order_; // initiative order (indices into units_)
     std::vector<GroundEffect> ground_;
+    std::vector<PendingRewind> rewinds_;
+    std::vector<Entity> creatures_; // spawnable prototypes (keyed by name)
     std::size_t turnIdx_ = 0;
     bool finished_ = false;
 

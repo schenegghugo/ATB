@@ -120,6 +120,48 @@ int main() {
         check(!b.nearestFoe(E).has_value(), "enemy AI cannot acquire the invisible player");
     }
 
+    // --- Rewind: snap back to position + HP + statuses after 2 turns --------
+    std::printf("Rewind (delayed state restore):\n");
+    {
+        Battle b = makeArena({4, 3}, {8, 3}, {spellid::Rewind});
+        int rw = slotOf(b, P, spellid::Rewind);
+        b.unit(P).hp = 50;                                   // known starting HP (max 60)
+        b.unit(P).statuses.push_back({StatusEffect::Kind::Shield, 30, 9}); // a status to restore
+        b.cast(P, rw, {4, 3});                               // self-cast: snapshot {(4,3), 50, [shield]}
+        check(b.unit(P).hasStatus(StatusEffect::Kind::Rewind), "rewind marker applied");
+
+        b.stepTo(P, {5, 3});                                 // mutate state after the snapshot
+        b.unit(P).hp = 20;
+        b.unit(P).statuses.push_back({StatusEffect::Kind::DamageOverTime, 3, 9});
+
+        b.endTurn(); b.endTurn();                            // back to P: turnsLeft 2 -> 1
+        check(b.unit(P).pos == Vec2i{5, 3} && b.unit(P).hp == 20, "not yet rewound after 1 turn");
+
+        b.endTurn(); b.endTurn();                            // back to P: turnsLeft 1 -> 0, restore
+        check(b.unit(P).pos == Vec2i{4, 3}, "rewound to original position");
+        check(b.unit(P).hp == 50, "rewound to original HP");
+        check(b.unit(P).hasStatus(StatusEffect::Kind::Shield), "restored the pre-cast Shield");
+        check(!b.unit(P).hasStatus(StatusEffect::Kind::DamageOverTime), "dropped the post-cast DoT");
+        check(!b.unit(P).hasStatus(StatusEffect::Kind::Rewind), "rewind marker cleared after firing");
+    }
+
+    // --- Rewind fizzles on a dead target (no revive) ------------------------
+    std::printf("Rewind (no revive):\n");
+    {
+        // Two player champions so killing one doesn't end the battle.
+        std::vector<Entity> roster;
+        roster.push_back(makeUnit("P1", Faction::Player, {4, 3}, {spellid::Rewind}));
+        roster.push_back(makeUnit("P2", Faction::Player, {2, 3}, {spellid::Attack}));
+        roster.push_back(makeUnit("E2", Faction::Enemy, {10, 3}, {spellid::Attack}));
+        Battle b(Grid(14, 7), std::move(roster));
+        int rw = slotOf(b, 0, spellid::Rewind);
+        b.unit(0).hp = 40;
+        b.cast(0, rw, {4, 3});                               // P1 self-rewinds (snapshot HP 40)
+        b.unit(0).hp = 0;                                    // P1 dies before the rewind fires
+        for (int i = 0; i < 6; ++i) b.endTurn();             // turns pass; dead P1 is skipped
+        check(!b.unit(0).alive() && b.unit(0).hp == 0, "dead target stays dead — rewind does not revive");
+    }
+
     std::printf("\n%s (%d failure%s)\n", g_fails == 0 ? "ALL PASS" : "FAILURES", g_fails,
                 g_fails == 1 ? "" : "s");
     return g_fails == 0 ? 0 : 1;

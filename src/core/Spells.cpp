@@ -49,6 +49,16 @@ Effect spawnGlyph(int duration, int repel) {
 Effect spawnPortal(int duration) {
     return Effect{Effect::Type::Spawn, 0, {}, GroundSpec{GroundKind::Portal, duration, 0}};
 }
+Effect rewind(int turns) {
+    return Effect{Effect::Type::ApplyStatus, 0,
+                  StatusEffect{StatusEffect::Kind::Rewind, 0, turns}, {}, {}};
+}
+Effect summon(std::string creatureKey) {
+    Effect e;
+    e.type = Effect::Type::Summon;
+    e.creature = std::move(creatureKey);
+    return e;
+}
 
 SpellDef def(int id, std::string key, int cost, Spell spell) {
     spell.name = key;
@@ -108,6 +118,26 @@ SpellCatalog makeDefaultCatalog() {
     // Glyph — lay a radius-3 trap zone; anyone entering is repelled 2 tiles.
     c.add(def(spellid::Glyph, "glyph", 3,
               Spell{"", 3, 1, 5, true, TargetShape::Circle, 3, 3, {spawnGlyph(3, 2)}}));
+
+    // Rewind — tag a unit (or self, range 0); after 2 of its turns it snaps back
+    // to the position + HP + statuses + cooldowns it had when hit (fizzles if it
+    // died first). High cooldown — a powerful escape/undo.
+    c.add(def(spellid::Rewind, "rewind", 3,
+              Spell{"", 3, 0, 6, true, TargetShape::Single, 0, 5, {rewind(2)}}));
+
+    // Bomb — lob an inert "bomb" creature onto a tile; it detonates on its 2nd
+    // turn (or when destroyed) for a radius-1 blast. The bomb is an entity, so it
+    // can be pushed / pulled / rewound. (Spawns the "bomb" creature template.)
+    c.add(def(spellid::Bomb, "bomb", 3,
+              Spell{"", 3, 1, 6, true, TargetShape::Single, 0, 3, {summon("bomb")}}));
+
+    // Summons — place an AI-driven helper on a nearby tile (capped per team).
+    c.add(def(spellid::Blocker, "blocker", 4,
+              Spell{"", 4, 1, 4, true, TargetShape::Single, 0, 6, {summon("blocker")}}));
+    c.add(def(spellid::Healer, "healer", 4,
+              Spell{"", 4, 1, 4, true, TargetShape::Single, 0, 6, {summon("healer")}}));
+    c.add(def(spellid::Brute, "brute", 4,
+              Spell{"", 4, 1, 4, true, TargetShape::Single, 0, 6, {summon("brute")}}));
 
     return c;
 }

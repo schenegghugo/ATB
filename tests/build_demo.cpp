@@ -41,6 +41,7 @@ int main() {
     CharacterBuild pyro;
     pyro.name = "Pyromancer";
     pyro.stats.bonusAp = 1;
+    pyro.stats.bonusInitiative = 2; // +2 initiative @ 1 pt each
     pyro.spellIds = {spellid::Attack, spellid::Fireball, spellid::Poison};
     printValidation("Pyromancer", validateBuild(pyro, catalog, rules));
 
@@ -65,14 +66,18 @@ int main() {
     if (!loaded) { std::printf("  FAILED to reload!\n"); return 1; }
 
     const bool same = loaded->name == pyro.name && loaded->spellIds == pyro.spellIds &&
-                      loaded->stats.bonusAp == pyro.stats.bonusAp;
+                      loaded->stats.bonusAp == pyro.stats.bonusAp &&
+                      loaded->stats.bonusInitiative == pyro.stats.bonusInitiative;
     std::printf("  Reloaded build round-trips identically: %s\n", same ? "yes" : "NO");
 
     // --- Instantiate ---------------------------------------------------------
     Entity e = instantiate(*loaded, catalog, Faction::Player, Vec2i{1, 7}, rules);
-    std::printf("\nInstantiated '%s': HP %d, AP %d, MP %d, %zu spells\n", e.name.c_str(), e.maxHp,
-                e.maxAp, e.maxMp, e.spells.size());
+    std::printf("\nInstantiated '%s': HP %d, AP %d, MP %d, initiative %d, %zu spells\n",
+                e.name.c_str(), e.maxHp, e.maxAp, e.maxMp, e.initiative, e.spells.size());
+    const bool initOk = e.initiative == rules.baseInitiative + pyro.stats.bonusInitiative;
+    std::printf("  Initiative buy applied (%d = base %d + bought %d): %s\n", e.initiative,
+                rules.baseInitiative, pyro.stats.bonusInitiative, initOk ? "yes" : "NO");
 
     repo.remove("Pyromancer");
-    return same ? 0 : 1;
+    return (same && initOk) ? 0 : 1;
 }

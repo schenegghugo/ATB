@@ -39,6 +39,7 @@ inline constexpr Row<Effect::Type> kEffectTypes[] = {
     {Effect::Type::Pull, "pull"},
     {Effect::Type::ApplyStatus, "applyStatus"},
     {Effect::Type::Spawn, "spawn"},
+    {Effect::Type::Summon, "summon"},
 };
 
 inline constexpr Row<StatusEffect::Kind> kStatusKinds[] = {
@@ -47,12 +48,19 @@ inline constexpr Row<StatusEffect::Kind> kStatusKinds[] = {
     {StatusEffect::Kind::ApBuff, "apBuff"},
     {StatusEffect::Kind::MpBuff, "mpBuff"},
     {StatusEffect::Kind::Invisible, "invisible"},
+    {StatusEffect::Kind::Rewind, "rewind"},
 };
 
 inline constexpr Row<GroundKind> kGroundKinds[] = {
     {GroundKind::Wall, "wall"},
     {GroundKind::Glyph, "glyph"},
     {GroundKind::Portal, "portal"},
+};
+
+inline constexpr Row<EntityKind> kEntityKinds[] = {
+    {EntityKind::Champion, "champion"},
+    {EntityKind::Summon, "summon"},
+    {EntityKind::Object, "object"},
 };
 
 // --- Generic lookups over a table -------------------------------------------
@@ -93,14 +101,16 @@ static_assert(tableConsistent(kTargetShapes), "kTargetShapes inconsistent");
 static_assert(tableConsistent(kEffectTypes), "kEffectTypes inconsistent");
 static_assert(tableConsistent(kStatusKinds), "kStatusKinds inconsistent");
 static_assert(tableConsistent(kGroundKinds), "kGroundKinds inconsistent");
+static_assert(tableConsistent(kEntityKinds), "kEntityKinds inconsistent");
 
 // Expected counts — bump these when a core enum gains a value, as a reminder to
 // add the matching row above. (C++ can't enumerate enum values, so any *new*
 // core value is also caught in practice by the catalog round-trip test once the
 // default catalog uses it — serialization of an unmapped value is empty.)
 static_assert(std::size(kTargetShapes) == 4, "TargetShape changed — update kTargetShapes");
-static_assert(std::size(kEffectTypes) == 6, "Effect::Type changed — update kEffectTypes");
-static_assert(std::size(kStatusKinds) == 5, "StatusEffect::Kind changed — update kStatusKinds");
+static_assert(std::size(kEffectTypes) == 7, "Effect::Type changed — update kEffectTypes");
+static_assert(std::size(kStatusKinds) == 6, "StatusEffect::Kind changed — update kStatusKinds");
 static_assert(std::size(kGroundKinds) == 3, "GroundKind changed — update kGroundKinds");
+static_assert(std::size(kEntityKinds) == 3, "EntityKind changed — update kEntityKinds");
 
 } // namespace tb::enums

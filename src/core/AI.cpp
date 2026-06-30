@@ -238,10 +238,73 @@ AIAction executeFirst(Battle& battle, EntityId self, const PlannedAction& a) {
     return AIAction::Moved;
 }
 
+// One step of shortest-path movement toward `goal`.
+AIAction stepToward(Battle& b, EntityId self, Vec2i goal) {
+    if (b.unit(self).mp <= 0) return AIAction::Done;
+    auto path = findPath(b.grid(), b.unit(self).pos, goal, b.pathBlockers(self));
+    if (path.size() < 2 || !b.stepTo(self, path[1])) return AIAction::Done;
+    return AIAction::Moved;
+}
+
+// Dead-simple, single-purpose summon behaviour — summons "do one thing": a
+// support unit heals the most-wounded ally, a puller (blocker) yanks foes onto
+// itself, anything else strikes the nearest foe; each closes the distance when it
+// can't act yet. Deliberately not the beam planner — summons aren't meant to be
+// clever.
+AIAction summonTakeOneAction(Battle& b, EntityId self) {
+    const Entity& me = b.unit(self);
+    if (me.spells.empty()) {
+        if (auto foe = b.nearestFoe(self)) return stepToward(b, self, b.unit(*foe).pos);
+        return AIAction::Done;
+    }
+    const Spell& sp = me.spells[0];
+    const bool support =
+        has(sp, Effect::Type::Heal) || hasStatusEffect(sp, StatusEffect::Kind::Shield);
+    const bool puller = has(sp, Effect::Type::Pull);
+
+    if (support) {
+        std::optional<EntityId> best;
+        double worst = 1.0;
+        for (EntityId i = 0; i < b.unitCount(); ++i) {
+            const Entity& u = b.unit(i);
+            if (!u.alive() || u.team != me.team || u.maxHp <= 0) continue;
+            const double frac = static_cast<double>(u.hp) / u.maxHp;
+            if (frac < 1.0 && (!best || frac < worst)) { best = i; worst = frac; }
+        }
+        if (!best) return AIAction::Done; // nobody hurt — hold position
+        const Vec2i tp = b.unit(*best).pos;
+        if (b.canCast(self, 0, tp)) { b.cast(self, 0, tp); return AIAction::Attacked; }
+        return stepToward(b, self, tp);
+    }
+
+    if (puller) {
+        // Self-cast the cross pull when any foe sits on its arms (4 cardinal
+        // lines, range 4); otherwise advance to drag more foes into range.
+        if (b.canCast(self, 0, me.pos)) {
+            for (EntityId id : b.unitsAt(b.affectedTiles(sp, me.pos, me.pos)))
+                if (b.unit(id).team != me.team) {
+                    b.cast(self, 0, me.pos);
+                    return AIAction::Attacked;
+                }
+        }
+        if (auto foe = b.nearestFoe(self)) return stepToward(b, self, b.unit(*foe).pos);
+        return AIAction::Done;
+    }
+
+    // Default (damage): strike the nearest foe, or close in.
+    if (auto foe = b.nearestFoe(self)) {
+        const Vec2i fp = b.unit(*foe).pos;
+        if (b.canCast(self, 0, fp)) { b.cast(self, 0, fp); return AIAction::Attacked; }
+        return stepToward(b, self, fp);
+    }
+    return AIAction::Done;
+}
+
 } // namespace
 
 AIAction enemyTakeOneAction(Battle& battle, EntityId self) {
     if (battle.phase() == Phase::Finished || !battle.unit(self).alive()) return AIAction::Done;
+    if (battle.unit(self).kind == EntityKind::Summon) return summonTakeOneAction(battle, self);
     const std::vector<PlannedAction> plan = planTurn(battle, self);
     if (plan.empty()) return AIAction::Done;
     // Execute just the first step (movement one tile at a time for animation);
@@ -251,10 +314,16 @@ AIAction enemyTakeOneAction(Battle& battle, EntityId self) {
 
 void runEnemyTurn(Battle& battle, bool autoEndTurn) {
     const EntityId self = battle.activeUnit();
-    // Plan once, execute the whole sequence (efficient for headless / simulation).
-    for (const PlannedAction& a : planTurn(battle, self)) {
-        if (battle.phase() == Phase::Finished) break;
-        applyAction(battle, self, a);
+    if (battle.unit(self).kind == EntityKind::Summon) {
+        // Simple summons act one step at a time until they're spent.
+        for (int i = 0; i < 8 && battle.phase() != Phase::Finished; ++i)
+            if (summonTakeOneAction(battle, self) == AIAction::Done) break;
+    } else {
+        // Plan once, execute the whole sequence (efficient for headless / sim).
+        for (const PlannedAction& a : planTurn(battle, self)) {
+            if (battle.phase() == Phase::Finished) break;
+            applyAction(battle, self, a);
+        }
     }
     if (autoEndTurn && battle.phase() != Phase::Finished) battle.endTurn();
 }

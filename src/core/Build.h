@@ -33,6 +33,7 @@ struct BuildRules {
     int hpCost = 1;   // points per +hpStep HP
     int apCost = 3;   // points per +1 AP
     int mpCost = 2;   // points per +1 MP
+    int initCost = 1; // points per +1 initiative (act earlier)
 };
 
 // Point-bought stat upgrades on top of the baseline.
@@ -40,6 +41,7 @@ struct StatAllocation {
     int hpPurchases = 0; // each grants BuildRules::hpStep HP
     int bonusAp = 0;
     int bonusMp = 0;
+    int bonusInitiative = 0; // each grants +1 initiative
 };
 
 struct CharacterBuild {

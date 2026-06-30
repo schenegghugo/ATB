@@ -5,8 +5,8 @@
     {
       "id": 1,
       "key": "attack",
-      "name": "Attack",
       "buildCost": 1,
+      "name": "Attack",
       "apCost": 3,
       "minRange": 1,
       "maxRange": 6,
@@ -24,8 +24,8 @@
     {
       "id": 2,
       "key": "fireball",
-      "name": "Fireball",
       "buildCost": 3,
+      "name": "Fireball",
       "apCost": 4,
       "minRange": 2,
       "maxRange": 6,
@@ -43,8 +43,8 @@
     {
       "id": 3,
       "key": "poison",
-      "name": "Poison",
       "buildCost": 3,
+      "name": "Poison",
       "apCost": 3,
       "minRange": 1,
       "maxRange": 5,
@@ -70,8 +70,8 @@
     {
       "id": 4,
       "key": "knockback",
-      "name": "Knockback",
       "buildCost": 2,
+      "name": "Knockback",
       "apCost": 2,
       "minRange": 1,
       "maxRange": 2,
@@ -93,8 +93,8 @@
     {
       "id": 5,
       "key": "harpoon",
-      "name": "Harpoon",
       "buildCost": 2,
+      "name": "Harpoon",
       "apCost": 3,
       "minRange": 2,
       "maxRange": 6,
@@ -116,8 +116,8 @@
     {
       "id": 6,
       "key": "bulwark",
-      "name": "Bulwark",
       "buildCost": 2,
+      "name": "Bulwark",
       "apCost": 2,
       "minRange": 0,
       "maxRange": 2,
@@ -139,8 +139,8 @@
     {
       "id": 7,
       "key": "mend",
-      "name": "Mend",
       "buildCost": 2,
+      "name": "Mend",
       "apCost": 2,
       "minRange": 0,
       "maxRange": 3,
@@ -158,8 +158,8 @@
     {
       "id": 8,
       "key": "shelter",
-      "name": "Shelter",
       "buildCost": 3,
+      "name": "Shelter",
       "apCost": 3,
       "minRange": 1,
       "maxRange": 5,
@@ -181,8 +181,8 @@
     {
       "id": 9,
       "key": "invisible",
-      "name": "Invisible",
       "buildCost": 3,
+      "name": "Invisible",
       "apCost": 2,
       "minRange": 0,
       "maxRange": 0,
@@ -204,8 +204,8 @@
     {
       "id": 10,
       "key": "portal",
-      "name": "Portal",
       "buildCost": 3,
+      "name": "Portal",
       "apCost": 3,
       "minRange": 2,
       "maxRange": 8,
@@ -227,8 +227,8 @@
     {
       "id": 11,
       "key": "glyph",
-      "name": "Glyph",
       "buildCost": 3,
+      "name": "Glyph",
       "apCost": 3,
       "minRange": 1,
       "maxRange": 5,
@@ -244,6 +244,105 @@
             "duration": 3,
             "magnitude": 2
           }
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "key": "rewind",
+      "buildCost": 3,
+      "name": "Rewind",
+      "apCost": 3,
+      "minRange": 0,
+      "maxRange": 6,
+      "needsLineOfSight": true,
+      "shape": "single",
+      "radius": 0,
+      "cooldown": 5,
+      "effects": [
+        {
+          "type": "applyStatus",
+          "status": {
+            "kind": "rewind",
+            "magnitude": 0,
+            "turns": 2
+          }
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "key": "bomb",
+      "buildCost": 3,
+      "name": "Bomb",
+      "apCost": 3,
+      "minRange": 1,
+      "maxRange": 6,
+      "needsLineOfSight": true,
+      "shape": "single",
+      "radius": 0,
+      "cooldown": 3,
+      "effects": [
+        {
+          "type": "summon",
+          "creature": "bomb"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "key": "blocker",
+      "buildCost": 4,
+      "name": "Blocker",
+      "apCost": 4,
+      "minRange": 1,
+      "maxRange": 4,
+      "needsLineOfSight": true,
+      "shape": "single",
+      "radius": 0,
+      "cooldown": 6,
+      "effects": [
+        {
+          "type": "summon",
+          "creature": "blocker"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "key": "healer",
+      "buildCost": 4,
+      "name": "Healer",
+      "apCost": 4,
+      "minRange": 1,
+      "maxRange": 4,
+      "needsLineOfSight": true,
+      "shape": "single",
+      "radius": 0,
+      "cooldown": 6,
+      "effects": [
+        {
+          "type": "summon",
+          "creature": "healer"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "key": "brute",
+      "buildCost": 4,
+      "name": "Brute",
+      "apCost": 4,
+      "minRange": 1,
+      "maxRange": 4,
+      "needsLineOfSight": true,
+      "shape": "single",
+      "radius": 0,
+      "cooldown": 6,
+      "effects": [
+        {
+          "type": "summon",
+          "creature": "brute"
         }
       ]
     }

@@ -268,6 +268,94 @@ and the PvP trust anchor (`sha256`) is in place.
 
 ---
 
+## Spells & economy (shipped alongside Phase 1)
+
+### S.1 ☑ Rewind spell
+New `StatusEffect::Kind::Rewind` + a small `Battle` mechanic: casting it snapshots
+the target's **position + HP + statuses + cooldowns**; at the start of the
+target's **2nd turn** it restores that snapshot (replacing current state). One
+`SpellEnums` row, catalog entry `rewind` (id 12, range 0–6 so it self-casts,
+cooldown 5). **Fizzles if the target is dead** (dead units never reach a turn, so
+no revive). `tb_spells_demo` covers the snap-back (pos/HP/status) + the no-revive
+case. Demonstrates the data/code boundary: the *mechanic* was the only code; a
+Rewind-3-turns variant is now pure `catalog.json`.
+
+### S.2 ☑ Initiative as a build buy
+`StatAllocation.bonusInitiative` at `BuildRules.initCost = 1` pt each; wired into
+`validateBuild`, `instantiate` (`baseInitiative + bonus`), and build
+serialization (`init=` field). `tb_build_demo` verifies the round-trip + applied
+initiative. **Remaining:** expose `±` for initiative in the build editor GUI
+(small `BuildEditorScreen` follow-up; the economy/data model is done).
+
+---
+
+## Milestone: Roster entities (bombs & summons)
+
+A cohesive `core/` arc — **entities that enter the roster mid-battle** — that
+makes bombs and summons fall out as *content*. Independent of the catalog/PvP
+critical path but a real (PR-reviewed) engine change. Confirmed design decisions
+are baked in below.
+
+**Shared foundation (the code) — ☑ done, `tb_roster_demo` (16 checks):**
+- ☑ **`EntityKind { Champion, Summon, Object }`** on `Entity` (defaults to
+  `Champion`, so all existing code is unchanged).
+- ☑ **Mid-battle spawn** — `Battle::spawnEntity(Entity)`: appends to `units_`,
+  inserts into `order_` **by initiative (ties by `EntityId`)**, adjusts
+  `turnIdx_` so the active unit doesn't shift. Deterministic.
+- ☑ **Control generalization** `Control { Player, AI, Inert }` + `controlOf(id)`
+  (Object→Inert, Summon→AI, Champion→by team). *(GUI loop wiring — drive
+  AI/inert turns by `controlOf`, auto-end inert — happens in the Bombs/Summons
+  steps when entities actually enter normal play.)*
+- ☑ **Death-triggered effects** — `Entity::onDeath` (a `Spell`) resolved at the
+  dying unit's tile by `applyDamage`; reentrant + terminates (chain detonations
+  work). `cast()`'s resolution was factored into `applySpellEffects()` and shared.
+- ☑ **Victory = a team has no living *Champion*** — `checkVictory`/`winner` skip
+  summons/objects. Backward-compatible (everything is a Champion today).
+- ☑ **Creature catalog** — `Effect::Type::Summon` + `Battle::setCreatures`/
+  `spawnCreature`, and the bestiary is now **data**: `data/creatures.json`
+  (`data/CreatureJson.{h,cpp}` + `tb_creature_gen`), loaded by `main.cpp` with the
+  same valid/absent/malformed policy as the catalog. The Spell/Effect/Status ↔
+  JSON mapping was **factored into `data/SpellJson.{h,cpp}` + `data/JsonRead.h`**
+  and shared by the catalog and creature loaders (no duplication). `EntityKind`
+  got its `SpellEnums` table. `makeDefaultCreatures()` stays as the compiled seed
+  + generator. Covered by `tb_creature_demo` (round-trip + field fidelity +
+  malformed) with a CI drift guard; `core/` untouched.
+
+**Bombs** ☑ — an `Object` template (`core/Creatures.cpp`): HP 12; ignition =
+self-`DamageOverTime` 4/turn; `onDeath` = radius-1 `Damage` 20 (**friendly fire
+on** — confirmed); `Entity::fuse` = 2 → detonates (dies → onDeath) on its 2nd
+turn; reaching 0 HP (ignition, an attack, or a shove into a wall) detonates early.
+Cast via the `bomb` spell (`Effect::Type::Summon` → spawns the "bomb" creature at
+the target). Pushable/pullable/rewindable for free (it's an entity). Covered by
+`tb_roster_demo` (summon → armed → 2-turn fuse → blast). Portal-on-forced-move
+stays off for v1 (confirmed). *(AI doesn't cast Summon spells yet — like Portal,
+expected; tune later.)*
+
+**Summons** ☑ — three `Summon` templates in `core/Creatures.cpp`, each with one
+innate ability and a **dead-simple, single-purpose AI** (`summonTakeOneAction` —
+deliberately *not* the beam planner; summons aren't meant to be clever):
+- **blocker** (HP 45) — a **self-centred Cross Pull, range 4** (the 4 straight
+  lines): yanks every unit on its arms toward it; foes stop adjacent and take
+  collision damage. Self-casts when a foe is on an arm, else advances.
+- **healer** (HP 20) — heals the most-wounded ally within range, else closes in.
+- **brute** (HP 30) — strikes the nearest foe, else closes in.
+
+Cast via the `blocker`/`healer`/`brute` spells (`Effect::Type::Summon`). **Per-team
+cap of 2** enforced in `spawnCreature`. Excluded from victory (foundation).
+`main.cpp` now drives turns by **`controlOf`** (player inputs only their
+Champions; summons run the AI; objects auto-pass). Covered by `tb_roster_demo`
+(cap + the blocker pull). *(Two v1 notes: the Pull is friendly-fire like every
+effect — it also drags allies on the arms; and champions' beam AI doesn't cast
+Summon spells yet, like Portal — tune later.)*
+
+**Milestone complete.** ✅ foundation ☑ → Bombs ☑ → Summons ☑ → datafy creatures ☑.
+Both content types (spells + creatures) are now hand-editable JSON sharing one
+validated mapping layer. **Optional follow-ups:** summon `duration`; per-*champion*
+(vs per-team) cap; enemy-only Pull (the blocker is friendly-fire today); AI
+heuristics so champions actually cast Summon spells.
+
+---
+
 ## Phase 2 — Spell bar + sprite/asset packs (visible payoff)
 
 Pure `render/` + `main.cpp`, zero authority risk, recruits a *different*

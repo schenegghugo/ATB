@@ -20,10 +20,12 @@
 #include "core/AI.h"
 #include "core/Battle.h"
 #include "core/Build.h"
+#include "core/Creatures.h"
 #include "core/Grid.h"
 #include "core/Spells.h"
 #include "data/BuildRepository.h"
 #include "data/CatalogJson.h"
+#include "data/CreatureJson.h"
 #include "render/BuildEditorScreen.h"
 #include "render/ContentPaths.h"
 #include "render/Renderer.h"
@@ -43,6 +45,7 @@ enum class AppState { Editor, Battle };
 
 struct Session {
     SpellCatalog catalog = makeDefaultCatalog();
+    std::vector<Entity> creatures = makeDefaultCreatures(); // bestiary (Summon effects)
     BuildRules rules{};
     std::unique_ptr<BuildRepository> repo = std::make_unique<InMemoryBuildRepository>();
 };
@@ -71,7 +74,9 @@ Battle makeBattle(Session& s, const ArenaConfig& cfg, const CharacterBuild& play
     std::vector<Entity> roster;
     roster.push_back(instantiate(player, s.catalog, Faction::Player, cfg.playerSpawn, s.rules));
     roster.push_back(instantiate(enemy, s.catalog, Faction::Enemy, cfg.enemySpawn, s.rules));
-    return Battle(std::move(grid), std::move(roster));
+    Battle battle(std::move(grid), std::move(roster));
+    battle.setCreatures(s.creatures); // enable Summon effects (bombs / summons)
+    return battle;
 }
 
 std::string spellLabel(const Entity& u, int slot) {
@@ -107,6 +112,21 @@ int main() {
                  load.version.c_str(), load.sha256.c_str());
     } else {
         TraceLog(LOG_WARNING, "No data/catalog.json found — using the built-in default catalog.");
+    }
+
+    // Same policy for the bestiary (data/creatures.json).
+    if (std::optional<std::string> path = render::findContent("creatures.json")) {
+        CreatureLoad load = loadCreaturesFromFile(*path);
+        if (!load.ok) {
+            TraceLog(LOG_ERROR, "Bestiary '%s' is invalid:", path->c_str());
+            for (const std::string& e : load.errors) TraceLog(LOG_ERROR, "  - %s", e.c_str());
+            return 1;
+        }
+        session.creatures = std::move(load.creatures);
+        TraceLog(LOG_INFO, "Loaded bestiary '%s' v%s (%zu creatures)", path->c_str(),
+                 load.version.c_str(), session.creatures.size());
+    } else {
+        TraceLog(LOG_WARNING, "No data/creatures.json found — using the built-in default bestiary.");
     }
 
     session.repo->save(pyromancerBuild()); // seed the store (stands in for the DB)
@@ -174,8 +194,15 @@ int main() {
             status = "New arena. Player turn.";
         }
 
-        if (battle->phase() == Phase::PlayerTurn) {
-            const EntityId me = battle->activeUnit();
+        const bool finished = battle->phase() == Phase::Finished;
+        const EntityId active = finished ? 0 : battle->activeUnit();
+        // Drive turns by control, not team: a player only inputs for their own
+        // Champions; summons (either team) are AI, and objects (bombs) auto-pass.
+        const Control ctrl = finished ? Control::AI : battle->controlOf(active);
+        const bool playerControl = !finished && ctrl == Control::Player;
+
+        if (playerControl) {
+            const EntityId me = active;
             const int spellCount = static_cast<int>(battle->unit(me).spells.size());
             for (int k = 0; k < spellCount && k < 9; ++k)
                 if (IsKeyPressed(KEY_ONE + k)) selectedSpell = k;
@@ -193,21 +220,25 @@ int main() {
             }
             if (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER)) {
                 battle->endTurn();
-                status = "Enemy turn...";
                 aiTimer = 0.0f;
             }
-        } else if (battle->phase() == Phase::EnemyTurn) {
+        } else if (!finished) {
             aiTimer += dt;
             if (aiTimer >= kAiTick) {
                 aiTimer = 0.0f;
-                AIAction act = enemyTakeOneAction(*battle);
-                if (act == AIAction::Attacked) status = "Enemy casts a spell!";
-                else if (act == AIAction::Moved) status = "Enemy advances...";
-                else { battle->endTurn(); status = "Player turn."; }
+                if (ctrl == Control::Inert) {
+                    battle->endTurn(); // a bomb: its fuse/ignition ticked at turn start
+                } else {
+                    const std::string who = battle->unit(active).name;
+                    AIAction act = enemyTakeOneAction(*battle);
+                    if (act == AIAction::Attacked) status = who + " casts a spell.";
+                    else if (act == AIAction::Moved) status = who + " moves.";
+                    else battle->endTurn();
+                }
             }
         }
 
-        if (battle->phase() == Phase::Finished) {
+        if (finished) {
             auto w = battle->winner();
             status = (w && *w == Faction::Player) ? "Victory! Tab=editor, R=rematch."
                                                   : "Defeat. Tab=editor, R=rematch.";
@@ -217,8 +248,8 @@ int main() {
         view.hoveredTile = hovered;
         view.hoveredValid = hoveredValid;
         view.statusLine = status;
-        if (battle->phase() == Phase::PlayerTurn) {
-            const EntityId me = battle->activeUnit();
+        if (playerControl) {
+            const EntityId me = active;
             const Entity& u = battle->unit(me);
             view.reachable = reachableWithin(battle->grid(), u.pos, u.mp, battle->occupancy(me));
             view.showLosToHover = true;

@@ -1,0 +1,123 @@
+{
+  "schema": 1,
+  "version": "1.0.0",
+  "creatures": [
+    {
+      "key": "bomb",
+      "kind": "object",
+      "hp": 12,
+      "ap": 0,
+      "mp": 0,
+      "initiative": 1,
+      "fuse": 2,
+      "statuses": [
+        {
+          "kind": "damageOverTime",
+          "magnitude": 4,
+          "turns": 99
+        }
+      ],
+      "spells": [],
+      "onDeath": {
+        "name": "detonation",
+        "apCost": 0,
+        "minRange": 0,
+        "maxRange": 0,
+        "needsLineOfSight": false,
+        "shape": "circle",
+        "radius": 1,
+        "cooldown": 0,
+        "effects": [
+          {
+            "type": "damage",
+            "amount": 20
+          }
+        ]
+      }
+    },
+    {
+      "key": "blocker",
+      "kind": "summon",
+      "hp": 45,
+      "ap": 3,
+      "mp": 2,
+      "initiative": 4,
+      "fuse": 0,
+      "statuses": [],
+      "spells": [
+        {
+          "name": "Drag",
+          "apCost": 3,
+          "minRange": 0,
+          "maxRange": 0,
+          "needsLineOfSight": false,
+          "shape": "cross",
+          "radius": 4,
+          "cooldown": 1,
+          "effects": [
+            {
+              "type": "pull",
+              "amount": 4
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "healer",
+      "kind": "summon",
+      "hp": 20,
+      "ap": 3,
+      "mp": 2,
+      "initiative": 6,
+      "fuse": 0,
+      "statuses": [],
+      "spells": [
+        {
+          "name": "Mend",
+          "apCost": 3,
+          "minRange": 0,
+          "maxRange": 4,
+          "needsLineOfSight": false,
+          "shape": "single",
+          "radius": 0,
+          "cooldown": 1,
+          "effects": [
+            {
+              "type": "heal",
+              "amount": 12
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "brute",
+      "kind": "summon",
+      "hp": 30,
+      "ap": 3,
+      "mp": 2,
+      "initiative": 5,
+      "fuse": 0,
+      "statuses": [],
+      "spells": [
+        {
+          "name": "Strike",
+          "apCost": 3,
+          "minRange": 1,
+          "maxRange": 4,
+          "needsLineOfSight": true,
+          "shape": "single",
+          "radius": 0,
+          "cooldown": 0,
+          "effects": [
+            {
+              "type": "damage",
+              "amount": 10
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

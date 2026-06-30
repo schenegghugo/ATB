@@ -8,7 +8,8 @@ namespace tb {
 
 namespace {
 int statPointCost(const StatAllocation& s, const BuildRules& r) {
-    return s.hpPurchases * r.hpCost + s.bonusAp * r.apCost + s.bonusMp * r.mpCost;
+    return s.hpPurchases * r.hpCost + s.bonusAp * r.apCost + s.bonusMp * r.mpCost +
+           s.bonusInitiative * r.initCost;
 }
 } // namespace
 
@@ -17,7 +18,8 @@ BuildValidation validateBuild(const CharacterBuild& build, const SpellCatalog& c
     BuildValidation v;
     v.budget = rules.pointBudget;
 
-    if (build.stats.hpPurchases < 0 || build.stats.bonusAp < 0 || build.stats.bonusMp < 0)
+    if (build.stats.hpPurchases < 0 || build.stats.bonusAp < 0 || build.stats.bonusMp < 0 ||
+        build.stats.bonusInitiative < 0)
         v.errors.push_back("Stat allocations cannot be negative.");
 
     std::unordered_set<int> seen;
@@ -53,7 +55,7 @@ Entity instantiate(const CharacterBuild& build, const SpellCatalog& catalog, Fac
     e.maxHp = e.hp = rules.baseHp + build.stats.hpPurchases * rules.hpStep;
     e.maxAp = e.ap = rules.baseAp + build.stats.bonusAp;
     e.maxMp = e.mp = rules.baseMp + build.stats.bonusMp;
-    e.initiative = rules.baseInitiative;
+    e.initiative = rules.baseInitiative + build.stats.bonusInitiative;
 
     for (int id : build.spellIds) {
         if (const SpellDef* def = catalog.find(id)) e.spells.push_back(def->spell);
@@ -71,6 +73,7 @@ std::string serializeBuild(const CharacterBuild& b) {
     os << "hp=" << b.stats.hpPurchases << '\n';
     os << "ap=" << b.stats.bonusAp << '\n';
     os << "mp=" << b.stats.bonusMp << '\n';
+    os << "init=" << b.stats.bonusInitiative << '\n';
     os << "spells=";
     for (std::size_t i = 0; i < b.spellIds.size(); ++i) {
         if (i) os << ',';
@@ -96,6 +99,7 @@ std::optional<CharacterBuild> deserializeBuild(const std::string& text) {
         else if (key == "hp") b.stats.hpPurchases = std::atoi(val.c_str());
         else if (key == "ap") b.stats.bonusAp = std::atoi(val.c_str());
         else if (key == "mp") b.stats.bonusMp = std::atoi(val.c_str());
+        else if (key == "init") b.stats.bonusInitiative = std::atoi(val.c_str());
         else if (key == "spells") {
             std::stringstream ss(val);
             std::string tok;

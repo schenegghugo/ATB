@@ -28,19 +28,24 @@ jobs:
           ./build/tb_enums_demo
           ./build/tb_sha256_demo
           ./build/tb_catalog_demo
+          ./build/tb_creature_demo
           ./build/tb_headless
           ./build/tb_build_demo
           ./build/tb_spells_demo
           ./build/tb_ai_demo
+          ./build/tb_roster_demo
 
       - name: Balance sanity (fixed seed, fast)
         run: ./build/tb_balance 200 1
 
-      - name: Catalog file is in sync with the code
+      - name: Data files are in sync with the code
         run: |
           ./build/tb_catalog_gen /tmp/catalog.gen.json 1.0.0 >/dev/null
           diff -u data/catalog.json /tmp/catalog.gen.json \
             || (echo "data/catalog.json is stale — run tb_catalog_gen and commit" && exit 1)
+          ./build/tb_creature_gen /tmp/creatures.gen.json 1.0.0 >/dev/null
+          diff -u data/creatures.json /tmp/creatures.gen.json \
+            || (echo "data/creatures.json is stale — run tb_creature_gen and commit" && exit 1)
 
   gui-build:
     name: GUI compiles (Linux)

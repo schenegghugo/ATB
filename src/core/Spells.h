@@ -32,6 +32,11 @@ inline constexpr int Shelter = 8;  // temporary blocking walls
 inline constexpr int Invisible = 9; // self-conceal from the AI
 inline constexpr int Portal = 10;  // teleport-on-enter
 inline constexpr int Glyph = 11;   // repel-on-enter trap zone
+inline constexpr int Rewind = 12;  // restore a unit's earlier state after a delay
+inline constexpr int Bomb = 13;    // lob an inert bomb that detonates after a fuse
+inline constexpr int Blocker = 14; // summon a tanky puller
+inline constexpr int Healer = 15;  // summon a healer
+inline constexpr int Brute = 16;   // summon a bruiser-lite
 } // namespace spellid
 
 struct SpellDef {

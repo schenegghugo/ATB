@@ -9,6 +9,7 @@ namespace tb {
 namespace {
 
 constexpr int kCollisionDamagePerCell = 5; // forced-move into a blocker
+constexpr int kSummonCap = 2;              // max living summons per team
 
 // Reduce an arbitrary delta to a single cardinal step (axis with larger span).
 Vec2i cardinalStep(Vec2i from, Vec2i to) {
@@ -43,6 +44,33 @@ Battle::Battle(Grid grid, std::vector<Entity> units, StormConfig storm)
 }
 
 // ---------------------------------------------------------------------------
+EntityId Battle::spawnEntity(Entity e) {
+    const EntityId id = static_cast<EntityId>(units_.size());
+    if (e.spellCooldowns.size() != e.spells.size())
+        e.spellCooldowns.assign(e.spells.size(), 0);
+    units_.push_back(std::move(e));
+
+    // Insert into initiative order: higher initiative first, ties by EntityId
+    // ascending (matches the constructor's stable, id-ascending tie order). The
+    // new id is the largest, so it lands after equal-initiative incumbents.
+    const int newInit = units_[id].initiative;
+    std::size_t insertAt = order_.size();
+    for (std::size_t i = 0; i < order_.size(); ++i) {
+        const EntityId other = order_[i];
+        const int oi = units_[other].initiative;
+        if (newInit > oi || (newInit == oi && id < other)) {
+            insertAt = i;
+            break;
+        }
+    }
+    const bool hadUnits = !order_.empty();
+    order_.insert(order_.begin() + static_cast<std::ptrdiff_t>(insertAt), id);
+    // Keep the active unit pointed at: shift the cursor if we inserted at/before it.
+    if (hadUnits && insertAt <= turnIdx_) ++turnIdx_;
+    return id;
+}
+
+// ---------------------------------------------------------------------------
 Phase Battle::phase() const {
     if (finished_ || order_.empty()) return Phase::Finished;
     return units_[activeUnit()].team == Faction::Player ? Phase::PlayerTurn : Phase::EnemyTurn;
@@ -65,7 +93,7 @@ std::optional<Faction> Battle::winner() const {
     if (!finished_) return std::nullopt;
     bool playerAlive = false, enemyAlive = false;
     for (const Entity& e : units_) {
-        if (!e.alive()) continue;
+        if (!e.alive() || !e.isChampion()) continue; // only Champions decide victory
         (e.team == Faction::Player ? playerAlive : enemyAlive) = true;
     }
     if (playerAlive == enemyAlive) return std::nullopt; // double-KO / none
@@ -143,10 +171,22 @@ void Battle::startTurnFor(EntityId id) {
         if (s.kind == StatusEffect::Kind::DamageOverTime) applyDamage(id, s.magnitude);
     }
 
-    // Age and expire statuses.
-    for (StatusEffect& s : e.statuses) --s.remainingTurns;
+    // Fuse: an armed object (bomb) detonates when its countdown elapses — kill it
+    // so its onDeath (the blast) fires. Skipped if ignition/an attack already did.
+    if (e.alive() && e.fuse > 0 && --e.fuse == 0) applyDamage(id, e.hp);
+
+    // Rewind owns its own countdown (and may replace this unit's state), so it is
+    // ticked before — and excluded from — the generic status aging below.
+    rewindTick(id);
+
+    // Age and expire statuses (Rewind markers are managed by rewindTick).
+    for (StatusEffect& s : e.statuses)
+        if (s.kind != StatusEffect::Kind::Rewind) --s.remainingTurns;
     e.statuses.erase(std::remove_if(e.statuses.begin(), e.statuses.end(),
-                                    [](const StatusEffect& s) { return s.remainingTurns <= 0; }),
+                                    [](const StatusEffect& s) {
+                                        return s.kind != StatusEffect::Kind::Rewind &&
+                                               s.remainingTurns <= 0;
+                                    }),
                      e.statuses.end());
 
     // Cool down this unit's spells.
@@ -200,14 +240,25 @@ void Battle::applyDamage(EntityId id, int amount, DamageSource src) {
 
     e.hp -= amount;
     if (e.hp < 0) e.hp = 0;
-    if (!e.alive()) lastDeathSource_ = src;
+    if (!e.alive()) {
+        lastDeathSource_ = src;
+        // Death-triggered effects (e.g. a bomb's detonation). Copy first — the
+        // resolution mutates units_ and can recurse (chain detonations); a dead
+        // unit's applyDamage early-returns, so chains terminate.
+        if (!e.onDeath.effects.empty()) {
+            const Spell death = e.onDeath;
+            const Faction team = e.team;
+            const Vec2i at = e.pos;
+            applySpellEffects(death, team, at, at);
+        }
+    }
     checkVictory();
 }
 
 void Battle::checkVictory() {
     bool playerAlive = false, enemyAlive = false;
     for (const Entity& e : units_) {
-        if (!e.alive()) continue;
+        if (!e.alive() || !e.isChampion()) continue; // summons/objects don't keep a team alive
         (e.team == Faction::Player ? playerAlive : enemyAlive) = true;
     }
     if (!playerAlive || !enemyAlive) finished_ = true;
@@ -356,12 +407,20 @@ bool Battle::cast(EntityId caster, int spellIdx, Vec2i target) {
     if (spellIdx < static_cast<int>(units_[caster].spellCooldowns.size()))
         units_[caster].spellCooldowns[spellIdx] = sp.cooldown;
 
+    applySpellEffects(sp, casterTeam, casterPos, target);
+    return true;
+}
+
+void Battle::applySpellEffects(const Spell& sp, Faction casterTeam, Vec2i casterPos, Vec2i target) {
     const std::vector<Vec2i> zone = affectedTiles(sp, casterPos, target);
 
-    // Tile/ground effects resolve once for the cast.
-    for (const Effect& fx : sp.effects)
+    // Tile/ground/spawn effects resolve once for the cast (not per victim).
+    for (const Effect& fx : sp.effects) {
         if (fx.type == Effect::Type::Spawn)
             spawnGround(fx.ground, casterTeam, casterPos, target, zone);
+        else if (fx.type == Effect::Type::Summon)
+            spawnCreature(fx.creature, casterTeam, target);
+    }
 
     // Unit effects resolve per affected unit (friendly fire included).
     const std::vector<EntityId> hit = unitsAt(zone);
@@ -377,7 +436,27 @@ bool Battle::cast(EntityId caster, int spellIdx, Vec2i target) {
                     break;
                 }
                 case Effect::Type::ApplyStatus:
-                    units_[victim].statuses.push_back(fx.status);
+                    if (fx.status.kind == StatusEffect::Kind::Rewind) {
+                        Entity& v = units_[victim];
+                        // Recast refreshes: drop any prior pending rewind + marker.
+                        rewinds_.erase(std::remove_if(rewinds_.begin(), rewinds_.end(),
+                                                      [&](const PendingRewind& r) {
+                                                          return r.target == victim;
+                                                      }),
+                                       rewinds_.end());
+                        v.statuses.erase(std::remove_if(v.statuses.begin(), v.statuses.end(),
+                                                        [](const StatusEffect& s) {
+                                                            return s.kind == StatusEffect::Kind::Rewind;
+                                                        }),
+                                         v.statuses.end());
+                        // Snapshot the *current* state (marker excluded), then mark.
+                        rewinds_.push_back({victim,
+                                            EntitySnapshot{v.pos, v.hp, v.statuses, v.spellCooldowns},
+                                            fx.status.remainingTurns});
+                        v.statuses.push_back(fx.status);
+                    } else {
+                        units_[victim].statuses.push_back(fx.status);
+                    }
                     break;
                 case Effect::Type::Push:
                     applyForcedMove(victim, cardinalStep(casterPos, units_[victim].pos), fx.amount);
@@ -386,11 +465,30 @@ bool Battle::cast(EntityId caster, int spellIdx, Vec2i target) {
                     applyForcedMove(victim, cardinalStep(units_[victim].pos, casterPos), fx.amount);
                     break;
                 case Effect::Type::Spawn:
+                case Effect::Type::Summon:
                     break; // handled above, once
             }
         }
     }
-    return true;
+}
+
+void Battle::spawnCreature(const std::string& key, Faction team, Vec2i at) {
+    if (!grid_.isWalkable(at) || unitAt(at).has_value()) return; // need a free tile
+    for (const Entity& proto : creatures_) {
+        if (proto.name != key) continue;
+        // Per-team summon cap (objects like bombs are uncapped).
+        if (proto.kind == EntityKind::Summon) {
+            int living = 0;
+            for (const Entity& u : units_)
+                if (u.alive() && u.team == team && u.kind == EntityKind::Summon) ++living;
+            if (living >= kSummonCap) return;
+        }
+        Entity e = proto;
+        e.team = team;
+        e.pos = at;
+        spawnEntity(std::move(e));
+        return;
+    }
 }
 
 void Battle::onEnterTile(EntityId who) {
@@ -415,6 +513,31 @@ void Battle::onEnterTile(EntityId who) {
             return;
         }
     }
+}
+
+void Battle::rewindTick(EntityId id) {
+    auto it = std::find_if(rewinds_.begin(), rewinds_.end(),
+                           [&](const PendingRewind& r) { return r.target == id; });
+    if (it == rewinds_.end()) return;
+    if (--it->turnsLeft > 0) return; // not yet
+
+    Entity& e = units_[id];
+    if (e.alive()) {
+        // Restore position + HP + statuses + cooldowns. Replacing the status
+        // vector also drops the Rewind marker. (Rewind does not revive: a dead
+        // unit never reaches its turn, so this branch only runs while alive.)
+        e.pos = it->snap.pos;
+        e.hp = it->snap.hp;
+        e.statuses = it->snap.statuses;
+        e.spellCooldowns = it->snap.spellCooldowns;
+    } else {
+        e.statuses.erase(std::remove_if(e.statuses.begin(), e.statuses.end(),
+                                        [](const StatusEffect& s) {
+                                            return s.kind == StatusEffect::Kind::Rewind;
+                                        }),
+                         e.statuses.end());
+    }
+    rewinds_.erase(it);
 }
 
 // ---------------------------------------------------------------------------
