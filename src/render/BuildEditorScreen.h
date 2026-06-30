@@ -32,6 +32,7 @@ public:
 
 private:
     [[nodiscard]] bool hasSpell(int id) const;
+    [[nodiscard]] bool matchesFilter(const SpellDef& d) const;
     void toggleSpell(int id);
     void refreshSaved();
 
@@ -43,6 +44,7 @@ private:
     std::vector<std::string> savedNames_;
     int enemyIdx_ = 0;
     bool editingName_ = false;
+    int filter_ = 0; // category filter: 0=All 1=Damage 2=Effects 3=Support 4=Summon
     std::string statusMsg_;
 };
 

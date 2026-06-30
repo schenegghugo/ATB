@@ -374,12 +374,18 @@ test** enforces that *derivable* tags can't lie (`aoe`⇒non-Single shape,
 `single`⇒Single, `summon`⇒Summon effect, `dot`⇒DoT, `damage`⇒Damage/DoT);
 intent tags (buff/debuff/support/…) are unchecked. `data/catalog.json` regenerated.
 
-### BE.2 ☐ Editor UI: bigger window + filterable card grid
-Resize the window per-screen (`SetWindowSize`: wide editor / arena-sized battle).
-Replace the vertical spell list with a **card grid** (icon + name + cost),
-**category filter chips** (All / Damage / Effects / Support / Summon) + secondary
-tag toggles, and a loadout + budget side panel. Card icons reuse Phase-2's atlas
-frames (with the procedural-badge fallback), so this dovetails with the spell bar.
+### BE.2 ☑ Editor UI: bigger window + filterable card grid
+Window opens larger (≥1180×720) and is **resizable** (`FLAG_WINDOW_RESIZABLE`);
+the editor reads the **live window size** (`GetScreenWidth/Height`) and lays out
+responsively each frame — so it works under tiling WMs (Sway ignores fixed-size
+*requests*, so per-screen `SetWindowSize` was the wrong approach). The vertical
+list is replaced by a **card grid** (name + cost + AP/range + tags), with
+**category filter chips** (All / Damage / Effects / Support / Summon → tag
+predicates) and a right column of stat steppers — now including **+INIT**
+(the deferred S.2 control) — plus the budget bar + validation errors. Built &
+run-verified (no crash; harmless Wayland window-*position* warnings only).
+*(Follow-ups: spell-card icons once Phase-2 atlas lands; grid scroll for very
+large modded catalogs; secondary modifier-tag toggles.)*
 
 ---
 

@@ -32,6 +32,7 @@
 
 #include "raylib.h"
 
+#include <algorithm>
 #include <memory>
 #include <optional>
 #include <string>
@@ -134,11 +135,15 @@ int main() {
 
     render::Layout layout;
     ArenaConfig cfg;
-    // Window is sized for the battle arena; the editor lays out within it.
-    const int sw = layout.screenWidth(Grid(cfg.width, cfg.height));
-    const int sh = layout.screenHeight(Grid(cfg.width, cfg.height));
+    // Open large enough for both the arena and the (responsive) build editor; the
+    // editor reads the live window size each frame, so it adapts to resizes /
+    // tiling window managers (e.g. Sway, which ignores fixed-size requests).
+    const int arenaW = layout.screenWidth(Grid(cfg.width, cfg.height));
+    const int arenaH = layout.screenHeight(Grid(cfg.width, cfg.height));
+    const int sw = std::max(arenaW, 1180);
+    const int sh = std::max(arenaH, 720);
 
-    SetConfigFlags(FLAG_MSAA_4X_HINT);
+    SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE);
     InitWindow(sw, sh, "Tactical Battler — POC");
     if (!IsWindowReady()) {
         // No display/GL context (e.g. headless, or Wayland without the Wayland
@@ -174,7 +179,8 @@ int main() {
 
         if (state == AppState::Editor) {
             BeginDrawing();
-            if (editor.runFrame(sw, sh) == render::BuildEditorScreen::Result::Fight) {
+            if (editor.runFrame(GetScreenWidth(), GetScreenHeight()) ==
+                render::BuildEditorScreen::Result::Fight) {
                 playerBuild = editor.playerBuild();
                 enterBattle();
             }

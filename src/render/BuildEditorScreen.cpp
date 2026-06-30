@@ -91,21 +91,38 @@ CharacterBuild BuildEditorScreen::enemyBuild() const {
     return fallback;
 }
 
+bool BuildEditorScreen::matchesFilter(const SpellDef& d) const {
+    auto has = [&](const char* t) {
+        return std::find(d.tags.begin(), d.tags.end(), std::string(t)) != d.tags.end();
+    };
+    switch (filter_) {
+        case 1: return has("damage");
+        case 2: return has("buff") || has("debuff") || has("dot");
+        case 3: return has("support");
+        case 4: return has("summon");
+        default: return true; // All
+    }
+}
+
 BuildEditorScreen::Result BuildEditorScreen::runFrame(int screenW, int screenH) {
     const Vector2 m = GetMousePosition();
     Result result = Result::None;
     ClearBackground(kBg);
 
-    DrawText("BUILD EDITOR", 16, 12, 24, kText);
-    DrawText("Classless point-buy — spend the budget on skills + stats. No classes.", 16, 40, 16,
-             kMuted);
+    const float W = static_cast<float>(screenW);
+    const float H = static_cast<float>(screenH);
+    const float pad = 16.0f;
+    const float rightW = 300.0f;            // fixed right column (stats + budget)
+    const float rightX = W - rightW - pad;  // everything left of this is the grid
+
+    DrawText("BUILD EDITOR", 16, 10, 22, kText);
+    DrawText("Classless point-buy — filter the dictionary, click cards to add / remove.", 16, 36,
+             14, kMuted);
 
     const BuildValidation val = validateBuild(player_, catalog_, rules_);
 
-    // --- Name field (editable) ----------------------------------------------
-    const float rightX = 384.0f;
-    const float rightW = static_cast<float>(screenW) - rightX - 16.0f;
-    Rectangle nameRect{rightX, 64, rightW, 32};
+    // --- Name field (top-right) ---------------------------------------------
+    Rectangle nameRect{rightX, 10, rightW, 30};
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) editingName_ = hovered(nameRect, m);
     if (editingName_) {
         int key = GetCharPressed();
@@ -120,93 +137,110 @@ BuildEditorScreen::Result BuildEditorScreen::runFrame(int screenW, int screenH) 
     DrawRectangleRec(nameRect, editingName_ ? kPanelHot : kPanel);
     DrawRectangleLinesEx(nameRect, 1.0f, editingName_ ? kAccent : kLine);
     DrawText(TextFormat("Name: %s%s", player_.name.c_str(), editingName_ ? "_" : ""),
-             static_cast<int>(nameRect.x) + 8, static_cast<int>(nameRect.y) + 8, 18, kText);
+             static_cast<int>(nameRect.x) + 8, static_cast<int>(nameRect.y) + 8, 16, kText);
 
-    // --- Catalog list (left) -------------------------------------------------
-    DrawText("Skill Dictionary  (click to add / remove)", 16, 48, 16, kMuted);
-    const float rowH = 46.0f;
-    float y = 72.0f;
-    for (const SpellDef& d : catalog_.all()) {
-        Rectangle row{16, y, 352, rowH - 6};
-        const bool picked = hasSpell(d.id);
-        Color base = picked ? (hovered(row, m) ? kPickedHot : kPicked)
-                            : (hovered(row, m) ? kPanelHot : kPanel);
-        DrawRectangleRec(row, base);
-        DrawRectangleLinesEx(row, 1.0f, kLine);
-
-        // Checkbox marker.
-        Rectangle box{row.x + 8, row.y + 8, 22, 22};
-        DrawRectangleRec(box, picked ? kGood : kBg);
-        DrawRectangleLinesEx(box, 1.0f, kLine);
-        if (picked) textCentered("x", box, 18, kBg);
-
-        DrawText(TextFormat("%s", d.spell.name.c_str()), static_cast<int>(row.x) + 40,
-                 static_cast<int>(row.y) + 4, 18, kText);
-        DrawText(TextFormat("%d AP  range %d-%d  %s", d.spell.apCost, d.spell.minRange,
-                            d.spell.maxRange, shapeName(d.spell.shape)),
-                 static_cast<int>(row.x) + 40, static_cast<int>(row.y) + 22, 13, kMuted);
-        DrawText(TextFormat("%d pt", d.buildCost), static_cast<int>(row.x + row.width) - 52,
-                 static_cast<int>(row.y) + 10, 18, kAccent);
-
-        if (pressed(row, m)) toggleSpell(d.id);
-        y += rowH;
+    // --- Category filter chips ----------------------------------------------
+    static const char* kCats[] = {"All", "Damage", "Effects", "Support", "Summon"};
+    float chipX = 16.0f;
+    const float chipY = 62.0f;
+    for (int i = 0; i < 5; ++i) {
+        const float cw = static_cast<float>(MeasureText(kCats[i], 16)) + 22;
+        Rectangle chip{chipX, chipY, cw, 28};
+        if (button(chip, kCats[i], m, filter_ == i ? kAccent : kPanel)) filter_ = i;
+        chipX += cw + 8;
     }
 
-    // --- Stat steppers (right) ----------------------------------------------
+    // --- Spell card grid -----------------------------------------------------
+    const float gx0 = 16.0f, gy0 = 100.0f;
+    const float gridW = rightX - pad - gx0;
+    const float cardW = 172.0f, cardH = 80.0f, gap = 10.0f;
+    const int cols = std::max(1, static_cast<int>((gridW + gap) / (cardW + gap)));
+    int shown = 0;
+    for (const SpellDef& d : catalog_.all()) {
+        if (!matchesFilter(d)) continue;
+        const int col = shown % cols, gridRow = shown / cols;
+        Rectangle card{gx0 + col * (cardW + gap), gy0 + gridRow * (cardH + gap), cardW, cardH};
+        const bool picked = hasSpell(d.id);
+        Color base = picked ? (hovered(card, m) ? kPickedHot : kPicked)
+                            : (hovered(card, m) ? kPanelHot : kPanel);
+        DrawRectangleRec(card, base);
+        DrawRectangleLinesEx(card, picked ? 2.0f : 1.0f, picked ? kGood : kLine);
+
+        const int cx = static_cast<int>(card.x) + 8;
+        DrawText(d.spell.name.c_str(), cx, static_cast<int>(card.y) + 6, 18, kText);
+        DrawText(TextFormat("%d", d.buildCost), static_cast<int>(card.x + card.width) - 22,
+                 static_cast<int>(card.y) + 6, 18, kAccent);
+        DrawText(TextFormat("%d AP   rng %d-%d   %s", d.spell.apCost, d.spell.minRange,
+                            d.spell.maxRange, shapeName(d.spell.shape)),
+                 cx, static_cast<int>(card.y) + 30, 12, kMuted);
+        // First few tags (the secondary categorisation, visible per card).
+        std::string tagline;
+        for (std::size_t i = 0; i < d.tags.size() && i < 3; ++i) {
+            if (i) tagline += " ";
+            tagline += d.tags[i];
+        }
+        DrawText(tagline.c_str(), cx, static_cast<int>(card.y) + 52, 12, kAccent);
+
+        if (pressed(card, m)) toggleSpell(d.id);
+        ++shown;
+    }
+    if (shown == 0)
+        DrawText("(no spells match this filter)", static_cast<int>(gx0), static_cast<int>(gy0), 16,
+                 kMuted);
+
+    // --- Right column: stat steppers ----------------------------------------
     auto stepper = [&](float sy, const char* label, int& value, int costPer, const char* valFmt) {
         DrawText(label, static_cast<int>(rightX), static_cast<int>(sy) + 6, 18, kText);
-        Rectangle minus{rightX + 150, sy, 30, 30};
-        Rectangle plus{rightX + 230, sy, 30, 30};
+        Rectangle minus{rightX + rightW - 132, sy, 30, 30};
+        Rectangle plus{rightX + rightW - 52, sy, 30, 30};
         if (button(minus, "-", m, kPanel, value > 0)) --value;
         if (button(plus, "+", m, kPanel)) ++value;
-        DrawText(TextFormat(valFmt, value), static_cast<int>(rightX) + 186,
+        DrawText(TextFormat(valFmt, value), static_cast<int>(rightX + rightW) - 96,
                  static_cast<int>(sy) + 6, 18, kGood);
-        DrawText(TextFormat("%d pt", costPer), static_cast<int>(rightX) + 270,
-                 static_cast<int>(sy) + 8, 14, kMuted);
+        DrawText(TextFormat("%dpt", costPer), static_cast<int>(rightX + rightW) - 18 - 28,
+                 static_cast<int>(sy) + 8, 13, kMuted);
     };
-    DrawText("Stat upgrades", static_cast<int>(rightX), 108, 16, kMuted);
-    stepper(128, "+HP", player_.stats.hpPurchases, rules_.hpCost, "x%d");
-    stepper(166, "+AP", player_.stats.bonusAp, rules_.apCost, "+%d");
-    stepper(204, "+MP", player_.stats.bonusMp, rules_.mpCost, "+%d");
+    float sy = 56.0f;
+    DrawText("Stat upgrades", static_cast<int>(rightX), static_cast<int>(sy), 16, kMuted);
+    sy += 24;
+    stepper(sy, "+HP", player_.stats.hpPurchases, rules_.hpCost, "x%d"); sy += 38;
+    stepper(sy, "+AP", player_.stats.bonusAp, rules_.apCost, "+%d"); sy += 38;
+    stepper(sy, "+MP", player_.stats.bonusMp, rules_.mpCost, "+%d"); sy += 38;
+    stepper(sy, "+INIT", player_.stats.bonusInitiative, rules_.initCost, "+%d"); sy += 46;
 
     // --- Budget + validation -------------------------------------------------
-    Rectangle barBg{rightX, 252, rightW, 22};
+    Rectangle barBg{rightX, sy, rightW, 22};
     DrawRectangleRec(barBg, kPanel);
-    float frac = val.budget ? std::clamp(static_cast<float>(val.spent) / val.budget, 0.0f, 1.0f) : 0;
+    const float frac =
+        val.budget ? std::clamp(static_cast<float>(val.spent) / val.budget, 0.0f, 1.0f) : 0.0f;
     DrawRectangle(static_cast<int>(barBg.x), static_cast<int>(barBg.y),
                   static_cast<int>(barBg.width * frac), static_cast<int>(barBg.height),
                   val.ok ? kGood : kBad);
     DrawRectangleLinesEx(barBg, 1.0f, kLine);
     DrawText(TextFormat("Points: %d / %d", val.spent, val.budget), static_cast<int>(rightX),
-             280, 18, val.ok ? kText : kBad);
+             static_cast<int>(sy) + 28, 18, val.ok ? kText : kBad);
 
-    int ey = 306;
+    int ey = static_cast<int>(sy) + 54;
     for (const std::string& err : val.errors) {
-        DrawText(TextFormat("- %s", err.c_str()), static_cast<int>(rightX), ey, 14, kBad);
-        ey += 18;
+        DrawText(TextFormat("- %s", err.c_str()), static_cast<int>(rightX), ey, 13, kBad);
+        ey += 17;
     }
 
     // --- Bottom action bar ---------------------------------------------------
-    const float by = static_cast<float>(screenH) - 44;
+    const float by = H - 44;
     Rectangle saveBtn{16, by, 110, 32};
     Rectangle enemyBtn{136, by, 250, 32};
-    Rectangle fightBtn{static_cast<float>(screenW) - 156, by, 140, 32};
+    Rectangle fightBtn{W - 156, by, 140, 32};
 
     if (button(saveBtn, "Save", m, kPanel, val.ok)) {
         repo_.save(player_);
         refreshSaved();
         statusMsg_ = "Saved '" + player_.name + "'.";
     }
-
     const char* enemyName = savedNames_.empty() ? "(none)" : savedNames_[enemyIdx_].c_str();
-    if (button(enemyBtn, TextFormat("Enemy: %s  >", enemyName), m, kPanel,
-               !savedNames_.empty())) {
+    if (button(enemyBtn, TextFormat("Enemy: %s  >", enemyName), m, kPanel, !savedNames_.empty()))
         enemyIdx_ = (enemyIdx_ + 1) % static_cast<int>(savedNames_.size());
-    }
-
-    if (button(fightBtn, "Fight >", m, kAccent, val.ok)) {
-        result = Result::Fight;
-    }
+    if (button(fightBtn, "Fight >", m, kAccent, val.ok)) result = Result::Fight;
 
     if (!statusMsg_.empty())
         DrawText(statusMsg_.c_str(), static_cast<int>(enemyBtn.x), static_cast<int>(by) - 20, 14,
