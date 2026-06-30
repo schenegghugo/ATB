@@ -17,6 +17,7 @@
 #include "core/Build.h"
 #include "core/Grid.h"
 #include "core/Spells.h"
+#include "data/CatalogJson.h"
 
 #include <algorithm>
 #include <array>
@@ -183,7 +184,29 @@ int main(int argc, char** argv) {
     const unsigned seed = argc > 2 ? static_cast<unsigned>(std::atoi(argv[2])) : 12345u;
     const std::string outfile = argc > 3 ? argv[3] : "balance_report.txt";
 
-    SpellCatalog catalog = makeDefaultCatalog();
+    // Balance the *actual* content: load data/catalog.json (override the dir via
+    // ATB_DATA_DIR) so data edits drive the report. Absent file → the compiled
+    // catalog; present-but-invalid → hard error (don't silently report the wrong set).
+    std::string catalogPath = "data/catalog.json";
+    if (const char* dir = std::getenv("ATB_DATA_DIR"); dir && *dir)
+        catalogPath = std::string(dir) + "/catalog.json";
+    SpellCatalog catalog;
+    std::string catalogSource, catalogVersion;
+    if (std::ifstream(catalogPath).good()) {
+        CatalogLoad load = loadCatalogFromFile(catalogPath);
+        if (!load.ok) {
+            std::fprintf(stderr, "balance: catalog '%s' is invalid:\n", catalogPath.c_str());
+            for (const std::string& e : load.errors) std::fprintf(stderr, "  - %s\n", e.c_str());
+            return 1;
+        }
+        catalog = std::move(load.catalog);
+        catalogSource = catalogPath;
+        catalogVersion = load.version;
+    } else {
+        catalog = makeDefaultCatalog();
+        catalogSource = "built-in (makeDefaultCatalog)";
+    }
+
     BuildRules rules{};
     StormConfig storm{}; // defaults used by runMatch
     std::mt19937 rng(seed);
@@ -235,7 +258,11 @@ int main(int argc, char** argv) {
     r << "  wall time          " << elapsed << " s  ("
       << (elapsed > 0 ? matches / elapsed : 0) << " matches/s)\n";
     r << "  point budget       " << rules.pointBudget << "\n";
-    r << "  fireball cost      " << catalog.find(spellid::Fireball)->buildCost << " pt\n";
+    r << "  catalog            " << catalogSource;
+    if (!catalogVersion.empty()) r << "  (v" << catalogVersion << ")";
+    r << "\n";
+    if (const SpellDef* fb = catalog.find(spellid::Fireball))
+        r << "  fireball cost      " << fb->buildCost << " pt\n";
     r << "  closing ring       from round " << storm.startRound << ", " << storm.damage
       << " dmg/turn outside the safe square\n";
     line();

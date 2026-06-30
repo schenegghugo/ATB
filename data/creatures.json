@@ -30,7 +30,7 @@
         "effects": [
           {
             "type": "damage",
-            "amount": 20
+            "amount": 25
           }
         ]
       }
@@ -38,7 +38,7 @@
     {
       "key": "blocker",
       "kind": "summon",
-      "hp": 45,
+      "hp": 18,
       "ap": 3,
       "mp": 2,
       "initiative": 4,
@@ -66,7 +66,7 @@
     {
       "key": "healer",
       "kind": "summon",
-      "hp": 20,
+      "hp": 10,
       "ap": 3,
       "mp": 2,
       "initiative": 6,
@@ -94,9 +94,9 @@
     {
       "key": "brute",
       "kind": "summon",
-      "hp": 30,
+      "hp": 18,
       "ap": 3,
-      "mp": 2,
+      "mp": 4,
       "initiative": 5,
       "fuse": 0,
       "statuses": [],
@@ -105,7 +105,7 @@
           "name": "Strike",
           "apCost": 3,
           "minRange": 1,
-          "maxRange": 4,
+          "maxRange": 2,
           "needsLineOfSight": true,
           "shape": "single",
           "radius": 0,
@@ -113,7 +113,7 @@
           "effects": [
             {
               "type": "damage",
-              "amount": 10
+              "amount": 8
             }
           ]
         }
