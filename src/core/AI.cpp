@@ -86,6 +86,28 @@ int expectedIncoming(const Battle& b, EntityId victimId) {
     return worst;
 }
 
+// Blast damage threatening `victim` from any live bomb (an Object with a damaging
+// onDeath) whose detonation footprint covers the victim's tile. Bombs are short-
+// fused and also detonate when killed, so any in-range bomb is treated as a live
+// threat — this pulls the planner out of blast zones (and stops it dragging a
+// bomb toward its own units, since that raises this term for them).
+int expectedBlast(const Battle& b, EntityId victimId) {
+    const Entity& v = b.unit(victimId);
+    if (!v.alive()) return 0;
+    int worst = 0;
+    for (EntityId i = 0; i < b.unitCount(); ++i) {
+        const Entity& e = b.unit(i);
+        if (!e.alive() || e.kind != EntityKind::Object || e.onDeath.effects.empty()) continue;
+        int dmg = 0;
+        for (const Effect& fx : e.onDeath.effects)
+            if (fx.type == Effect::Type::Damage) dmg += fx.amount;
+        if (dmg <= 0) continue;
+        for (Vec2i t : b.affectedTiles(e.onDeath, e.pos, e.pos))
+            if (t == v.pos) { worst = std::max(worst, dmg); break; }
+    }
+    return worst;
+}
+
 // How good the board is for `me` — higher is better. Captures banked DoT, shields
 // and (crucially) the damage we expect to take, so defensive plans are valued.
 // `foeField` is BFS walking distance from the nearest foe to every tile (foes
@@ -97,7 +119,7 @@ double evalState(const Battle& b, Faction me, const std::vector<int>& foeField) 
         const Entity& u = b.unit(i);
         if (u.alive()) {
             const double effHp = u.hp + shieldPool(u) - EW.dotWeight * pendingDoT(u);
-            const double risk = EW.riskWeight * expectedIncoming(b, i);
+            const double risk = EW.riskWeight * (expectedIncoming(b, i) + expectedBlast(b, i));
             score += (u.team == me) ? (effHp - risk) : -(effHp - risk);
             // Asymmetric aggression: only *my* units are rewarded for closing in,
             // so the gradient pulls us toward combat instead of a mutual standoff.
@@ -120,7 +142,7 @@ std::vector<int> buildFoeField(const Battle& b, Faction me) {
     std::vector<int> field(static_cast<std::size_t>(g.width()) * g.height(), -1);
     for (EntityId i = 0; i < b.unitCount(); ++i) {
         const Entity& f = b.unit(i);
-        if (!f.alive() || f.team == me) continue;
+        if (!f.alive() || f.team == me || f.kind == EntityKind::Object) continue; // not bombs
         std::vector<int> d = distanceField(g, f.pos);
         for (std::size_t k = 0; k < field.size(); ++k)
             if (d[k] >= 0 && (field[k] < 0 || d[k] < field[k])) field[k] = d[k];
@@ -147,7 +169,7 @@ std::vector<PlannedAction> enumerateActions(const Battle& b, EntityId self) {
     std::vector<Vec2i> foeTiles, allyTiles;
     for (EntityId i = 0; i < b.unitCount(); ++i) {
         const Entity& u = b.unit(i);
-        if (!u.alive()) continue;
+        if (!u.alive() || u.kind == EntityKind::Object) continue; // don't target inert bombs
         if (u.team == me.team) allyTiles.push_back(u.pos);
         else if (!u.invisible()) foeTiles.push_back(u.pos); // can't target hidden foes
     }

@@ -350,9 +350,19 @@ Summon spells yet, like Portal — tune later.)*
 
 **Milestone complete.** ✅ foundation ☑ → Bombs ☑ → Summons ☑ → datafy creatures ☑.
 Both content types (spells + creatures) are now hand-editable JSON sharing one
-validated mapping layer. **Optional follow-ups:** summon `duration`; per-*champion*
-(vs per-team) cap; enemy-only Pull (the blocker is friendly-fire today); AI
-heuristics so champions actually cast Summon spells.
+validated mapping layer.
+
+**Fixes since:**
+- *Bomb-aware AI* — the beam planner treated a foe-team bomb as a target (it
+  harpooned bombs *toward* itself). Now bombs are excluded from targeting,
+  nearest-foe, and the aggression field, and `evalState` adds an `expectedBlast`
+  risk term so units avoid standing in a live bomb's blast radius. (`tb_roster_demo`)
+- *Dead-unit HUD* — status panels now draw only for **living** units, so a dead
+  summon/bomb's HP/AP/MP card disappears.
+
+**Optional follow-ups:** summon `duration`; per-*champion* (vs per-team) cap;
+enemy-only Pull (the blocker is friendly-fire today); AI heuristics so champions
+actually *cast* Summon spells.
 
 ---
 

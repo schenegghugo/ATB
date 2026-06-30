@@ -155,15 +155,18 @@ void drawFrame(const Layout& l, const Battle& battle, const ViewState& view) {
         }
     }
 
-    // --- HUD -----------------------------------------------------------------
-    const int slotCount = static_cast<int>(units.size());
+    // --- HUD: one status panel per *living* unit (dead summons/bombs vanish) --
+    std::vector<EntityId> living;
+    for (EntityId i = 0; i < units.size(); ++i)
+        if (units[i].alive()) living.push_back(i);
+    const int slotCount = static_cast<int>(living.size());
     const EntityId activeId = battle.activeUnit();
-    for (int i = 0; i < slotCount; ++i) {
-        const Entity& e = units[i];
+    for (int slot = 0; slot < slotCount; ++slot) {
+        const EntityId id = living[slot];
+        const Entity& e = units[id];
         Color color = e.team == Faction::Player ? kPlayer : kEnemy;
-        drawEntityPanel(l, g, e, color, i, slotCount,
-                        battle.phase() != Phase::Finished &&
-                            static_cast<EntityId>(i) == activeId);
+        drawEntityPanel(l, g, e, color, slot, slotCount,
+                        battle.phase() != Phase::Finished && id == activeId);
     }
 
     if (!view.statusLine.empty()) {

@@ -113,7 +113,8 @@ std::optional<EntityId> Battle::nearestFoe(EntityId of) const {
     for (EntityId i = 0; i < units_.size(); ++i) {
         const Entity& e = units_[i];
         if (!e.alive() || e.team == me.team) continue;
-        if (e.invisible()) continue; // concealed foes can't be acquired
+        if (e.invisible()) continue;                  // concealed foes can't be acquired
+        if (e.kind == EntityKind::Object) continue;   // bombs aren't foes to fight
         int d = manhattan(me.pos, e.pos);
         if (!best || d < bestDist) { best = i; bestDist = d; }
     }

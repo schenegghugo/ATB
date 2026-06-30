@@ -185,6 +185,25 @@ int main() {
         check(b.unit(1).hp < foeBefore, "foe took collision damage stopping against the blocker");
     }
 
+    // --- AI treats bombs as hazards, not targets ---------------------------
+    std::printf("AI ignores bombs as targets (no suicidal harpoon-pull):\n");
+    {
+        std::vector<Entity> roster;
+        roster.push_back(mk("P", Faction::Player, EntityKind::Champion, {1, 1}, 50, 10)); // keeps match live
+        roster.push_back(mk("E", Faction::Enemy, EntityKind::Champion, {5, 3}, 50, 5,
+                            {catalog.find(spellid::Harpoon)->spell}));
+        Battle b(Grid(14, 7), std::move(roster));
+        Entity bomb;
+        for (const Entity& proto : makeDefaultCreatures())
+            if (proto.name == "bomb") { bomb = proto; break; }
+        bomb.team = Faction::Player; // the player's bomb is a "foe" to the enemy AI
+        bomb.pos = {8, 3};           // 3 tiles east of E — within Harpoon's 2-6 range
+        const EntityId bid = b.spawnEntity(std::move(bomb));
+        const Vec2i before = b.unit(bid).pos;
+        for (int i = 0; i < 4; ++i) (void)enemyTakeOneAction(b, 1); // let E plan + act
+        check(b.unit(bid).pos == before, "enemy AI never pulls the bomb toward itself");
+    }
+
     std::printf("\n%s (%d failure%s)\n", g_fails == 0 ? "ALL PASS" : "FAILURES", g_fails,
                 g_fails == 1 ? "" : "s");
     return g_fails == 0 ? 0 : 1;
