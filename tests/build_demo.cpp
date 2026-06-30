@@ -56,6 +56,11 @@ int main() {
     bogus.spellIds = {spellid::Attack, 999}; // unknown id
     printValidation("Bogus (unknown spell)", validateBuild(bogus, catalog, rules));
 
+    // Ban enforcement: pyro is valid normally, invalid when "fireball" is banned.
+    const BuildValidation banned = validateBuild(pyro, catalog, rules, {"fireball"});
+    printValidation("Pyromancer (fireball banned)", banned);
+    const bool banWorks = validateBuild(pyro, catalog, rules).ok && !banned.ok;
+
     // --- Persistence round-trip ---------------------------------------------
     const std::string dir = (std::filesystem::temp_directory_path() / "tb_builds").string();
     FileBuildRepository repo(dir);
@@ -78,6 +83,9 @@ int main() {
     std::printf("  Initiative buy applied (%d = base %d + bought %d): %s\n", e.initiative,
                 rules.baseInitiative, pyro.stats.bonusInitiative, initOk ? "yes" : "NO");
 
+    std::printf("  Ban enforcement (valid normally, rejected when banned): %s\n",
+                banWorks ? "yes" : "NO");
+
     repo.remove("Pyromancer");
-    return (same && initOk) ? 0 : 1;
+    return (same && initOk && banWorks) ? 0 : 1;
 }

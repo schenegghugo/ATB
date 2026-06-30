@@ -140,7 +140,11 @@ BuildEditorScreen::Result BuildEditorScreen::runFrame(int screenW, int screenH) 
 
     DrawText("BUILD EDITOR", 16, 10, 22, kText);
 
-    const BuildValidation val = validateBuild(cur(), catalog_, ruleset_.economy);
+    const BuildValidation val = validateBuild(cur(), catalog_, ruleset_.economy, ruleset_.bannedSpells);
+    auto isBanned = [&](const std::string& key) {
+        return std::find(ruleset_.bannedSpells.begin(), ruleset_.bannedSpells.end(), key) !=
+               ruleset_.bannedSpells.end();
+    };
 
     // --- Name field (top-right) edits the current slot ----------------------
     Rectangle nameRect{rightX, 10, rightW, 30};
@@ -165,7 +169,8 @@ BuildEditorScreen::Result BuildEditorScreen::runFrame(int screenW, int screenH) 
     {
         float tx = 104.0f;
         for (int i = 0; i < static_cast<int>(playerTeam_.size()); ++i) {
-            const bool slotOk = validateBuild(playerTeam_[i], catalog_, ruleset_.economy).ok;
+            const bool slotOk =
+                validateBuild(playerTeam_[i], catalog_, ruleset_.economy, ruleset_.bannedSpells).ok;
             Rectangle tab{tx, 38, 34, 26};
             const Color base = (i == playerSlot_) ? kAccent : (slotOk ? kPanel : kBad);
             if (button(tab, TextFormat("%d", i + 1), m, base)) {
@@ -197,28 +202,33 @@ BuildEditorScreen::Result BuildEditorScreen::runFrame(int screenW, int screenH) 
         if (!matchesFilter(d)) continue;
         const int col = shown % cols, gridRow = shown / cols;
         Rectangle card{gx0 + col * (cardW + gap), gy0 + gridRow * (cardH + gap), cardW, cardH};
+        const bool banned = isBanned(d.key);
         const bool picked = hasSpell(d.id);
-        Color base = picked ? (hovered(card, m) ? kPickedHot : kPicked)
-                            : (hovered(card, m) ? kPanelHot : kPanel);
+        Color base = banned ? kBg
+                            : picked ? (hovered(card, m) ? kPickedHot : kPicked)
+                                     : (hovered(card, m) ? kPanelHot : kPanel);
         DrawRectangleRec(card, base);
         DrawRectangleLinesEx(card, picked ? 2.0f : 1.0f, picked ? kGood : kLine);
 
         const int cx = static_cast<int>(card.x) + 8;
-        DrawText(d.spell.name.c_str(), cx, static_cast<int>(card.y) + 6, 18, kText);
+        DrawText(d.spell.name.c_str(), cx, static_cast<int>(card.y) + 6, 18, banned ? kMuted : kText);
         DrawText(TextFormat("%d", d.buildCost), static_cast<int>(card.x + card.width) - 22,
-                 static_cast<int>(card.y) + 6, 18, kAccent);
+                 static_cast<int>(card.y) + 6, 18, banned ? kMuted : kAccent);
         DrawText(TextFormat("%d AP   rng %d-%d   %s", d.spell.apCost, d.spell.minRange,
                             d.spell.maxRange, shapeName(d.spell.shape)),
                  cx, static_cast<int>(card.y) + 30, 12, kMuted);
-        // First few tags (the secondary categorisation, visible per card).
-        std::string tagline;
-        for (std::size_t i = 0; i < d.tags.size() && i < 3; ++i) {
-            if (i) tagline += " ";
-            tagline += d.tags[i];
+        if (banned) {
+            DrawText("BANNED", cx, static_cast<int>(card.y) + 52, 12, kBad);
+        } else {
+            std::string tagline; // first few tags (secondary categorisation)
+            for (std::size_t i = 0; i < d.tags.size() && i < 3; ++i) {
+                if (i) tagline += " ";
+                tagline += d.tags[i];
+            }
+            DrawText(tagline.c_str(), cx, static_cast<int>(card.y) + 52, 12, kAccent);
         }
-        DrawText(tagline.c_str(), cx, static_cast<int>(card.y) + 52, 12, kAccent);
 
-        if (pressed(card, m)) toggleSpell(d.id);
+        if (!banned && pressed(card, m)) toggleSpell(d.id);
         ++shown;
     }
     if (shown == 0)
@@ -279,7 +289,7 @@ BuildEditorScreen::Result BuildEditorScreen::runFrame(int screenW, int screenH) 
     // --- Bottom action bar ---------------------------------------------------
     bool teamValid = true;
     for (const CharacterBuild& b : playerTeam_)
-        if (!validateBuild(b, catalog_, ruleset_.economy).ok) teamValid = false;
+        if (!validateBuild(b, catalog_, ruleset_.economy, ruleset_.bannedSpells).ok) teamValid = false;
 
     const float by = H - 44;
     Rectangle saveBtn{16, by, 130, 32};

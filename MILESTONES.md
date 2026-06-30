@@ -492,13 +492,21 @@ the sim both resolve + load it (fail-loud on a bad map). Ships `data/maps/duel.j
 validates), wired into CI. Verified end-to-end: static-map matches run in the sim
 and the GUI; default (random arena) unchanged.
 
-### R.5 ☐ Ban enforcement + competitive / custom
-Bans grey-out/hide editor cards, reject in `validateBuild`, and drop from the
-sim's random builds. Trust tie-in: **ranked** pins the *official* ruleset (fixed
-format, hashed); **custom** lobbies pin an *agreed* `rules.json` by hash (Phase 4
-lobby) — "competitive forces a format; custom allows agreed rulesets."
+### R.5 ☑ Ban enforcement + competitive / custom
+`validateBuild` gained a `bannedSpells` (catalog-key) param — it rejects any build
+using a banned spell (the server's build-admission check too). The **editor**
+greys out banned cards (`BANNED`, not selectable) and validates the team against
+the bans; the **sim** drops banned spells from its random-build pool. Verified:
+`tb_build_demo` (valid normally, rejected when banned) + a sim run with
+`fireball`/`poison` banned shows them at 0% pick. Trust tie-in (documented,
+`ARCHITECTURE.md` §5/§7): **ranked** pins the official ruleset; **custom** lobbies
+pin an agreed `rules.json` by hash — functionally realized with Phase 4 netcode.
 
-**Sequence:** Core split (CS.1) → R.1 → R.2 (unify) → R.3 → R.4 → R.5.
+**Milestone complete.** ✅ Core split → R.1 (ruleset data) → R.2 (unified
+`buildMatch`) → R.3 (2v2/3v3) → R.4 (static maps) → R.5 (bans). One `rules.json`
+now drives format, economy, ring, arena, and bans across the game *and* the
+balance sim — the third pinned, hand-editable, validity-gated artifact beside
+catalog + creatures.
 
 ---
 

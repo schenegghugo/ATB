@@ -57,10 +57,13 @@ struct BuildValidation {
     std::vector<std::string> errors;
 };
 
-// Verifies the build references real spells, has no duplicates / negatives, and
-// fits the point budget. Pure — safe to call from UI on every edit.
+// Verifies the build references real spells, has no duplicates / negatives, fits
+// the point budget, and uses no banned spell (by catalog key — the ruleset's
+// `bannedSpells`). Pure — safe to call from UI on every edit, and the server's
+// build-admission check.
 [[nodiscard]] BuildValidation validateBuild(const CharacterBuild& build, const SpellCatalog& catalog,
-                                            const BuildRules& rules = {});
+                                            const BuildRules& rules = {},
+                                            const std::vector<std::string>& bannedSpells = {});
 
 // Materialises a runtime Entity. Assumes the build is valid (call validateBuild
 // first in UI); unknown spell ids are skipped defensively.

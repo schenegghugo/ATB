@@ -14,13 +14,17 @@ int statPointCost(const StatAllocation& s, const BuildRules& r) {
 } // namespace
 
 BuildValidation validateBuild(const CharacterBuild& build, const SpellCatalog& catalog,
-                              const BuildRules& rules) {
+                              const BuildRules& rules, const std::vector<std::string>& bannedSpells) {
     BuildValidation v;
     v.budget = rules.pointBudget;
 
     if (build.stats.hpPurchases < 0 || build.stats.bonusAp < 0 || build.stats.bonusMp < 0 ||
         build.stats.bonusInitiative < 0)
         v.errors.push_back("Stat allocations cannot be negative.");
+
+    auto isBanned = [&](const std::string& key) {
+        return std::find(bannedSpells.begin(), bannedSpells.end(), key) != bannedSpells.end();
+    };
 
     std::unordered_set<int> seen;
     int spellPoints = 0;
@@ -34,6 +38,8 @@ BuildValidation validateBuild(const CharacterBuild& build, const SpellCatalog& c
             v.errors.push_back("Unknown spell id " + std::to_string(id) + ".");
             continue;
         }
+        if (isBanned(def->key))
+            v.errors.push_back("Spell '" + def->key + "' is banned by the ruleset.");
         spellPoints += def->buildCost;
     }
 

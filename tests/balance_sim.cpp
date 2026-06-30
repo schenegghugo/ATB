@@ -60,15 +60,17 @@ int statCost(const StatAllocation& s, const BuildRules& r) {
     return s.hpPurchases * r.hpCost + s.bonusAp * r.apCost + s.bonusMp * r.mpCost;
 }
 
-Build randomBuild(std::mt19937& rng, const SpellCatalog& catalog, const BuildRules& rules) {
+Build randomBuild(std::mt19937& rng, const SpellCatalog& catalog, const BuildRules& rules,
+                  const std::vector<std::string>& banned) {
     CharacterBuild b;
     b.name = "rnd";
     std::vector<int> ids;
-    for (const SpellDef& d : catalog.all()) ids.push_back(d.id);
+    for (const SpellDef& d : catalog.all())
+        if (std::find(banned.begin(), banned.end(), d.key) == banned.end()) ids.push_back(d.id);
     std::shuffle(ids.begin(), ids.end(), rng);
     for (int id : ids) {
         b.spellIds.push_back(id);
-        if (!validateBuild(b, catalog, rules).ok) b.spellIds.pop_back();
+        if (!validateBuild(b, catalog, rules, banned).ok) b.spellIds.pop_back();
     }
     if (!std::any_of(b.spellIds.begin(), b.spellIds.end(), isOffensive)) {
         b.spellIds.clear();
@@ -84,7 +86,7 @@ Build randomBuild(std::mt19937& rng, const SpellCatalog& catalog, const BuildRul
         }
         CharacterBuild probe = b;
         probe.stats = trial;
-        if (validateBuild(probe, catalog, rules).ok) b.stats = trial;
+        if (validateBuild(probe, catalog, rules, banned).ok) b.stats = trial;
     }
     Build out;
     out.def = b;
@@ -265,8 +267,8 @@ int main(int argc, char** argv) {
         std::vector<Build> teamA, teamB;
         std::vector<CharacterBuild> defsA, defsB;
         for (int t = 0; t < teamSize; ++t) {
-            teamA.push_back(randomBuild(rng, catalog, rules));
-            teamB.push_back(randomBuild(rng, catalog, rules));
+            teamA.push_back(randomBuild(rng, catalog, rules, ruleset.bannedSpells));
+            teamB.push_back(randomBuild(rng, catalog, rules, ruleset.bannedSpells));
             defsA.push_back(teamA.back().def);
             defsB.push_back(teamB.back().def);
         }
