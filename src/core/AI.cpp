@@ -239,7 +239,9 @@ std::vector<PlannedAction> planTurn(const Battle& battle, EntityId self) {
         double ev;
     };
     std::vector<Node> beam;
-    beam.push_back({battle, {}, evalState(battle, me, foeField)});
+    Node root{battle, {}, evalState(battle, me, foeField)};
+    root.state.setEventRecording(false); // throwaway sims don't narrate (and stay cheap to clone)
+    beam.push_back(std::move(root));
 
     double bestEv = beam[0].ev;
     std::vector<PlannedAction> bestSeq;

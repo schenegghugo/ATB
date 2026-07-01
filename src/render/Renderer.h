@@ -55,11 +55,20 @@ struct ViewState {
     bool showSpellBar = false;
     int selectedSpell = -1;                 // highlighted button (matches the digit hotkey)
     std::vector<std::string> spellIconKeys; // catalog key per active-unit spell (icons land in 2.2)
+
+    // Combat log panel (drawn in the empty column right of the board, if it fits).
+    int windowW = 0, windowH = 0; // actual window size (the board uses Layout::screen*)
+    int logScroll = 0;            // lines scrolled up from the newest (0 = autoscroll to bottom)
 };
 
 // Converts a pixel position to a grid coordinate (caller checks inBounds).
 [[nodiscard]] Vec2i screenToGrid(const Layout& l, int px, int py);
 
-void drawFrame(const Layout& l, const Battle& battle, const ViewState& view);
+// Optional presentation pack (art/palette). Null = the built-in primitives, so
+// the renderer works identically with no pack. Defined in SpritePack.h.
+class SpritePack;
+
+void drawFrame(const Layout& l, const Battle& battle, const ViewState& view,
+               const SpritePack* pack = nullptr);
 
 } // namespace tb::render

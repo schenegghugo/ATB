@@ -128,12 +128,42 @@ CMakeFiles/tactical_battler.dir/src/render/ContentPaths.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tactical_battler.dir/src/render/ContentPaths.cpp.s"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/hugo/Projects/ATB/src/render/ContentPaths.cpp -o CMakeFiles/tactical_battler.dir/src/render/ContentPaths.cpp.s
 
+CMakeFiles/tactical_battler.dir/src/render/PackManifest.cpp.o: CMakeFiles/tactical_battler.dir/flags.make
+CMakeFiles/tactical_battler.dir/src/render/PackManifest.cpp.o: /home/hugo/Projects/ATB/src/render/PackManifest.cpp
+CMakeFiles/tactical_battler.dir/src/render/PackManifest.cpp.o: CMakeFiles/tactical_battler.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=$(CMAKE_PROGRESS_5) "Building CXX object CMakeFiles/tactical_battler.dir/src/render/PackManifest.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/tactical_battler.dir/src/render/PackManifest.cpp.o -MF CMakeFiles/tactical_battler.dir/src/render/PackManifest.cpp.o.d -o CMakeFiles/tactical_battler.dir/src/render/PackManifest.cpp.o -c /home/hugo/Projects/ATB/src/render/PackManifest.cpp
+
+CMakeFiles/tactical_battler.dir/src/render/PackManifest.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tactical_battler.dir/src/render/PackManifest.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/hugo/Projects/ATB/src/render/PackManifest.cpp > CMakeFiles/tactical_battler.dir/src/render/PackManifest.cpp.i
+
+CMakeFiles/tactical_battler.dir/src/render/PackManifest.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tactical_battler.dir/src/render/PackManifest.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/hugo/Projects/ATB/src/render/PackManifest.cpp -o CMakeFiles/tactical_battler.dir/src/render/PackManifest.cpp.s
+
+CMakeFiles/tactical_battler.dir/src/render/SpritePack.cpp.o: CMakeFiles/tactical_battler.dir/flags.make
+CMakeFiles/tactical_battler.dir/src/render/SpritePack.cpp.o: /home/hugo/Projects/ATB/src/render/SpritePack.cpp
+CMakeFiles/tactical_battler.dir/src/render/SpritePack.cpp.o: CMakeFiles/tactical_battler.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=$(CMAKE_PROGRESS_6) "Building CXX object CMakeFiles/tactical_battler.dir/src/render/SpritePack.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/tactical_battler.dir/src/render/SpritePack.cpp.o -MF CMakeFiles/tactical_battler.dir/src/render/SpritePack.cpp.o.d -o CMakeFiles/tactical_battler.dir/src/render/SpritePack.cpp.o -c /home/hugo/Projects/ATB/src/render/SpritePack.cpp
+
+CMakeFiles/tactical_battler.dir/src/render/SpritePack.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tactical_battler.dir/src/render/SpritePack.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/hugo/Projects/ATB/src/render/SpritePack.cpp > CMakeFiles/tactical_battler.dir/src/render/SpritePack.cpp.i
+
+CMakeFiles/tactical_battler.dir/src/render/SpritePack.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tactical_battler.dir/src/render/SpritePack.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/hugo/Projects/ATB/src/render/SpritePack.cpp -o CMakeFiles/tactical_battler.dir/src/render/SpritePack.cpp.s
+
 # Object files for target tactical_battler
 tactical_battler_OBJECTS = \
 "CMakeFiles/tactical_battler.dir/src/main.cpp.o" \
 "CMakeFiles/tactical_battler.dir/src/render/Renderer.cpp.o" \
 "CMakeFiles/tactical_battler.dir/src/render/BuildEditorScreen.cpp.o" \
-"CMakeFiles/tactical_battler.dir/src/render/ContentPaths.cpp.o"
+"CMakeFiles/tactical_battler.dir/src/render/ContentPaths.cpp.o" \
+"CMakeFiles/tactical_battler.dir/src/render/PackManifest.cpp.o" \
+"CMakeFiles/tactical_battler.dir/src/render/SpritePack.cpp.o"
 
 # External object files for target tactical_battler
 tactical_battler_EXTERNAL_OBJECTS =
@@ -142,6 +172,8 @@ tactical_battler: CMakeFiles/tactical_battler.dir/src/main.cpp.o
 tactical_battler: CMakeFiles/tactical_battler.dir/src/render/Renderer.cpp.o
 tactical_battler: CMakeFiles/tactical_battler.dir/src/render/BuildEditorScreen.cpp.o
 tactical_battler: CMakeFiles/tactical_battler.dir/src/render/ContentPaths.cpp.o
+tactical_battler: CMakeFiles/tactical_battler.dir/src/render/PackManifest.cpp.o
+tactical_battler: CMakeFiles/tactical_battler.dir/src/render/SpritePack.cpp.o
 tactical_battler: CMakeFiles/tactical_battler.dir/build.make
 tactical_battler: CMakeFiles/tactical_battler.dir/compiler_depend.ts
 tactical_battler: libtb_core.a
@@ -152,7 +184,7 @@ tactical_battler: /usr/lib/libGLU.so
 tactical_battler: /usr/lib/librt.a
 tactical_battler: /usr/lib/libm.so
 tactical_battler: CMakeFiles/tactical_battler.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=$(CMAKE_PROGRESS_5) "Linking CXX executable tactical_battler"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=$(CMAKE_PROGRESS_7) "Linking CXX executable tactical_battler"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/tactical_battler.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.

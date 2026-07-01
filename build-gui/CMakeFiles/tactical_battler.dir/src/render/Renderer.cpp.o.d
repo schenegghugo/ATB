@@ -124,6 +124,7 @@ CMakeFiles/tactical_battler.dir/src/render/Renderer.cpp.o: \
  /usr/include/c++/16.1.1/bits/vector.tcc \
  /home/hugo/Projects/ATB/src/render/../core/Entity.h \
  /home/hugo/Projects/ATB/src/render/../core/Grid.h \
+ /home/hugo/Projects/ATB/src/render/../core/Event.h \
  /home/hugo/Projects/ATB/src/render/../core/Storm.h \
  /usr/include/c++/16.1.1/optional /usr/include/c++/16.1.1/exception \
  /usr/include/c++/16.1.1/bits/exception_ptr.h \
@@ -131,6 +132,14 @@ CMakeFiles/tactical_battler.dir/src/render/Renderer.cpp.o: \
  /usr/include/c++/16.1.1/typeinfo \
  /usr/include/c++/16.1.1/bits/nested_exception.h \
  /usr/include/c++/16.1.1/bits/enable_special_members.h \
+ /home/hugo/Projects/ATB/src/render/SpritePack.h \
+ /home/hugo/Projects/ATB/src/render/PackManifest.h \
+ /usr/include/c++/16.1.1/unordered_map \
+ /usr/include/c++/16.1.1/bits/unordered_map.h \
+ /usr/include/c++/16.1.1/bits/hashtable.h \
+ /usr/include/c++/16.1.1/bits/hashtable_policy.h \
+ /usr/include/c++/16.1.1/ext/aligned_buffer.h \
+ /usr/include/c++/16.1.1/bits/node_handle.h \
  /home/hugo/Projects/ATB/build-gui/_deps/raylib-src/src/raylib.h \
  /usr/include/c++/16.1.1/algorithm \
  /usr/include/c++/16.1.1/bits/stl_algo.h \
@@ -141,4 +150,7 @@ CMakeFiles/tactical_battler.dir/src/render/Renderer.cpp.o: \
  /usr/include/c++/16.1.1/bits/ranges_algo.h \
  /usr/include/c++/16.1.1/bits/ranges_algobase.h \
  /usr/include/c++/16.1.1/pstl/glue_algorithm_defs.h \
- /usr/include/c++/16.1.1/pstl/execution_defs.h
+ /usr/include/c++/16.1.1/pstl/execution_defs.h \
+ /usr/include/c++/16.1.1/utility \
+ /usr/include/c++/16.1.1/bits/stl_relops.h \
+ /usr/include/c++/16.1.1/bits/intcmp.h

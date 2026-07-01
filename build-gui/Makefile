@@ -260,6 +260,19 @@ tb_roster_demo/fast:
 .PHONY : tb_roster_demo/fast
 
 #=============================================================================
+# Target rules for targets named tb_event_demo
+
+# Build rule for target.
+tb_event_demo: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tb_event_demo
+.PHONY : tb_event_demo
+
+# fast build rule for target.
+tb_event_demo/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_event_demo.dir/build.make CMakeFiles/tb_event_demo.dir/build
+.PHONY : tb_event_demo/fast
+
+#=============================================================================
 # Target rules for targets named tb_json_demo
 
 # Build rule for target.
@@ -414,6 +427,19 @@ tb_team_balance: cmake_check_build_system
 tb_team_balance/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_team_balance.dir/build.make CMakeFiles/tb_team_balance.dir/build
 .PHONY : tb_team_balance/fast
+
+#=============================================================================
+# Target rules for targets named tb_pack_demo
+
+# Build rule for target.
+tb_pack_demo: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tb_pack_demo
+.PHONY : tb_pack_demo
+
+# fast build rule for target.
+tb_pack_demo/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_pack_demo.dir/build.make CMakeFiles/tb_pack_demo.dir/build
+.PHONY : tb_pack_demo/fast
 
 #=============================================================================
 # Target rules for targets named tactical_battler
@@ -912,6 +938,33 @@ src/render/ContentPaths.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tactical_battler.dir/build.make CMakeFiles/tactical_battler.dir/src/render/ContentPaths.cpp.s
 .PHONY : src/render/ContentPaths.cpp.s
 
+src/render/PackManifest.o: src/render/PackManifest.cpp.o
+.PHONY : src/render/PackManifest.o
+
+# target to build an object file
+src/render/PackManifest.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_pack_demo.dir/build.make CMakeFiles/tb_pack_demo.dir/src/render/PackManifest.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tactical_battler.dir/build.make CMakeFiles/tactical_battler.dir/src/render/PackManifest.cpp.o
+.PHONY : src/render/PackManifest.cpp.o
+
+src/render/PackManifest.i: src/render/PackManifest.cpp.i
+.PHONY : src/render/PackManifest.i
+
+# target to preprocess a source file
+src/render/PackManifest.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_pack_demo.dir/build.make CMakeFiles/tb_pack_demo.dir/src/render/PackManifest.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tactical_battler.dir/build.make CMakeFiles/tactical_battler.dir/src/render/PackManifest.cpp.i
+.PHONY : src/render/PackManifest.cpp.i
+
+src/render/PackManifest.s: src/render/PackManifest.cpp.s
+.PHONY : src/render/PackManifest.s
+
+# target to generate assembly for a file
+src/render/PackManifest.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_pack_demo.dir/build.make CMakeFiles/tb_pack_demo.dir/src/render/PackManifest.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tactical_battler.dir/build.make CMakeFiles/tactical_battler.dir/src/render/PackManifest.cpp.s
+.PHONY : src/render/PackManifest.cpp.s
+
 src/render/Renderer.o: src/render/Renderer.cpp.o
 .PHONY : src/render/Renderer.o
 
@@ -935,6 +988,30 @@ src/render/Renderer.s: src/render/Renderer.cpp.s
 src/render/Renderer.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tactical_battler.dir/build.make CMakeFiles/tactical_battler.dir/src/render/Renderer.cpp.s
 .PHONY : src/render/Renderer.cpp.s
+
+src/render/SpritePack.o: src/render/SpritePack.cpp.o
+.PHONY : src/render/SpritePack.o
+
+# target to build an object file
+src/render/SpritePack.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tactical_battler.dir/build.make CMakeFiles/tactical_battler.dir/src/render/SpritePack.cpp.o
+.PHONY : src/render/SpritePack.cpp.o
+
+src/render/SpritePack.i: src/render/SpritePack.cpp.i
+.PHONY : src/render/SpritePack.i
+
+# target to preprocess a source file
+src/render/SpritePack.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tactical_battler.dir/build.make CMakeFiles/tactical_battler.dir/src/render/SpritePack.cpp.i
+.PHONY : src/render/SpritePack.cpp.i
+
+src/render/SpritePack.s: src/render/SpritePack.cpp.s
+.PHONY : src/render/SpritePack.s
+
+# target to generate assembly for a file
+src/render/SpritePack.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tactical_battler.dir/build.make CMakeFiles/tactical_battler.dir/src/render/SpritePack.cpp.s
+.PHONY : src/render/SpritePack.cpp.s
 
 tests/ai_demo.o: tests/ai_demo.cpp.o
 .PHONY : tests/ai_demo.o
@@ -1080,6 +1157,30 @@ tests/enums_demo.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_enums_demo.dir/build.make CMakeFiles/tb_enums_demo.dir/tests/enums_demo.cpp.s
 .PHONY : tests/enums_demo.cpp.s
 
+tests/event_demo.o: tests/event_demo.cpp.o
+.PHONY : tests/event_demo.o
+
+# target to build an object file
+tests/event_demo.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_event_demo.dir/build.make CMakeFiles/tb_event_demo.dir/tests/event_demo.cpp.o
+.PHONY : tests/event_demo.cpp.o
+
+tests/event_demo.i: tests/event_demo.cpp.i
+.PHONY : tests/event_demo.i
+
+# target to preprocess a source file
+tests/event_demo.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_event_demo.dir/build.make CMakeFiles/tb_event_demo.dir/tests/event_demo.cpp.i
+.PHONY : tests/event_demo.cpp.i
+
+tests/event_demo.s: tests/event_demo.cpp.s
+.PHONY : tests/event_demo.s
+
+# target to generate assembly for a file
+tests/event_demo.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_event_demo.dir/build.make CMakeFiles/tb_event_demo.dir/tests/event_demo.cpp.s
+.PHONY : tests/event_demo.cpp.s
+
 tests/headless_demo.o: tests/headless_demo.cpp.o
 .PHONY : tests/headless_demo.o
 
@@ -1151,6 +1252,30 @@ tests/map_demo.s: tests/map_demo.cpp.s
 tests/map_demo.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_map_demo.dir/build.make CMakeFiles/tb_map_demo.dir/tests/map_demo.cpp.s
 .PHONY : tests/map_demo.cpp.s
+
+tests/pack_demo.o: tests/pack_demo.cpp.o
+.PHONY : tests/pack_demo.o
+
+# target to build an object file
+tests/pack_demo.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_pack_demo.dir/build.make CMakeFiles/tb_pack_demo.dir/tests/pack_demo.cpp.o
+.PHONY : tests/pack_demo.cpp.o
+
+tests/pack_demo.i: tests/pack_demo.cpp.i
+.PHONY : tests/pack_demo.i
+
+# target to preprocess a source file
+tests/pack_demo.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_pack_demo.dir/build.make CMakeFiles/tb_pack_demo.dir/tests/pack_demo.cpp.i
+.PHONY : tests/pack_demo.cpp.i
+
+tests/pack_demo.s: tests/pack_demo.cpp.s
+.PHONY : tests/pack_demo.s
+
+# target to generate assembly for a file
+tests/pack_demo.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_pack_demo.dir/build.make CMakeFiles/tb_pack_demo.dir/tests/pack_demo.cpp.s
+.PHONY : tests/pack_demo.cpp.s
 
 tests/roster_demo.o: tests/roster_demo.cpp.o
 .PHONY : tests/roster_demo.o
@@ -1372,9 +1497,11 @@ help:
 	@echo "... tb_creature_demo"
 	@echo "... tb_creature_gen"
 	@echo "... tb_enums_demo"
+	@echo "... tb_event_demo"
 	@echo "... tb_headless"
 	@echo "... tb_json_demo"
 	@echo "... tb_map_demo"
+	@echo "... tb_pack_demo"
 	@echo "... tb_roster_demo"
 	@echo "... tb_ruleset_demo"
 	@echo "... tb_ruleset_gen"
@@ -1435,9 +1562,15 @@ help:
 	@echo "... src/render/ContentPaths.o"
 	@echo "... src/render/ContentPaths.i"
 	@echo "... src/render/ContentPaths.s"
+	@echo "... src/render/PackManifest.o"
+	@echo "... src/render/PackManifest.i"
+	@echo "... src/render/PackManifest.s"
 	@echo "... src/render/Renderer.o"
 	@echo "... src/render/Renderer.i"
 	@echo "... src/render/Renderer.s"
+	@echo "... src/render/SpritePack.o"
+	@echo "... src/render/SpritePack.i"
+	@echo "... src/render/SpritePack.s"
 	@echo "... tests/ai_demo.o"
 	@echo "... tests/ai_demo.i"
 	@echo "... tests/ai_demo.s"
@@ -1456,6 +1589,9 @@ help:
 	@echo "... tests/enums_demo.o"
 	@echo "... tests/enums_demo.i"
 	@echo "... tests/enums_demo.s"
+	@echo "... tests/event_demo.o"
+	@echo "... tests/event_demo.i"
+	@echo "... tests/event_demo.s"
 	@echo "... tests/headless_demo.o"
 	@echo "... tests/headless_demo.i"
 	@echo "... tests/headless_demo.s"
@@ -1465,6 +1601,9 @@ help:
 	@echo "... tests/map_demo.o"
 	@echo "... tests/map_demo.i"
 	@echo "... tests/map_demo.s"
+	@echo "... tests/pack_demo.o"
+	@echo "... tests/pack_demo.i"
+	@echo "... tests/pack_demo.s"
 	@echo "... tests/roster_demo.o"
 	@echo "... tests/roster_demo.i"
 	@echo "... tests/roster_demo.s"

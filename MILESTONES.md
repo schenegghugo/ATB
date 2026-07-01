@@ -534,7 +534,15 @@ Visually confirmed in-game.
 - Icon-key resolution needs **no core change**:
   `slot → build.spellIds[slot] → catalog.find(id)->key`.
 
-### 2.2 ☐ Sprite/asset pack seam — **atlas-based**
+### 2.2 ☑ Sprite/asset pack seam — **atlas-based**
+*Seam shipped; manifest loader headless-tested (`tb_pack_demo`, in CI); palette
+re-theme visually confirmed in-game.* `render/PackManifest.{h,cpp}`
+(raylib-free parse + strict validation) + `render/SpritePack.{h,cpp}` (atlas load,
+resolve, `drawSprite`/`paletteOr`). Renderer routes **tiles / units / spell-bar
+icons** through the ladder (atlas sprite → palette colour → primitive); `main.cpp`
+loads a pack from `ATB_PACK=<dir>` (absent ⇒ primitives, unchanged). Example
+palette-only pack in `packs/example/`. *Remaining:* ground effects + status
+markers wiring, the editor skill-dictionary icons, animation clips (2.4).
 - **Atlas-first** (Raylib batches sub-rects of one bound texture — singular files
   would force a bind per sprite). A pack = `pack.json` + one or more atlas PNGs.
 - `pack.json` (parsed by the **reused `data/Json` layer from 1.1**) maps each
@@ -547,7 +555,16 @@ Visually confirmed in-game.
 - **v1**: static `rect` per key + palette, one atlas page, hot-reload. Animation
   (`anim`/`cast`) fields are reserved in the manifest but optional.
 
-### 2.3 ☐ Combat log + structured engine event stream
+### 2.3 ◐ Combat log + structured engine event stream
+*Engine stream shipped + headless-tested (`tb_event_demo`, in CI); GUI log panel
+implemented, pending a visual pass.* `core/Event.h` (`BattleEvent`/`EventType`);
+`Battle` appends via `emit()` at TurnStart/Move/Cast/Damage/Heal/Status/Death and
+exposes `events()`. The AI disables recording on its planning clones
+(`setEventRecording`) so they stay cheap. Renderer draws a scrolling log in the
+column right of the board (`formatEvent`, wheel scrollback + autoscroll); Move is
+emitted but hidden in the log (kept for animation/replay). *Remaining:* the
+one-line `status` string still coexists (not yet fully replaced); forced-move
+displacement isn't emitted as Move yet.
 - The engine emits a typed, ordered **event stream** as it resolves a turn
   (`Move`, `Cast`, `Damage`, `Heal`, `Status`, `Death`, `Storm`, …) — pure data,
   deterministic, no I/O. A small `Battle` addition (append to a log vector); it

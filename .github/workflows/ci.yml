@@ -36,6 +36,8 @@ jobs:
           ./build/tb_spells_demo
           ./build/tb_ai_demo
           ./build/tb_roster_demo
+          ./build/tb_event_demo
+          ./build/tb_pack_demo
 
       - name: Balance sanity (fixed seed, fast)
         run: ./build/tb_balance 200 1

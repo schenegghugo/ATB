@@ -1,12 +1,28 @@
 #include "Renderer.h"
 
+#include "SpritePack.h"
+
 #include "raylib.h"
 
 #include <algorithm>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace tb::render {
 
 namespace {
+
+// Semantic keys a pack targets for tiles (sprites are dotted; palette is short).
+struct TileKeys { const char* sprite; const char* palette; };
+TileKeys tileKeys(TileType t) {
+    switch (t) {
+        case TileType::Wall: return {"tiles.wall", "wall"};
+        case TileType::Obstacle: return {"tiles.obstacle", "obstacle"};
+        case TileType::Walkable: break;
+    }
+    return {"tiles.floor", "floor"};
+}
 
 // Tactical-mode palette.
 constexpr Color kBackground{18, 20, 28, 255};
@@ -73,7 +89,10 @@ void drawEntityPanel(const Layout& l, const Grid& g, const Entity& e, Color colo
 
 // The clickable spell bar for the active player unit. Button geometry comes from
 // the shared spellSlotRect (below), so this and the frontend's hit-test agree.
-void drawSpellBar(const Layout& l, const Battle& battle, const ViewState& view) {
+// Each button's icon resolves through the pack (spells.<key>) with a text-badge
+// fallback, so the bar is fully usable with zero art.
+void drawSpellBar(const Layout& l, const Battle& battle, const ViewState& view,
+                  const SpritePack* pack) {
     if (!view.showSpellBar || battle.phase() == Phase::Finished) return;
     const Grid& g = battle.grid();
     const Entity& u = battle.unit(battle.activeUnit());
@@ -91,16 +110,107 @@ void drawSpellBar(const Layout& l, const Battle& battle, const ViewState& view) 
 
         DrawRectangleRec(r, !ready ? kBtnCooldown : !afford ? kBtnPoor : kBtnReady);
         DrawRectangleLinesEx(r, selected ? 3.0f : 1.0f, selected ? kBtnSelected : kGridLine);
+
+        // Icon from the pack (spells.<catalog key>); dim it when unusable. If the
+        // pack has no icon, the digit + name badge below stands in.
+        bool hasIcon = false;
+        if (pack && s < static_cast<int>(view.spellIconKeys.size()) && !view.spellIconKeys[s].empty()) {
+            const float side = static_cast<float>(rc.h - 6);
+            const Rectangle icon{rc.x + 3.0f, rc.y + 3.0f, side, side};
+            const Color tint = usable ? WHITE : Color{255, 255, 255, 110};
+            hasIcon = pack->drawSprite("spells." + view.spellIconKeys[s], icon, tint);
+        }
+        const int textX = hasIcon ? rc.x + rc.h : rc.x + 24;
+
         // Hotkey digit stays on the button (additive to click-to-select).
-        DrawText(TextFormat("%d", s + 1), rc.x + 6, rc.y + 4, 18, usable ? kText : kTextDim);
-        DrawText(sp.name.c_str(), rc.x + 24, rc.y + 6, 15, usable ? kText : kTextDim);
-        DrawText(TextFormat("%d AP", sp.apCost), rc.x + 6, rc.y + rc.h - 17, 14,
+        DrawText(TextFormat("%d", s + 1), rc.x + 4, rc.y + 3, 16, usable ? kText : kTextDim);
+        DrawText(sp.name.c_str(), textX, rc.y + 6, 15, usable ? kText : kTextDim);
+        DrawText(TextFormat("%d AP", sp.apCost), textX, rc.y + rc.h - 17, 14,
                  afford ? kText : kBtnCdText);
         if (cd > 0) {
             const char* cds = TextFormat("CD %d", cd);
             DrawText(cds, rc.x + rc.w - MeasureText(cds, 14) - 6, rc.y + rc.h - 17, 14, kBtnCdText);
         }
     }
+}
+
+const char* statusWord(StatusEffect::Kind k) {
+    switch (k) {
+        case StatusEffect::Kind::DamageOverTime: return "a damage-over-time";
+        case StatusEffect::Kind::Shield: return "a Shield";
+        case StatusEffect::Kind::ApBuff: return "an AP buff";
+        case StatusEffect::Kind::MpBuff: return "an MP buff";
+        case StatusEffect::Kind::Invisible: return "Invisibility";
+        case StatusEffect::Kind::Rewind: return "a Rewind marker";
+    }
+    return "a status";
+}
+
+// Turn one event into a log line + colour. Returns false to *hide* it (Move is
+// noise in a combat log — the events still exist for animation/replay).
+bool formatEvent(const Battle& b, const BattleEvent& ev, std::string& out, Color& col) {
+    const std::string who = b.unit(ev.actor).name;
+    const std::string tgt = b.unit(ev.target).name;
+    switch (ev.type) {
+        case EventType::Move:
+            return false;
+        case EventType::TurnStart:
+            out = "-- " + who + " --"; col = kTextDim; return true;
+        case EventType::Cast: {
+            const auto& sp = b.unit(ev.actor).spells;
+            const std::string name =
+                (ev.spellSlot >= 0 && ev.spellSlot < static_cast<int>(sp.size())) ? sp[ev.spellSlot].name
+                                                                                  : "a spell";
+            out = who + " casts " + name; col = kText; return true;
+        }
+        case EventType::Damage: {
+            const char* w = ev.source == DamageSource::Storm ? " ring"
+                          : ev.source == DamageSource::Collision ? " collision" : "";
+            out = "  " + tgt + " takes " + std::to_string(ev.amount) + w + " damage";
+            col = Color{232, 120, 110, 255}; return true;
+        }
+        case EventType::Heal:
+            out = "  " + tgt + " recovers " + std::to_string(ev.amount) + " HP";
+            col = Color{120, 210, 140, 255}; return true;
+        case EventType::Status:
+            out = "  " + tgt + " gains " + statusWord(ev.status);
+            col = Color{190, 155, 235, 255}; return true;
+        case EventType::Death:
+            out = tgt + " is defeated"; col = Color{240, 90, 95, 255}; return true;
+    }
+    return false;
+}
+
+// Scrolling combat log in the empty column to the right of the board. Skipped if
+// the window isn't wide enough to give it a readable strip.
+void drawCombatLog(const Layout& l, const Battle& battle, const ViewState& view) {
+    const Grid& g = battle.grid();
+    const int x0 = l.screenWidth(g) + 8;
+    const int panelW = view.windowW - x0 - 8;
+    if (panelW < 200) return; // too narrow — the board fills the window
+    const int y0 = l.originY;
+    const int panelH = view.windowH - y0 - 8;
+
+    DrawRectangle(x0, y0, panelW, panelH, Color{12, 14, 20, 230});
+    DrawRectangleLines(x0, y0, panelW, panelH, kGridLine);
+    DrawText("COMBAT LOG", x0 + 8, y0 + 6, 14, kText);
+
+    const int lineH = 16, top = y0 + 28;
+    const int rows = std::max(0, (panelH - 34) / lineH);
+
+    std::vector<std::pair<std::string, Color>> lines;
+    for (const BattleEvent& ev : battle.events()) {
+        std::string text;
+        Color col;
+        if (formatEvent(battle, ev, text, col)) lines.emplace_back(std::move(text), col);
+    }
+    const int total = static_cast<int>(lines.size());
+    const int maxStart = std::max(0, total - rows);
+    const int start = std::clamp(maxStart - view.logScroll, 0, maxStart);
+    for (int i = 0; i < rows && start + i < total; ++i)
+        DrawText(lines[start + i].first.c_str(), x0 + 8, top + i * lineH, 13, lines[start + i].second);
+    if (start < maxStart) // more history above the fold
+        DrawText("^ scroll", x0 + panelW - MeasureText("^ scroll", 12) - 8, y0 + 8, 12, kTextDim);
 }
 
 } // namespace
@@ -118,22 +228,22 @@ Vec2i screenToGrid(const Layout& l, int px, int py) {
     return Vec2i{(px - l.originX) / l.tileSize, (py - l.originY) / l.tileSize};
 }
 
-void drawFrame(const Layout& l, const Battle& battle, const ViewState& view) {
+void drawFrame(const Layout& l, const Battle& battle, const ViewState& view,
+               const SpritePack* pack) {
     const Grid& g = battle.grid();
     ClearBackground(kBackground);
 
     // --- Tiles ---------------------------------------------------------------
+    // Resolution ladder per tile: pack sprite → pack palette colour → primitive.
     for (int y = 0; y < g.height(); ++y) {
         for (int x = 0; x < g.width(); ++x) {
             Vec2i p{x, y};
             Rectangle r = tileRect(l, p);
-            Color c = kFloor;
-            switch (g.at(p)) {
-                case TileType::Wall: c = kWall; break;
-                case TileType::Obstacle: c = kObstacle; break;
-                case TileType::Walkable: c = kFloor; break;
-            }
-            DrawRectangleRec(r, c);
+            const TileType tt = g.at(p);
+            const Color def = tt == TileType::Wall ? kWall : tt == TileType::Obstacle ? kObstacle : kFloor;
+            const TileKeys keys = tileKeys(tt);
+            if (!(pack && pack->drawSprite(keys.sprite, r)))
+                DrawRectangleRec(r, pack ? pack->paletteOr(keys.palette, def) : def);
             DrawRectangleLinesEx(r, 1.0f, kGridLine);
             if (battle.inStorm(p)) DrawRectangleRec(r, kStorm); // collapsed by the ring
         }
@@ -192,9 +302,17 @@ void drawFrame(const Layout& l, const Battle& battle, const ViewState& view) {
         Color color = e.team == Faction::Player ? kPlayer : kEnemy;
         if (e.invisible()) color = Fade(color, 0.35f); // concealed: drawn ghosted
         Vector2 c = tileCenter(l, e.pos);
-        DrawCircleV(c, l.tileSize * 0.36f, color);
-        DrawCircleLines(static_cast<int>(c.x), static_cast<int>(c.y),
-                        l.tileSize * 0.36f, Color{0, 0, 0, 160});
+        // Pack unit sprite (units.player / units.enemy) → primitive circle. Tint
+        // carries the ghosting so concealed units read the same either way.
+        const char* uk = e.team == Faction::Player ? "units.player" : "units.enemy";
+        const Rectangle dest{c.x - l.tileSize * 0.5f, c.y - l.tileSize * 0.5f,
+                             static_cast<float>(l.tileSize), static_cast<float>(l.tileSize)};
+        const Color tint = e.invisible() ? Color{255, 255, 255, 90} : WHITE;
+        if (!(pack && pack->drawSprite(uk, dest, tint))) {
+            DrawCircleV(c, l.tileSize * 0.36f, color);
+            DrawCircleLines(static_cast<int>(c.x), static_cast<int>(c.y),
+                            l.tileSize * 0.36f, Color{0, 0, 0, 160});
+        }
         // Active status effects as small markers above the unit.
         for (std::size_t s = 0; s < e.statuses.size(); ++s) {
             DrawRectangle(static_cast<int>(c.x) - 12 + static_cast<int>(s) * 8,
@@ -216,7 +334,8 @@ void drawFrame(const Layout& l, const Battle& battle, const ViewState& view) {
                         battle.phase() != Phase::Finished && id == activeId);
     }
 
-    drawSpellBar(l, battle, view);
+    drawSpellBar(l, battle, view, pack);
+    drawCombatLog(l, battle, view);
 
     if (!view.statusLine.empty()) {
         DrawText(view.statusLine.c_str(), l.originX, 4, 16, kText);

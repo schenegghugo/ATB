@@ -13,6 +13,7 @@
 //
 #include "Combat.h" // DamageSource, StatusEffect, GroundKind/Spec, Effect, Spell
 #include "Entity.h" // EntityId, Faction, EntityKind, Control, Entity, EntitySnapshot
+#include "Event.h"  // BattleEvent — the structured combat event stream
 #include "Grid.h"
 #include "Storm.h"  // StormConfig (match config, also embedded in the Ruleset)
 
@@ -71,6 +72,18 @@ public:
     }
     [[nodiscard]] Phase phase() const;
     [[nodiscard]] std::optional<Faction> winner() const;
+
+    // --- Combat event stream (see Event.h) -----------------------------------
+    // Ordered narration of everything that has happened, appended during
+    // resolution. A consumer tracks its own read cursor (the vector only grows).
+    [[nodiscard]] const std::vector<BattleEvent>& events() const { return events_; }
+    // The AI clones the Battle to simulate candidate turns; it disables recording
+    // on its throwaway copies so they neither grow nor copy a log (also clears
+    // any inherited events). The real match keeps recording.
+    void setEventRecording(bool on) {
+        recordEvents_ = on;
+        if (!on) events_.clear();
+    }
 
     // Add an entity to the live roster mid-battle (summon/bomb). Inserts into the
     // initiative order by initiative (ties by EntityId) without shifting the unit
@@ -132,6 +145,7 @@ public:
     void applyForcedMove(EntityId who, Vec2i dir, int distance);
 
 private:
+    void emit(const BattleEvent& ev) { if (recordEvents_) events_.push_back(ev); }
     void startTurnFor(EntityId id); // tick statuses + cooldowns, reset AP/MP (+buffs)
     // honours Shield, records the source of any lethal blow, checks victory
     void applyDamage(EntityId id, int amount, DamageSource src = DamageSource::Spell);
@@ -159,6 +173,8 @@ private:
     std::vector<GroundEffect> ground_;
     std::vector<PendingRewind> rewinds_;
     std::vector<Entity> creatures_; // spawnable prototypes (keyed by name)
+    std::vector<BattleEvent> events_;
+    bool recordEvents_ = true;
     std::size_t turnIdx_ = 0;
     bool finished_ = false;
 

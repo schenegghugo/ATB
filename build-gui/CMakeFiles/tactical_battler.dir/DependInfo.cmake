@@ -11,7 +11,9 @@ set(CMAKE_DEPENDS_DEPENDENCY_FILES
   "/home/hugo/Projects/ATB/src/main.cpp" "CMakeFiles/tactical_battler.dir/src/main.cpp.o" "gcc" "CMakeFiles/tactical_battler.dir/src/main.cpp.o.d"
   "/home/hugo/Projects/ATB/src/render/BuildEditorScreen.cpp" "CMakeFiles/tactical_battler.dir/src/render/BuildEditorScreen.cpp.o" "gcc" "CMakeFiles/tactical_battler.dir/src/render/BuildEditorScreen.cpp.o.d"
   "/home/hugo/Projects/ATB/src/render/ContentPaths.cpp" "CMakeFiles/tactical_battler.dir/src/render/ContentPaths.cpp.o" "gcc" "CMakeFiles/tactical_battler.dir/src/render/ContentPaths.cpp.o.d"
+  "/home/hugo/Projects/ATB/src/render/PackManifest.cpp" "CMakeFiles/tactical_battler.dir/src/render/PackManifest.cpp.o" "gcc" "CMakeFiles/tactical_battler.dir/src/render/PackManifest.cpp.o.d"
   "/home/hugo/Projects/ATB/src/render/Renderer.cpp" "CMakeFiles/tactical_battler.dir/src/render/Renderer.cpp.o" "gcc" "CMakeFiles/tactical_battler.dir/src/render/Renderer.cpp.o.d"
+  "/home/hugo/Projects/ATB/src/render/SpritePack.cpp" "CMakeFiles/tactical_battler.dir/src/render/SpritePack.cpp.o" "gcc" "CMakeFiles/tactical_battler.dir/src/render/SpritePack.cpp.o.d"
   "" "tactical_battler" "gcc" "CMakeFiles/tactical_battler.dir/link.d"
   )
 

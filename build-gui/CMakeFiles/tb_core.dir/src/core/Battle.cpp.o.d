@@ -123,6 +123,7 @@ CMakeFiles/tb_core.dir/src/core/Battle.cpp.o: \
  /usr/include/c++/16.1.1/bits/vector.tcc \
  /home/hugo/Projects/ATB/src/core/Entity.h \
  /home/hugo/Projects/ATB/src/core/Grid.h \
+ /home/hugo/Projects/ATB/src/core/Event.h \
  /home/hugo/Projects/ATB/src/core/Storm.h \
  /usr/include/c++/16.1.1/optional /usr/include/c++/16.1.1/exception \
  /usr/include/c++/16.1.1/bits/exception_ptr.h \

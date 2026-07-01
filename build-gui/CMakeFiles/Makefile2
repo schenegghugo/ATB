@@ -69,6 +69,7 @@ all: CMakeFiles/tb_build_demo.dir/all
 all: CMakeFiles/tb_spells_demo.dir/all
 all: CMakeFiles/tb_ai_demo.dir/all
 all: CMakeFiles/tb_roster_demo.dir/all
+all: CMakeFiles/tb_event_demo.dir/all
 all: CMakeFiles/tb_json_demo.dir/all
 all: CMakeFiles/tb_enums_demo.dir/all
 all: CMakeFiles/tb_catalog_demo.dir/all
@@ -81,6 +82,7 @@ all: CMakeFiles/tb_creature_gen.dir/all
 all: CMakeFiles/tb_ruleset_gen.dir/all
 all: CMakeFiles/tb_balance.dir/all
 all: CMakeFiles/tb_team_balance.dir/all
+all: CMakeFiles/tb_pack_demo.dir/all
 all: CMakeFiles/tactical_battler.dir/all
 all: _deps/raylib-build/all
 .PHONY : all
@@ -92,6 +94,7 @@ codegen: CMakeFiles/tb_build_demo.dir/codegen
 codegen: CMakeFiles/tb_spells_demo.dir/codegen
 codegen: CMakeFiles/tb_ai_demo.dir/codegen
 codegen: CMakeFiles/tb_roster_demo.dir/codegen
+codegen: CMakeFiles/tb_event_demo.dir/codegen
 codegen: CMakeFiles/tb_json_demo.dir/codegen
 codegen: CMakeFiles/tb_enums_demo.dir/codegen
 codegen: CMakeFiles/tb_catalog_demo.dir/codegen
@@ -104,6 +107,7 @@ codegen: CMakeFiles/tb_creature_gen.dir/codegen
 codegen: CMakeFiles/tb_ruleset_gen.dir/codegen
 codegen: CMakeFiles/tb_balance.dir/codegen
 codegen: CMakeFiles/tb_team_balance.dir/codegen
+codegen: CMakeFiles/tb_pack_demo.dir/codegen
 codegen: CMakeFiles/tactical_battler.dir/codegen
 codegen: _deps/raylib-build/codegen
 .PHONY : codegen
@@ -119,6 +123,7 @@ clean: CMakeFiles/tb_build_demo.dir/clean
 clean: CMakeFiles/tb_spells_demo.dir/clean
 clean: CMakeFiles/tb_ai_demo.dir/clean
 clean: CMakeFiles/tb_roster_demo.dir/clean
+clean: CMakeFiles/tb_event_demo.dir/clean
 clean: CMakeFiles/tb_json_demo.dir/clean
 clean: CMakeFiles/tb_enums_demo.dir/clean
 clean: CMakeFiles/tb_catalog_demo.dir/clean
@@ -131,6 +136,7 @@ clean: CMakeFiles/tb_creature_gen.dir/clean
 clean: CMakeFiles/tb_ruleset_gen.dir/clean
 clean: CMakeFiles/tb_balance.dir/clean
 clean: CMakeFiles/tb_team_balance.dir/clean
+clean: CMakeFiles/tb_pack_demo.dir/clean
 clean: CMakeFiles/tactical_battler.dir/clean
 clean: _deps/raylib-build/clean
 .PHONY : clean
@@ -223,12 +229,12 @@ _deps/raylib-build/raylib/external/glfw/src/clean: _deps/raylib-build/raylib/ext
 CMakeFiles/tb_core.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_core.dir/build.make CMakeFiles/tb_core.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_core.dir/build.make CMakeFiles/tb_core.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=63,64,65,66,67,68,69,70,71,72,73,74,75,76 "Built target tb_core"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=61,62,63,64,65,66,67,68,69,70,71,72,73 "Built target tb_core"
 .PHONY : CMakeFiles/tb_core.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/tb_core.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 14
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 13
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/tb_core.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 0
 .PHONY : CMakeFiles/tb_core.dir/rule
@@ -240,7 +246,7 @@ tb_core: CMakeFiles/tb_core.dir/rule
 # codegen rule for target.
 CMakeFiles/tb_core.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_core.dir/build.make CMakeFiles/tb_core.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=63,64,65,66,67,68,69,70,71,72,73,74,75,76 "Finished codegen for target tb_core"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=61,62,63,64,65,66,67,68,69,70,71,72,73 "Finished codegen for target tb_core"
 .PHONY : CMakeFiles/tb_core.dir/codegen
 
 # clean rule for target.
@@ -255,12 +261,12 @@ CMakeFiles/tb_core.dir/clean:
 CMakeFiles/tb_headless.dir/all: CMakeFiles/tb_core.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_headless.dir/build.make CMakeFiles/tb_headless.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_headless.dir/build.make CMakeFiles/tb_headless.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=83,84 "Built target tb_headless"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=81,82 "Built target tb_headless"
 .PHONY : CMakeFiles/tb_headless.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/tb_headless.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 16
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 15
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/tb_headless.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 0
 .PHONY : CMakeFiles/tb_headless.dir/rule
@@ -272,7 +278,7 @@ tb_headless: CMakeFiles/tb_headless.dir/rule
 # codegen rule for target.
 CMakeFiles/tb_headless.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_headless.dir/build.make CMakeFiles/tb_headless.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=83,84 "Finished codegen for target tb_headless"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=81,82 "Finished codegen for target tb_headless"
 .PHONY : CMakeFiles/tb_headless.dir/codegen
 
 # clean rule for target.
@@ -287,12 +293,12 @@ CMakeFiles/tb_headless.dir/clean:
 CMakeFiles/tb_build_demo.dir/all: CMakeFiles/tb_core.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_build_demo.dir/build.make CMakeFiles/tb_build_demo.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_build_demo.dir/build.make CMakeFiles/tb_build_demo.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=57,58 "Built target tb_build_demo"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=55,56 "Built target tb_build_demo"
 .PHONY : CMakeFiles/tb_build_demo.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/tb_build_demo.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 16
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 15
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/tb_build_demo.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 0
 .PHONY : CMakeFiles/tb_build_demo.dir/rule
@@ -304,7 +310,7 @@ tb_build_demo: CMakeFiles/tb_build_demo.dir/rule
 # codegen rule for target.
 CMakeFiles/tb_build_demo.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_build_demo.dir/build.make CMakeFiles/tb_build_demo.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=57,58 "Finished codegen for target tb_build_demo"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=55,56 "Finished codegen for target tb_build_demo"
 .PHONY : CMakeFiles/tb_build_demo.dir/codegen
 
 # clean rule for target.
@@ -324,7 +330,7 @@ CMakeFiles/tb_spells_demo.dir/all: CMakeFiles/tb_core.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/tb_spells_demo.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 16
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 15
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/tb_spells_demo.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 0
 .PHONY : CMakeFiles/tb_spells_demo.dir/rule
@@ -351,12 +357,12 @@ CMakeFiles/tb_spells_demo.dir/clean:
 CMakeFiles/tb_ai_demo.dir/all: CMakeFiles/tb_core.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_ai_demo.dir/build.make CMakeFiles/tb_ai_demo.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_ai_demo.dir/build.make CMakeFiles/tb_ai_demo.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=53,54 "Built target tb_ai_demo"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=52,53 "Built target tb_ai_demo"
 .PHONY : CMakeFiles/tb_ai_demo.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/tb_ai_demo.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 16
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 15
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/tb_ai_demo.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 0
 .PHONY : CMakeFiles/tb_ai_demo.dir/rule
@@ -368,7 +374,7 @@ tb_ai_demo: CMakeFiles/tb_ai_demo.dir/rule
 # codegen rule for target.
 CMakeFiles/tb_ai_demo.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_ai_demo.dir/build.make CMakeFiles/tb_ai_demo.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=53,54 "Finished codegen for target tb_ai_demo"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=52,53 "Finished codegen for target tb_ai_demo"
 .PHONY : CMakeFiles/tb_ai_demo.dir/codegen
 
 # clean rule for target.
@@ -383,12 +389,12 @@ CMakeFiles/tb_ai_demo.dir/clean:
 CMakeFiles/tb_roster_demo.dir/all: CMakeFiles/tb_core.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_roster_demo.dir/build.make CMakeFiles/tb_roster_demo.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_roster_demo.dir/build.make CMakeFiles/tb_roster_demo.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=88,89 "Built target tb_roster_demo"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=89,90 "Built target tb_roster_demo"
 .PHONY : CMakeFiles/tb_roster_demo.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/tb_roster_demo.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 16
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 15
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/tb_roster_demo.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 0
 .PHONY : CMakeFiles/tb_roster_demo.dir/rule
@@ -400,7 +406,7 @@ tb_roster_demo: CMakeFiles/tb_roster_demo.dir/rule
 # codegen rule for target.
 CMakeFiles/tb_roster_demo.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_roster_demo.dir/build.make CMakeFiles/tb_roster_demo.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=88,89 "Finished codegen for target tb_roster_demo"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=89,90 "Finished codegen for target tb_roster_demo"
 .PHONY : CMakeFiles/tb_roster_demo.dir/codegen
 
 # clean rule for target.
@@ -409,18 +415,50 @@ CMakeFiles/tb_roster_demo.dir/clean:
 .PHONY : CMakeFiles/tb_roster_demo.dir/clean
 
 #=============================================================================
+# Target rules for target CMakeFiles/tb_event_demo.dir
+
+# All Build rule for target.
+CMakeFiles/tb_event_demo.dir/all: CMakeFiles/tb_core.dir/all
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_event_demo.dir/build.make CMakeFiles/tb_event_demo.dir/depend
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_event_demo.dir/build.make CMakeFiles/tb_event_demo.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=80 "Built target tb_event_demo"
+.PHONY : CMakeFiles/tb_event_demo.dir/all
+
+# Build rule for subdir invocation for target.
+CMakeFiles/tb_event_demo.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 14
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/tb_event_demo.dir/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 0
+.PHONY : CMakeFiles/tb_event_demo.dir/rule
+
+# Convenience name for target.
+tb_event_demo: CMakeFiles/tb_event_demo.dir/rule
+.PHONY : tb_event_demo
+
+# codegen rule for target.
+CMakeFiles/tb_event_demo.dir/codegen:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_event_demo.dir/build.make CMakeFiles/tb_event_demo.dir/codegen
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=80 "Finished codegen for target tb_event_demo"
+.PHONY : CMakeFiles/tb_event_demo.dir/codegen
+
+# clean rule for target.
+CMakeFiles/tb_event_demo.dir/clean:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_event_demo.dir/build.make CMakeFiles/tb_event_demo.dir/clean
+.PHONY : CMakeFiles/tb_event_demo.dir/clean
+
+#=============================================================================
 # Target rules for target CMakeFiles/tb_json_demo.dir
 
 # All Build rule for target.
 CMakeFiles/tb_json_demo.dir/all: CMakeFiles/tb_core.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_json_demo.dir/build.make CMakeFiles/tb_json_demo.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_json_demo.dir/build.make CMakeFiles/tb_json_demo.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=85,86 "Built target tb_json_demo"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=83,84 "Built target tb_json_demo"
 .PHONY : CMakeFiles/tb_json_demo.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/tb_json_demo.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 16
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 15
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/tb_json_demo.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 0
 .PHONY : CMakeFiles/tb_json_demo.dir/rule
@@ -432,7 +470,7 @@ tb_json_demo: CMakeFiles/tb_json_demo.dir/rule
 # codegen rule for target.
 CMakeFiles/tb_json_demo.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_json_demo.dir/build.make CMakeFiles/tb_json_demo.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=85,86 "Finished codegen for target tb_json_demo"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=83,84 "Finished codegen for target tb_json_demo"
 .PHONY : CMakeFiles/tb_json_demo.dir/codegen
 
 # clean rule for target.
@@ -447,12 +485,12 @@ CMakeFiles/tb_json_demo.dir/clean:
 CMakeFiles/tb_enums_demo.dir/all: CMakeFiles/tb_core.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_enums_demo.dir/build.make CMakeFiles/tb_enums_demo.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_enums_demo.dir/build.make CMakeFiles/tb_enums_demo.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=81,82 "Built target tb_enums_demo"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=78,79 "Built target tb_enums_demo"
 .PHONY : CMakeFiles/tb_enums_demo.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/tb_enums_demo.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 16
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 15
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/tb_enums_demo.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 0
 .PHONY : CMakeFiles/tb_enums_demo.dir/rule
@@ -464,7 +502,7 @@ tb_enums_demo: CMakeFiles/tb_enums_demo.dir/rule
 # codegen rule for target.
 CMakeFiles/tb_enums_demo.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_enums_demo.dir/build.make CMakeFiles/tb_enums_demo.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=81,82 "Finished codegen for target tb_enums_demo"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=78,79 "Finished codegen for target tb_enums_demo"
 .PHONY : CMakeFiles/tb_enums_demo.dir/codegen
 
 # clean rule for target.
@@ -479,12 +517,12 @@ CMakeFiles/tb_enums_demo.dir/clean:
 CMakeFiles/tb_catalog_demo.dir/all: CMakeFiles/tb_core.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_catalog_demo.dir/build.make CMakeFiles/tb_catalog_demo.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_catalog_demo.dir/build.make CMakeFiles/tb_catalog_demo.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=59,60 "Built target tb_catalog_demo"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=57,58 "Built target tb_catalog_demo"
 .PHONY : CMakeFiles/tb_catalog_demo.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/tb_catalog_demo.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 16
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 15
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/tb_catalog_demo.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 0
 .PHONY : CMakeFiles/tb_catalog_demo.dir/rule
@@ -496,7 +534,7 @@ tb_catalog_demo: CMakeFiles/tb_catalog_demo.dir/rule
 # codegen rule for target.
 CMakeFiles/tb_catalog_demo.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_catalog_demo.dir/build.make CMakeFiles/tb_catalog_demo.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=59,60 "Finished codegen for target tb_catalog_demo"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=57,58 "Finished codegen for target tb_catalog_demo"
 .PHONY : CMakeFiles/tb_catalog_demo.dir/codegen
 
 # clean rule for target.
@@ -511,12 +549,12 @@ CMakeFiles/tb_catalog_demo.dir/clean:
 CMakeFiles/tb_creature_demo.dir/all: CMakeFiles/tb_core.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_creature_demo.dir/build.make CMakeFiles/tb_creature_demo.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_creature_demo.dir/build.make CMakeFiles/tb_creature_demo.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=77,78 "Built target tb_creature_demo"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=74,75 "Built target tb_creature_demo"
 .PHONY : CMakeFiles/tb_creature_demo.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/tb_creature_demo.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 16
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 15
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/tb_creature_demo.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 0
 .PHONY : CMakeFiles/tb_creature_demo.dir/rule
@@ -528,7 +566,7 @@ tb_creature_demo: CMakeFiles/tb_creature_demo.dir/rule
 # codegen rule for target.
 CMakeFiles/tb_creature_demo.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_creature_demo.dir/build.make CMakeFiles/tb_creature_demo.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=77,78 "Finished codegen for target tb_creature_demo"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=74,75 "Finished codegen for target tb_creature_demo"
 .PHONY : CMakeFiles/tb_creature_demo.dir/codegen
 
 # clean rule for target.
@@ -543,12 +581,12 @@ CMakeFiles/tb_creature_demo.dir/clean:
 CMakeFiles/tb_ruleset_demo.dir/all: CMakeFiles/tb_core.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_ruleset_demo.dir/build.make CMakeFiles/tb_ruleset_demo.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_ruleset_demo.dir/build.make CMakeFiles/tb_ruleset_demo.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=90,91 "Built target tb_ruleset_demo"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=91,92 "Built target tb_ruleset_demo"
 .PHONY : CMakeFiles/tb_ruleset_demo.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/tb_ruleset_demo.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 16
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 15
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/tb_ruleset_demo.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 0
 .PHONY : CMakeFiles/tb_ruleset_demo.dir/rule
@@ -560,7 +598,7 @@ tb_ruleset_demo: CMakeFiles/tb_ruleset_demo.dir/rule
 # codegen rule for target.
 CMakeFiles/tb_ruleset_demo.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_ruleset_demo.dir/build.make CMakeFiles/tb_ruleset_demo.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=90,91 "Finished codegen for target tb_ruleset_demo"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=91,92 "Finished codegen for target tb_ruleset_demo"
 .PHONY : CMakeFiles/tb_ruleset_demo.dir/codegen
 
 # clean rule for target.
@@ -575,7 +613,7 @@ CMakeFiles/tb_ruleset_demo.dir/clean:
 CMakeFiles/tb_map_demo.dir/all: CMakeFiles/tb_core.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_map_demo.dir/build.make CMakeFiles/tb_map_demo.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_map_demo.dir/build.make CMakeFiles/tb_map_demo.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=87 "Built target tb_map_demo"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=85,86 "Built target tb_map_demo"
 .PHONY : CMakeFiles/tb_map_demo.dir/all
 
 # Build rule for subdir invocation for target.
@@ -592,7 +630,7 @@ tb_map_demo: CMakeFiles/tb_map_demo.dir/rule
 # codegen rule for target.
 CMakeFiles/tb_map_demo.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_map_demo.dir/build.make CMakeFiles/tb_map_demo.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=87 "Finished codegen for target tb_map_demo"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=85,86 "Finished codegen for target tb_map_demo"
 .PHONY : CMakeFiles/tb_map_demo.dir/codegen
 
 # clean rule for target.
@@ -612,7 +650,7 @@ CMakeFiles/tb_sha256_demo.dir/all: CMakeFiles/tb_core.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/tb_sha256_demo.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 16
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 15
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/tb_sha256_demo.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 0
 .PHONY : CMakeFiles/tb_sha256_demo.dir/rule
@@ -639,12 +677,12 @@ CMakeFiles/tb_sha256_demo.dir/clean:
 CMakeFiles/tb_catalog_gen.dir/all: CMakeFiles/tb_core.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_catalog_gen.dir/build.make CMakeFiles/tb_catalog_gen.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_catalog_gen.dir/build.make CMakeFiles/tb_catalog_gen.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=61,62 "Built target tb_catalog_gen"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=59,60 "Built target tb_catalog_gen"
 .PHONY : CMakeFiles/tb_catalog_gen.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/tb_catalog_gen.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 16
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 15
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/tb_catalog_gen.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 0
 .PHONY : CMakeFiles/tb_catalog_gen.dir/rule
@@ -656,7 +694,7 @@ tb_catalog_gen: CMakeFiles/tb_catalog_gen.dir/rule
 # codegen rule for target.
 CMakeFiles/tb_catalog_gen.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_catalog_gen.dir/build.make CMakeFiles/tb_catalog_gen.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=61,62 "Finished codegen for target tb_catalog_gen"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=59,60 "Finished codegen for target tb_catalog_gen"
 .PHONY : CMakeFiles/tb_catalog_gen.dir/codegen
 
 # clean rule for target.
@@ -671,12 +709,12 @@ CMakeFiles/tb_catalog_gen.dir/clean:
 CMakeFiles/tb_creature_gen.dir/all: CMakeFiles/tb_core.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_creature_gen.dir/build.make CMakeFiles/tb_creature_gen.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_creature_gen.dir/build.make CMakeFiles/tb_creature_gen.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=79,80 "Built target tb_creature_gen"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=76,77 "Built target tb_creature_gen"
 .PHONY : CMakeFiles/tb_creature_gen.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/tb_creature_gen.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 16
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 15
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/tb_creature_gen.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 0
 .PHONY : CMakeFiles/tb_creature_gen.dir/rule
@@ -688,7 +726,7 @@ tb_creature_gen: CMakeFiles/tb_creature_gen.dir/rule
 # codegen rule for target.
 CMakeFiles/tb_creature_gen.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_creature_gen.dir/build.make CMakeFiles/tb_creature_gen.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=79,80 "Finished codegen for target tb_creature_gen"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=76,77 "Finished codegen for target tb_creature_gen"
 .PHONY : CMakeFiles/tb_creature_gen.dir/codegen
 
 # clean rule for target.
@@ -703,12 +741,12 @@ CMakeFiles/tb_creature_gen.dir/clean:
 CMakeFiles/tb_ruleset_gen.dir/all: CMakeFiles/tb_core.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_ruleset_gen.dir/build.make CMakeFiles/tb_ruleset_gen.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_ruleset_gen.dir/build.make CMakeFiles/tb_ruleset_gen.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=92,93 "Built target tb_ruleset_gen"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=93 "Built target tb_ruleset_gen"
 .PHONY : CMakeFiles/tb_ruleset_gen.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/tb_ruleset_gen.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 16
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 14
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/tb_ruleset_gen.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 0
 .PHONY : CMakeFiles/tb_ruleset_gen.dir/rule
@@ -720,7 +758,7 @@ tb_ruleset_gen: CMakeFiles/tb_ruleset_gen.dir/rule
 # codegen rule for target.
 CMakeFiles/tb_ruleset_gen.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_ruleset_gen.dir/build.make CMakeFiles/tb_ruleset_gen.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=92,93 "Finished codegen for target tb_ruleset_gen"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=93 "Finished codegen for target tb_ruleset_gen"
 .PHONY : CMakeFiles/tb_ruleset_gen.dir/codegen
 
 # clean rule for target.
@@ -735,12 +773,12 @@ CMakeFiles/tb_ruleset_gen.dir/clean:
 CMakeFiles/tb_balance.dir/all: CMakeFiles/tb_core.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_balance.dir/build.make CMakeFiles/tb_balance.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_balance.dir/build.make CMakeFiles/tb_balance.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=55,56 "Built target tb_balance"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=54 "Built target tb_balance"
 .PHONY : CMakeFiles/tb_balance.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/tb_balance.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 16
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 14
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/tb_balance.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 0
 .PHONY : CMakeFiles/tb_balance.dir/rule
@@ -752,7 +790,7 @@ tb_balance: CMakeFiles/tb_balance.dir/rule
 # codegen rule for target.
 CMakeFiles/tb_balance.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_balance.dir/build.make CMakeFiles/tb_balance.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=55,56 "Finished codegen for target tb_balance"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=54 "Finished codegen for target tb_balance"
 .PHONY : CMakeFiles/tb_balance.dir/codegen
 
 # clean rule for target.
@@ -772,7 +810,7 @@ CMakeFiles/tb_team_balance.dir/all: CMakeFiles/tb_core.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/tb_team_balance.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 16
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 15
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/tb_team_balance.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 0
 .PHONY : CMakeFiles/tb_team_balance.dir/rule
@@ -793,6 +831,38 @@ CMakeFiles/tb_team_balance.dir/clean:
 .PHONY : CMakeFiles/tb_team_balance.dir/clean
 
 #=============================================================================
+# Target rules for target CMakeFiles/tb_pack_demo.dir
+
+# All Build rule for target.
+CMakeFiles/tb_pack_demo.dir/all: CMakeFiles/tb_core.dir/all
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_pack_demo.dir/build.make CMakeFiles/tb_pack_demo.dir/depend
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_pack_demo.dir/build.make CMakeFiles/tb_pack_demo.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=87,88 "Built target tb_pack_demo"
+.PHONY : CMakeFiles/tb_pack_demo.dir/all
+
+# Build rule for subdir invocation for target.
+CMakeFiles/tb_pack_demo.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 15
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/tb_pack_demo.dir/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 0
+.PHONY : CMakeFiles/tb_pack_demo.dir/rule
+
+# Convenience name for target.
+tb_pack_demo: CMakeFiles/tb_pack_demo.dir/rule
+.PHONY : tb_pack_demo
+
+# codegen rule for target.
+CMakeFiles/tb_pack_demo.dir/codegen:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_pack_demo.dir/build.make CMakeFiles/tb_pack_demo.dir/codegen
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=87,88 "Finished codegen for target tb_pack_demo"
+.PHONY : CMakeFiles/tb_pack_demo.dir/codegen
+
+# clean rule for target.
+CMakeFiles/tb_pack_demo.dir/clean:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_pack_demo.dir/build.make CMakeFiles/tb_pack_demo.dir/clean
+.PHONY : CMakeFiles/tb_pack_demo.dir/clean
+
+#=============================================================================
 # Target rules for target CMakeFiles/tactical_battler.dir
 
 # All Build rule for target.
@@ -801,12 +871,12 @@ CMakeFiles/tactical_battler.dir/all: _deps/raylib-build/raylib/CMakeFiles/raylib
 CMakeFiles/tactical_battler.dir/all: _deps/raylib-build/raylib/external/glfw/src/CMakeFiles/glfw.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tactical_battler.dir/build.make CMakeFiles/tactical_battler.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tactical_battler.dir/build.make CMakeFiles/tactical_battler.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=49,50,51,52 "Built target tactical_battler"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=46,47,48,49,50,51 "Built target tactical_battler"
 .PHONY : CMakeFiles/tactical_battler.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/tactical_battler.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 66
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 64
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/tactical_battler.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 0
 .PHONY : CMakeFiles/tactical_battler.dir/rule
@@ -818,7 +888,7 @@ tactical_battler: CMakeFiles/tactical_battler.dir/rule
 # codegen rule for target.
 CMakeFiles/tactical_battler.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tactical_battler.dir/build.make CMakeFiles/tactical_battler.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=49,50,51,52 "Finished codegen for target tactical_battler"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=46,47,48,49,50,51 "Finished codegen for target tactical_battler"
 .PHONY : CMakeFiles/tactical_battler.dir/codegen
 
 # clean rule for target.
@@ -865,12 +935,12 @@ _deps/raylib-build/CMakeFiles/uninstall.dir/clean:
 _deps/raylib-build/raylib/CMakeFiles/raylib.dir/all: _deps/raylib-build/raylib/external/glfw/src/CMakeFiles/glfw.dir/all
 	$(MAKE) $(MAKESILENT) -f _deps/raylib-build/raylib/CMakeFiles/raylib.dir/build.make _deps/raylib-build/raylib/CMakeFiles/raylib.dir/depend
 	$(MAKE) $(MAKESILENT) -f _deps/raylib-build/raylib/CMakeFiles/raylib.dir/build.make _deps/raylib-build/raylib/CMakeFiles/raylib.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=41,42,43,44,45,46,47,48 "Built target raylib"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=39,40,41,42,43,44,45 "Built target raylib"
 .PHONY : _deps/raylib-build/raylib/CMakeFiles/raylib.dir/all
 
 # Build rule for subdir invocation for target.
 _deps/raylib-build/raylib/CMakeFiles/raylib.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 48
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 45
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/raylib-build/raylib/CMakeFiles/raylib.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 0
 .PHONY : _deps/raylib-build/raylib/CMakeFiles/raylib.dir/rule
@@ -882,7 +952,7 @@ raylib: _deps/raylib-build/raylib/CMakeFiles/raylib.dir/rule
 # codegen rule for target.
 _deps/raylib-build/raylib/CMakeFiles/raylib.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f _deps/raylib-build/raylib/CMakeFiles/raylib.dir/build.make _deps/raylib-build/raylib/CMakeFiles/raylib.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=41,42,43,44,45,46,47,48 "Finished codegen for target raylib"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=39,40,41,42,43,44,45 "Finished codegen for target raylib"
 .PHONY : _deps/raylib-build/raylib/CMakeFiles/raylib.dir/codegen
 
 # clean rule for target.
@@ -897,12 +967,12 @@ _deps/raylib-build/raylib/CMakeFiles/raylib.dir/clean:
 _deps/raylib-build/raylib/external/glfw/src/CMakeFiles/glfw.dir/all:
 	$(MAKE) $(MAKESILENT) -f _deps/raylib-build/raylib/external/glfw/src/CMakeFiles/glfw.dir/build.make _deps/raylib-build/raylib/external/glfw/src/CMakeFiles/glfw.dir/depend
 	$(MAKE) $(MAKESILENT) -f _deps/raylib-build/raylib/external/glfw/src/CMakeFiles/glfw.dir/build.make _deps/raylib-build/raylib/external/glfw/src/CMakeFiles/glfw.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40 "Built target glfw"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38 "Built target glfw"
 .PHONY : _deps/raylib-build/raylib/external/glfw/src/CMakeFiles/glfw.dir/all
 
 # Build rule for subdir invocation for target.
 _deps/raylib-build/raylib/external/glfw/src/CMakeFiles/glfw.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 40
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 38
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/raylib-build/raylib/external/glfw/src/CMakeFiles/glfw.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/hugo/Projects/ATB/build-gui/CMakeFiles 0
 .PHONY : _deps/raylib-build/raylib/external/glfw/src/CMakeFiles/glfw.dir/rule
@@ -914,7 +984,7 @@ glfw: _deps/raylib-build/raylib/external/glfw/src/CMakeFiles/glfw.dir/rule
 # codegen rule for target.
 _deps/raylib-build/raylib/external/glfw/src/CMakeFiles/glfw.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f _deps/raylib-build/raylib/external/glfw/src/CMakeFiles/glfw.dir/build.make _deps/raylib-build/raylib/external/glfw/src/CMakeFiles/glfw.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40 "Finished codegen for target glfw"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38 "Finished codegen for target glfw"
 .PHONY : _deps/raylib-build/raylib/external/glfw/src/CMakeFiles/glfw.dir/codegen
 
 # clean rule for target.

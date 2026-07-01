@@ -1,0 +1,40 @@
+{
+  "schema": 1,
+  "name": "Dofus-style Arena Pack",
+  "version": "1.0.0",
+  "tileSize": 96,
+  "atlases": {
+    "main": "atlas.png"
+  },
+  "palette": {
+    "floor": "#2c303e",
+    "wall": "#3a4052",
+    "obstacle": "#5a4a34"
+  },
+  "sprites": {
+    "tiles.floor":       { "atlas": "main", "rect": [0, 0, 96, 96] },
+    "tiles.wall":        { "atlas": "main", "rect": [96, 0, 96, 96] },
+    "tiles.obstacle":    { "atlas": "main", "rect": [192, 0, 96, 96] },
+    "units.player":      { "atlas": "main", "rect": [288, 0, 96, 96] },
+    "units.enemy":       { "atlas": "main", "rect": [384, 0, 96, 96] },
+    "spells.attack":     { "atlas": "main", "rect": [480, 0, 96, 96] },
+
+    "spells.fireball":   { "atlas": "main", "rect": [0, 96, 96, 96] },
+    "spells.poison":     { "atlas": "main", "rect": [96, 96, 96, 96] },
+    "spells.knockback":  { "atlas": "main", "rect": [192, 96, 96, 96] },
+    "spells.harpoon":    { "atlas": "main", "rect": [288, 96, 96, 96] },
+    "spells.bulwark":    { "atlas": "main", "rect": [384, 96, 96, 96] },
+    "spells.mend":       { "atlas": "main", "rect": [480, 96, 96, 96] },
+
+    "spells.shelter":    { "atlas": "main", "rect": [0, 192, 96, 96] },
+    "spells.invisible":  { "atlas": "main", "rect": [96, 192, 96, 96] },
+    "spells.portal":     { "atlas": "main", "rect": [192, 192, 96, 96] },
+    "spells.glyph":      { "atlas": "main", "rect": [288, 192, 96, 96] },
+    "spells.rewind":     { "atlas": "main", "rect": [384, 192, 96, 96] },
+    "spells.bomb":       { "atlas": "main", "rect": [480, 192, 96, 96] },
+
+    "spells.blocker":    { "atlas": "main", "rect": [0, 288, 96, 96] },
+    "spells.healer":     { "atlas": "main", "rect": [96, 288, 96, 96] },
+    "spells.brute":      { "atlas": "main", "rect": [192, 288, 96, 96] }
+  }
+}

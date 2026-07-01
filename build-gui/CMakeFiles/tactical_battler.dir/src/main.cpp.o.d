@@ -124,6 +124,7 @@ CMakeFiles/tactical_battler.dir/src/main.cpp.o: \
  /usr/include/c++/16.1.1/bits/vector.tcc \
  /home/hugo/Projects/ATB/src/core/Entity.h \
  /home/hugo/Projects/ATB/src/core/Grid.h \
+ /home/hugo/Projects/ATB/src/core/Event.h \
  /home/hugo/Projects/ATB/src/core/Storm.h \
  /usr/include/c++/16.1.1/optional /usr/include/c++/16.1.1/exception \
  /usr/include/c++/16.1.1/bits/exception_ptr.h \
@@ -144,6 +145,14 @@ CMakeFiles/tactical_battler.dir/src/main.cpp.o: \
  /home/hugo/Projects/ATB/src/render/BuildEditorScreen.h \
  /home/hugo/Projects/ATB/src/render/ContentPaths.h \
  /home/hugo/Projects/ATB/src/render/Renderer.h \
+ /home/hugo/Projects/ATB/src/render/SpritePack.h \
+ /home/hugo/Projects/ATB/src/render/PackManifest.h \
+ /usr/include/c++/16.1.1/unordered_map \
+ /usr/include/c++/16.1.1/bits/unordered_map.h \
+ /usr/include/c++/16.1.1/bits/hashtable.h \
+ /usr/include/c++/16.1.1/bits/hashtable_policy.h \
+ /usr/include/c++/16.1.1/ext/aligned_buffer.h \
+ /usr/include/c++/16.1.1/bits/node_handle.h \
  /home/hugo/Projects/ATB/build-gui/_deps/raylib-src/src/raylib.h \
  /usr/include/c++/16.1.1/algorithm \
  /usr/include/c++/16.1.1/bits/stl_algo.h \
@@ -201,7 +210,6 @@ CMakeFiles/tactical_battler.dir/src/main.cpp.o: \
  /usr/include/c++/16.1.1/bits/shared_ptr_base.h \
  /usr/include/c++/16.1.1/bits/allocated_ptr.h \
  /usr/include/c++/16.1.1/bits/refwrap.h \
- /usr/include/c++/16.1.1/ext/aligned_buffer.h \
  /usr/include/c++/16.1.1/ext/concurrence.h \
  /usr/include/c++/16.1.1/bits/shared_ptr_atomic.h \
  /usr/include/c++/16.1.1/bits/atomic_base.h \

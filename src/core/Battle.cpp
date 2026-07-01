@@ -158,6 +158,8 @@ void Battle::startTurnFor(EntityId id) {
     // A new round begins when the initiative leader starts its turn.
     if (!order_.empty() && id == order_[0]) ++round_;
 
+    emit({EventType::TurnStart, id}); // before the start-of-turn ticks below fire
+
     // (Hook 2) Effect tick: buffs are "active" for the turn they tick, so we
     // apply them to the AP/MP reset *before* decrementing/expiring durations.
     int apBonus = 0, mpBonus = 0;
@@ -241,8 +243,10 @@ void Battle::applyDamage(EntityId id, int amount, DamageSource src) {
 
     e.hp -= amount;
     if (e.hp < 0) e.hp = 0;
+    if (amount > 0) emit({EventType::Damage, /*actor=*/id, /*target=*/id, amount, -1, src});
     if (!e.alive()) {
         lastDeathSource_ = src;
+        emit({EventType::Death, /*actor=*/id, /*target=*/id, 0, -1, src}); // before onDeath resolves
         // Death-triggered effects (e.g. a bomb's detonation). Copy first — the
         // resolution mutates units_ and can recurse (chain detonations); a dead
         // unit's applyDamage early-returns, so chains terminate.
@@ -280,6 +284,8 @@ bool Battle::stepTo(EntityId who, Vec2i adjacent) {
 
     e.pos = adjacent;
     e.mp -= 1;
+    emit({EventType::Move, /*actor=*/who, /*target=*/0, /*amount=*/1, -1,
+          DamageSource::Spell, StatusEffect::Kind::DamageOverTime, /*to=*/adjacent});
     onEnterTile(who);
     return true;
 }
@@ -408,6 +414,7 @@ bool Battle::cast(EntityId caster, int spellIdx, Vec2i target) {
     if (spellIdx < static_cast<int>(units_[caster].spellCooldowns.size()))
         units_[caster].spellCooldowns[spellIdx] = sp.cooldown;
 
+    emit({EventType::Cast, /*actor=*/caster, /*target=*/0, 0, /*spellSlot=*/spellIdx});
     applySpellEffects(sp, casterTeam, casterPos, target);
     return true;
 }
@@ -433,7 +440,10 @@ void Battle::applySpellEffects(const Spell& sp, Faction casterTeam, Vec2i caster
                     break;
                 case Effect::Type::Heal: {
                     Entity& v = units_[victim];
+                    const int before = v.hp;
                     v.hp = std::min(v.maxHp, v.hp + fx.amount);
+                    if (v.hp > before)
+                        emit({EventType::Heal, victim, victim, v.hp - before});
                     break;
                 }
                 case Effect::Type::ApplyStatus:
@@ -458,6 +468,8 @@ void Battle::applySpellEffects(const Spell& sp, Faction casterTeam, Vec2i caster
                     } else {
                         units_[victim].statuses.push_back(fx.status);
                     }
+                    emit({EventType::Status, victim, victim, fx.status.magnitude, -1,
+                          DamageSource::Spell, fx.status.kind});
                     break;
                 case Effect::Type::Push:
                     applyForcedMove(victim, cardinalStep(casterPos, units_[victim].pos), fx.amount);

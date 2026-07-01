@@ -33,10 +33,12 @@
 #include "render/BuildEditorScreen.h"
 #include "render/ContentPaths.h"
 #include "render/Renderer.h"
+#include "render/SpritePack.h"
 
 #include "raylib.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <memory>
 #include <optional>
 #include <string>
@@ -187,12 +189,29 @@ int main() {
     }
     SetTargetFPS(60);
 
+    // Optional presentation pack (art/palette). ATB_PACK=<dir> points at a folder
+    // holding pack.json; absent or unloadable → the built-in primitives (identical
+    // to before). A pack is client-side cosmetic only — it never touches rules.
+    std::optional<render::SpritePack> pack;
+    if (const char* pk = std::getenv("ATB_PACK"); pk && *pk) {
+        pack.emplace();
+        std::vector<std::string> errs;
+        if (pack->load(pk, errs)) {
+            TraceLog(LOG_INFO, "Loaded sprite pack '%s' (%s)", pk, pack->name().c_str());
+        } else {
+            TraceLog(LOG_WARNING, "Sprite pack '%s' failed to load — using primitives:", pk);
+            for (const std::string& e : errs) TraceLog(LOG_WARNING, "  - %s", e.c_str());
+            pack.reset();
+        }
+    }
+
     render::BuildEditorScreen editor(session.catalog, *session.repo, session.ruleset);
 
     AppState state = AppState::Editor;
     std::optional<Battle> battle;
     std::string status;
     int selectedSpell = 0;
+    int logScroll = 0; // combat-log scrollback (0 = pinned to newest)
 
     constexpr float kAiTick = 0.35f;
     float aiTimer = 0.0f;
@@ -202,6 +221,7 @@ int main() {
                                   session.catalog, /*seed=*/0, session.creatures,
                                   session.staticArena ? &*session.staticArena : nullptr));
         selectedSpell = 0;
+        logScroll = 0;
         aiTimer = 0.0f;
         status = "Player turn — left-click move, click a spell (or 1-9), right-click cast, Tab=editor.";
         state = AppState::Battle;
@@ -224,12 +244,16 @@ int main() {
         Vec2i hovered = render::screenToGrid(layout, GetMouseX(), GetMouseY());
         const bool hoveredValid = battle->grid().inBounds(hovered);
 
+        // Combat-log scrollback: wheel up = older, down = newer (clamped ≥ 0).
+        logScroll = std::max(0, logScroll + static_cast<int>(GetMouseWheelMove()));
+
         if (IsKeyPressed(KEY_TAB)) { state = AppState::Editor; continue; }
         if (IsKeyPressed(KEY_R)) {
             battle.emplace(buildMatch(session.ruleset, editor.playerTeam(), editor.enemyTeam(),
                                       session.catalog, /*seed=*/0, session.creatures,
                                       session.staticArena ? &*session.staticArena : nullptr));
             selectedSpell = 0;
+            logScroll = 0;
             status = "New arena. Player turn.";
         }
 
@@ -304,6 +328,9 @@ int main() {
         view.hoveredTile = hovered;
         view.hoveredValid = hoveredValid;
         view.statusLine = status;
+        view.windowW = GetScreenWidth();
+        view.windowH = GetScreenHeight();
+        view.logScroll = logScroll;
         if (playerControl) {
             const EntityId me = active;
             const Entity& u = battle->unit(me);
@@ -321,10 +348,11 @@ int main() {
         }
 
         BeginDrawing();
-        render::drawFrame(layout, *battle, view);
+        render::drawFrame(layout, *battle, view, pack ? &*pack : nullptr);
         EndDrawing();
     }
 
+    if (pack) pack->unload(); // free textures while the GL context is still alive
     CloseWindow();
     return 0;
 }

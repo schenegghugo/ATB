@@ -1,0 +1,205 @@
+{
+  "schema": 1,
+  "name": "Default (default)",
+  "version": "1.0.0",
+  "tileSize": 48,
+  "atlases": {
+    "main": "atlas.png"
+  },
+  "palette": {
+    "floor": "#2c303e",
+    "wall": "#3a4052",
+    "obstacle": "#5a4a34"
+  },
+  "sprites": {
+    "tiles.floor": {
+      "atlas": "main",
+      "rect": [
+        0,
+        0,
+        48,
+        48
+      ]
+    },
+    "tiles.wall": {
+      "atlas": "main",
+      "rect": [
+        48,
+        0,
+        48,
+        48
+      ]
+    },
+    "tiles.obstacle": {
+      "atlas": "main",
+      "rect": [
+        96,
+        0,
+        48,
+        48
+      ]
+    },
+    "units.player": {
+      "atlas": "main",
+      "rect": [
+        144,
+        0,
+        48,
+        48
+      ]
+    },
+    "units.enemy": {
+      "atlas": "main",
+      "rect": [
+        192,
+        0,
+        48,
+        48
+      ]
+    },
+    "spells.attack": {
+      "atlas": "main",
+      "rect": [
+        240,
+        0,
+        48,
+        48
+      ]
+    },
+    "spells.fireball": {
+      "atlas": "main",
+      "rect": [
+        0,
+        48,
+        48,
+        48
+      ]
+    },
+    "spells.poison": {
+      "atlas": "main",
+      "rect": [
+        48,
+        48,
+        48,
+        48
+      ]
+    },
+    "spells.knockback": {
+      "atlas": "main",
+      "rect": [
+        96,
+        48,
+        48,
+        48
+      ]
+    },
+    "spells.harpoon": {
+      "atlas": "main",
+      "rect": [
+        144,
+        48,
+        48,
+        48
+      ]
+    },
+    "spells.bulwark": {
+      "atlas": "main",
+      "rect": [
+        192,
+        48,
+        48,
+        48
+      ]
+    },
+    "spells.mend": {
+      "atlas": "main",
+      "rect": [
+        240,
+        48,
+        48,
+        48
+      ]
+    },
+    "spells.shelter": {
+      "atlas": "main",
+      "rect": [
+        0,
+        96,
+        48,
+        48
+      ]
+    },
+    "spells.invisible": {
+      "atlas": "main",
+      "rect": [
+        48,
+        96,
+        48,
+        48
+      ]
+    },
+    "spells.portal": {
+      "atlas": "main",
+      "rect": [
+        96,
+        96,
+        48,
+        48
+      ]
+    },
+    "spells.glyph": {
+      "atlas": "main",
+      "rect": [
+        144,
+        96,
+        48,
+        48
+      ]
+    },
+    "spells.rewind": {
+      "atlas": "main",
+      "rect": [
+        192,
+        96,
+        48,
+        48
+      ]
+    },
+    "spells.bomb": {
+      "atlas": "main",
+      "rect": [
+        240,
+        96,
+        48,
+        48
+      ]
+    },
+    "spells.blocker": {
+      "atlas": "main",
+      "rect": [
+        0,
+        144,
+        48,
+        48
+      ]
+    },
+    "spells.healer": {
+      "atlas": "main",
+      "rect": [
+        48,
+        144,
+        48,
+        48
+      ]
+    },
+    "spells.brute": {
+      "atlas": "main",
+      "rect": [
+        96,
+        144,
+        48,
+        48
+      ]
+    }
+  }
+}

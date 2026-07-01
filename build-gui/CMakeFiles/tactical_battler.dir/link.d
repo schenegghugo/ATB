@@ -6,6 +6,8 @@ tactical_battler: \
   CMakeFiles/tactical_battler.dir/src/render/Renderer.cpp.o \
   CMakeFiles/tactical_battler.dir/src/render/BuildEditorScreen.cpp.o \
   CMakeFiles/tactical_battler.dir/src/render/ContentPaths.cpp.o \
+  CMakeFiles/tactical_battler.dir/src/render/PackManifest.cpp.o \
+  CMakeFiles/tactical_battler.dir/src/render/SpritePack.cpp.o \
   libtb_core.a \
   _deps/raylib-build/raylib/libraylib.a \
   /usr/lib/gcc/x86_64-pc-linux-gnu/16.1.1/../../../../lib/libpthread.a \
@@ -70,6 +72,10 @@ CMakeFiles/tactical_battler.dir/src/render/Renderer.cpp.o:
 CMakeFiles/tactical_battler.dir/src/render/BuildEditorScreen.cpp.o:
 
 CMakeFiles/tactical_battler.dir/src/render/ContentPaths.cpp.o:
+
+CMakeFiles/tactical_battler.dir/src/render/PackManifest.cpp.o:
+
+CMakeFiles/tactical_battler.dir/src/render/SpritePack.cpp.o:
 
 libtb_core.a:
 

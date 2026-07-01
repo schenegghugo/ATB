@@ -4,6 +4,7 @@
 /home/hugo/Projects/ATB/build-gui/CMakeFiles/tb_spells_demo.dir
 /home/hugo/Projects/ATB/build-gui/CMakeFiles/tb_ai_demo.dir
 /home/hugo/Projects/ATB/build-gui/CMakeFiles/tb_roster_demo.dir
+/home/hugo/Projects/ATB/build-gui/CMakeFiles/tb_event_demo.dir
 /home/hugo/Projects/ATB/build-gui/CMakeFiles/tb_json_demo.dir
 /home/hugo/Projects/ATB/build-gui/CMakeFiles/tb_enums_demo.dir
 /home/hugo/Projects/ATB/build-gui/CMakeFiles/tb_catalog_demo.dir
@@ -16,6 +17,7 @@
 /home/hugo/Projects/ATB/build-gui/CMakeFiles/tb_ruleset_gen.dir
 /home/hugo/Projects/ATB/build-gui/CMakeFiles/tb_balance.dir
 /home/hugo/Projects/ATB/build-gui/CMakeFiles/tb_team_balance.dir
+/home/hugo/Projects/ATB/build-gui/CMakeFiles/tb_pack_demo.dir
 /home/hugo/Projects/ATB/build-gui/CMakeFiles/tactical_battler.dir
 /home/hugo/Projects/ATB/build-gui/CMakeFiles/package.dir
 /home/hugo/Projects/ATB/build-gui/CMakeFiles/package_source.dir
