@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/tb_team_balance.dir/link.d CMakeFiles/tb_team_balance.dir/tests/team_balance_sim.cpp.o -o tb_team_balance  libtb_core.a

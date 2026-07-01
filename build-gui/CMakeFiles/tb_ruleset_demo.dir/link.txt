@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/tb_ruleset_demo.dir/link.d CMakeFiles/tb_ruleset_demo.dir/tests/ruleset_demo.cpp.o -o tb_ruleset_demo  libtb_core.a

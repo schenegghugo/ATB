@@ -27,6 +27,12 @@ constexpr Color kPlayer{70, 170, 110, 255};
 constexpr Color kEnemy{200, 80, 80, 255};
 constexpr Color kLos{240, 220, 120, 200};
 constexpr Color kText{220, 224, 235, 255};
+constexpr Color kTextDim{150, 156, 172, 255};    // greyed button label (cd / unaffordable)
+constexpr Color kBtnReady{54, 62, 84, 255};      // castable now
+constexpr Color kBtnCooldown{38, 42, 52, 255};   // recharging
+constexpr Color kBtnPoor{72, 48, 52, 255};       // not enough AP
+constexpr Color kBtnSelected{235, 200, 90, 255}; // selected-button border
+constexpr Color kBtnCdText{232, 150, 80, 255};   // cooldown counter
 
 Rectangle tileRect(const Layout& l, Vec2i p) {
     return Rectangle{static_cast<float>(l.originX + p.x * l.tileSize),
@@ -49,7 +55,7 @@ void drawBar(int x, int y, int w, int h, float frac, Color fill, const char* lab
 void drawEntityPanel(const Layout& l, const Grid& g, const Entity& e, Color color, int slot,
                      int slotCount, bool isActive) {
     const int gaps = std::max(slotCount, 1);
-    const int y = l.originY + g.height() * l.tileSize + 10;
+    const int y = l.originY + g.height() * l.tileSize + l.spellBarHeight + 10;
     const int panelW = (l.screenWidth(g) - l.originX * 2 - 16 * (gaps - 1)) / gaps;
     const int x = l.originX + slot * (panelW + 16);
 
@@ -65,7 +71,48 @@ void drawEntityPanel(const Layout& l, const Grid& g, const Entity& e, Color colo
             TextFormat("MP %d", e.mp));
 }
 
+// The clickable spell bar for the active player unit. Button geometry comes from
+// the shared spellSlotRect (below), so this and the frontend's hit-test agree.
+void drawSpellBar(const Layout& l, const Battle& battle, const ViewState& view) {
+    if (!view.showSpellBar || battle.phase() == Phase::Finished) return;
+    const Grid& g = battle.grid();
+    const Entity& u = battle.unit(battle.activeUnit());
+    const int count = static_cast<int>(u.spells.size());
+    for (int s = 0; s < count; ++s) {
+        const Rect rc = spellSlotRect(l, g, s, count);
+        const Rectangle r{static_cast<float>(rc.x), static_cast<float>(rc.y),
+                          static_cast<float>(rc.w), static_cast<float>(rc.h)};
+        const Spell& sp = u.spells[s];
+        const int cd = s < static_cast<int>(u.spellCooldowns.size()) ? u.spellCooldowns[s] : 0;
+        const bool ready = cd == 0;
+        const bool afford = u.ap >= sp.apCost;
+        const bool usable = ready && afford;
+        const bool selected = s == view.selectedSpell;
+
+        DrawRectangleRec(r, !ready ? kBtnCooldown : !afford ? kBtnPoor : kBtnReady);
+        DrawRectangleLinesEx(r, selected ? 3.0f : 1.0f, selected ? kBtnSelected : kGridLine);
+        // Hotkey digit stays on the button (additive to click-to-select).
+        DrawText(TextFormat("%d", s + 1), rc.x + 6, rc.y + 4, 18, usable ? kText : kTextDim);
+        DrawText(sp.name.c_str(), rc.x + 24, rc.y + 6, 15, usable ? kText : kTextDim);
+        DrawText(TextFormat("%d AP", sp.apCost), rc.x + 6, rc.y + rc.h - 17, 14,
+                 afford ? kText : kBtnCdText);
+        if (cd > 0) {
+            const char* cds = TextFormat("CD %d", cd);
+            DrawText(cds, rc.x + rc.w - MeasureText(cds, 14) - 6, rc.y + rc.h - 17, 14, kBtnCdText);
+        }
+    }
+}
+
 } // namespace
+
+Rect spellSlotRect(const Layout& l, const Grid& g, int slot, int slotCount) {
+    const int gap = 8;
+    const int count = std::max(slotCount, 1);
+    const int availW = l.screenWidth(g) - l.originX * 2;
+    const int bw = (availW - gap * (count - 1)) / count;
+    return Rect{l.originX + slot * (bw + gap), l.originY + g.height() * l.tileSize + 6, bw,
+                l.spellBarHeight - 12};
+}
 
 Vec2i screenToGrid(const Layout& l, int px, int py) {
     return Vec2i{(px - l.originX) / l.tileSize, (py - l.originY) / l.tileSize};
@@ -168,6 +215,8 @@ void drawFrame(const Layout& l, const Battle& battle, const ViewState& view) {
         drawEntityPanel(l, g, e, color, slot, slotCount,
                         battle.phase() != Phase::Finished && id == activeId);
     }
+
+    drawSpellBar(l, battle, view);
 
     if (!view.statusLine.empty()) {
         DrawText(view.statusLine.c_str(), l.originX, 4, 16, kText);

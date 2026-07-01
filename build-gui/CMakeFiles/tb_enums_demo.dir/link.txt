@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/tb_enums_demo.dir/link.d CMakeFiles/tb_enums_demo.dir/tests/enums_demo.cpp.o -o tb_enums_demo  libtb_core.a

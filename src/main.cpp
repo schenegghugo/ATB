@@ -85,6 +85,15 @@ std::string spellLabel(const Entity& u, int slot) {
                       sp.minRange, sp.maxRange);
 }
 
+// The stable catalog slug for a runtime spell (used to resolve future 2.2 icons).
+// No core change: the runtime Spell carries no key, so we match it by name — spell
+// names are unique in the catalog. Empty if unknown (e.g. a summon's innate).
+std::string catalogKey(const SpellCatalog& catalog, const std::string& spellName) {
+    for (const SpellDef& d : catalog.all())
+        if (d.spell.name == spellName) return d.key;
+    return "";
+}
+
 } // namespace
 
 int main() {
@@ -194,7 +203,7 @@ int main() {
                                   session.staticArena ? &*session.staticArena : nullptr));
         selectedSpell = 0;
         aiTimer = 0.0f;
-        status = "Player turn — left-click move, 1-9 pick spell, right-click cast, Tab=editor.";
+        status = "Player turn — left-click move, click a spell (or 1-9), right-click cast, Tab=editor.";
         state = AppState::Battle;
     };
 
@@ -231,6 +240,10 @@ int main() {
         const Control ctrl = finished ? Control::AI : battle->controlOf(active);
         const bool playerControl = !finished && ctrl == Control::Player;
 
+        // Which spell button (if any) the cursor is over — set inside the player
+        // block below; also read later when composing the view (hover tooltip).
+        int hoveredSpell = -1;
+
         if (playerControl) {
             const EntityId me = active;
             const int spellCount = static_cast<int>(battle->unit(me).spells.size());
@@ -238,7 +251,20 @@ int main() {
                 if (IsKeyPressed(KEY_ONE + k)) selectedSpell = k;
             if (selectedSpell >= spellCount) selectedSpell = 0;
 
-            if (hoveredValid && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            // Hit-test the spell buttons against the same rects the renderer draws.
+            for (int s = 0; s < spellCount; ++s)
+                if (render::spellSlotRect(layout, battle->grid(), s, spellCount)
+                        .contains(GetMouseX(), GetMouseY())) {
+                    hoveredSpell = s;
+                    break;
+                }
+
+            // Spell bar is hit-tested *before* the board so a HUD click selects a
+            // spell instead of being read as a move.
+            if (hoveredSpell >= 0 && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                selectedSpell = hoveredSpell;
+                status = TextFormat("Selected %s.", battle->unit(me).spells[selectedSpell].name.c_str());
+            } else if (hoveredValid && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                 int moved = battle->moveToward(me, hovered);
                 status = moved > 0 ? TextFormat("Moved %d tile(s).", moved) : "Can't move there.";
             }
@@ -283,7 +309,11 @@ int main() {
             const Entity& u = battle->unit(me);
             view.reachable = reachableWithin(battle->grid(), u.pos, u.mp, battle->occupancy(me));
             view.showLosToHover = true;
-            view.spellLabel = spellLabel(u, selectedSpell);
+            view.showSpellBar = true;
+            view.selectedSpell = selectedSpell;
+            // Hovering a button previews *that* spell; otherwise show the selected one.
+            view.spellLabel = spellLabel(u, hoveredSpell >= 0 ? hoveredSpell : selectedSpell);
+            for (const Spell& sp : u.spells) view.spellIconKeys.push_back(catalogKey(session.catalog, sp.name));
             if (hoveredValid && selectedSpell < static_cast<int>(u.spells.size())) {
                 view.spellCastable = battle->canCast(me, selectedSpell, hovered);
                 view.spellZone = battle->affectedTiles(u.spells[selectedSpell], u.pos, hovered);

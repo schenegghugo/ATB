@@ -517,7 +517,12 @@ catalog + creatures.
 Pure `render/` + `main.cpp`, zero authority risk, recruits a *different*
 contributor pool (artists). Can overlap Phase 1. See `ARCHITECTURE.md` §6.
 
-### 2.1 ☐ Clickable spell bar (do first — works with zero art)
+### 2.1 ☑ Clickable spell bar (do first — works with zero art)
+`render::spellSlotRect()` single-sources the geometry; `main.cpp` hit-tests it
+before the board; `Renderer::drawSpellBar()` paints selected / affordable /
+cooldown / unaffordable states with the hotkey digit; `ViewState` gained
+`selectedSpell` + `spellIconKeys` (resolved by catalog name, ready for 2.2 icons).
+Visually confirmed in-game.
 - Single-source the per-slot rectangles in a `Layout` helper used by both draw
   and hit-test.
 - `main.cpp` hit-tests bar rects **before** the grid move/cast logic so a HUD
