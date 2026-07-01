@@ -92,6 +92,9 @@ target_link_libraries(tb_ruleset_gen PRIVATE tb_core)
 add_executable(tb_balance tests/balance_sim.cpp)
 target_link_libraries(tb_balance PRIVATE tb_core)
 
+add_executable(tb_team_balance tests/team_balance_sim.cpp)
+target_link_libraries(tb_team_balance PRIVATE tb_core)
+
 # ---------------------------------------------------------------------------
 # Raylib (graphical frontend). Use a system install if present, otherwise fetch.
 # Skipped entirely when TB_BUILD_GUI is OFF (headless/server/CI builds).

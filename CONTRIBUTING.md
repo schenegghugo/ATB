@@ -54,11 +54,11 @@ enforces:
 
 | Want to… | Where | Notes |
 |----------|-------|-------|
-| **Add / tweak a spell** | the catalog (`makeDefaultCatalog`, later `data/catalog.json`) | Pure data — combine existing `Effect`s. No engine change. |
+| **Add / tweak a spell** | the catalog (`data/catalog.json`, or the `makeDefaultCatalog` compiled fallback) | Pure data — combine existing `Effect`s. No engine change. |
 | **Draw sprites / re-theme** | an atlas-based sprite pack (`render/`, see ARCHITECTURE §6) | One `atlas.png` + a `pack.json` mapping keys → atlas rects (+ optional animations). Client-only, no engine recompile. Great first contribution for artists. |
 | **Write an AI** | `AI.cpp` (a pluggable `Brain` interface is planned) | Beam-search planner today; self-contained in `core/`. |
 | **Build a new frontend** | against the `Battle` read API | The engine never needs to know your frontend exists. |
-| **Tune balance** | `tb_balance` + spell costs | Back your change with before/after numbers from the simulator. |
+| **Tune balance** | `tb_balance` (per-spell) / `tb_team_balance` (NvN comps) + spell costs | Back your change with before/after numbers from the simulator. |
 | **Add a new _mechanic_** | extend the `Effect`/`StatusEffect`/`GroundKind` vocabulary in `core/`, then resolve it in `Battle` | A real engine change — expect closer review. |
 
 ### Good first issues

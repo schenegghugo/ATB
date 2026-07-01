@@ -1,0 +1,94 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Balance Report</title><style>body{font:14px/1.5 system-ui,sans-serif;margin:24px;color:#222;max-width:920px}h1{font-size:20px}h2{font-size:16px;margin-top:28px;border-bottom:1px solid #ddd;padding-bottom:4px}.meta{color:#555;font-size:13px}.meta b{color:#222}.sum{background:#f6f8fa;border:1px solid #e1e4e8;border-radius:6px;padding:8px 16px}table{border-collapse:collapse;font-size:13px}td,th{padding:3px 10px;text-align:left}th{border-bottom:1px solid #ccc}tr:nth-child(even){background:#fafafa}svg{max-width:100%}.legend span{display:inline-block;margin-right:14px;font-size:12px}.sw{display:inline-block;width:11px;height:11px;border-radius:2px;vertical-align:middle;margin-right:4px}</style></head><body>
+<h1>Tactical Battler — Balance Report</h1>
+<p class="meta"><b>30000</b> matches &middot; seed <b>42</b> &middot; 1v1 &middot; ruleset <b>data/rules.json</b> &middot; catalog <b>data/catalog.json</b></p>
+<div class="sum"><ul><li><b>8</b> spell(s) too strong, <b>7</b> too weak (of 16).</li><li>Going first wins <b>49%</b> — about fair (50% = fair).</li><li>A typical game lasts ~<b>5</b> round(s); most are decided by a spell kill.</li></ul></div>
+<p class="legend"><span><span class="sw" style="background:#27ae60"></span>balanced</span><span><span class="sw" style="background:#c0392b"></span>too strong</span><span><span class="sw" style="background:#2980b9"></span>too weak</span><span><span class="sw" style="background:#7f8c8d"></span>niche</span><span><span class="sw" style="background:#95a5a6"></span>AI-unused</span></p>
+<h2>Per-spell win rate</h2>
+<p class="meta">Each bar = the share of games won by builds that include that spell (50% = neutral). The black line is the <b>confidence range</b>: where the true win rate most likely sits &mdash; a wider line means fewer games, so less certainty. Bar colour = verdict (see key above).</p>
+<svg width="760" height="388" viewBox="0 0 760 388">
+<line x1="130" y1="20" x2="130" y2="384" stroke="#e8e8e8"/><text x="130" y="16" font-size="10" fill="#888" text-anchor="middle">0%</text>
+<line x1="270" y1="20" x2="270" y2="384" stroke="#e8e8e8"/><text x="270" y="16" font-size="10" fill="#888" text-anchor="middle">25%</text>
+<line x1="410" y1="20" x2="410" y2="384" stroke="#888" stroke-dasharray="4 3"/><text x="410" y="16" font-size="10" fill="#888" text-anchor="middle">50%</text>
+<line x1="550" y1="20" x2="550" y2="384" stroke="#e8e8e8"/><text x="550" y="16" font-size="10" fill="#888" text-anchor="middle">75%</text>
+<line x1="690" y1="20" x2="690" y2="384" stroke="#e8e8e8"/><text x="690" y="16" font-size="10" fill="#888" text-anchor="middle">100%</text>
+<text x="8" y="41" font-size="12">harpoon</text><rect x="130" y="30" width="352.861" height="14" fill="#c0392b" rx="2"/><line x1="478.961" y1="37" x2="486.732" y2="37" stroke="#333"/><line x1="478.961" y1="33" x2="478.961" y2="41" stroke="#333"/><line x1="486.732" y1="33" x2="486.732" y2="41" stroke="#333"/><text x="696" y="41" font-size="11">63.0%</text>
+<text x="8" y="63" font-size="12">bulwark</text><rect x="130" y="52" width="337.437" height="14" fill="#c0392b" rx="2"/><line x1="462.899" y1="59" x2="471.944" y2="59" stroke="#333"/><line x1="462.899" y1="55" x2="462.899" y2="63" stroke="#333"/><line x1="471.944" y1="55" x2="471.944" y2="63" stroke="#333"/><text x="696" y="63" font-size="11">60.3%</text>
+<text x="8" y="85" font-size="12">brute</text><rect x="130" y="74" width="311.586" height="14" fill="#c0392b" rx="2"/><line x1="436.282" y1="81" x2="446.867" y2="81" stroke="#333"/><line x1="436.282" y1="77" x2="436.282" y2="85" stroke="#333"/><line x1="446.867" y1="77" x2="446.867" y2="85" stroke="#333"/><text x="696" y="85" font-size="11">55.6%</text>
+<text x="8" y="107" font-size="12">invisible</text><rect x="130" y="96" width="310.374" height="14" fill="#c0392b" rx="2"/><line x1="435.398" y1="103" x2="445.33" y2="103" stroke="#333"/><line x1="435.398" y1="99" x2="435.398" y2="107" stroke="#333"/><line x1="445.33" y1="99" x2="445.33" y2="107" stroke="#333"/><text x="696" y="107" font-size="11">55.4%</text>
+<text x="8" y="129" font-size="12">attack</text><rect x="130" y="118" width="295.944" height="14" fill="#c0392b" rx="2"/><line x1="422.593" y1="125" x2="429.29" y2="125" stroke="#333"/><line x1="422.593" y1="121" x2="422.593" y2="129" stroke="#333"/><line x1="429.29" y1="121" x2="429.29" y2="129" stroke="#333"/><text x="696" y="129" font-size="11">52.8%</text>
+<text x="8" y="151" font-size="12">blocker</text><rect x="130" y="140" width="291.285" height="14" fill="#c0392b" rx="2"/><line x1="416.004" y1="147" x2="426.558" y2="147" stroke="#333"/><line x1="416.004" y1="143" x2="416.004" y2="151" stroke="#333"/><line x1="426.558" y1="143" x2="426.558" y2="151" stroke="#333"/><text x="696" y="151" font-size="11">52.0%</text>
+<text x="8" y="173" font-size="12">poison</text><rect x="130" y="162" width="290.513" height="14" fill="#c0392b" rx="2"/><line x1="415.992" y1="169" x2="425.028" y2="169" stroke="#333"/><line x1="415.992" y1="165" x2="415.992" y2="173" stroke="#333"/><line x1="425.028" y1="165" x2="425.028" y2="173" stroke="#333"/><text x="696" y="173" font-size="11">51.9%</text>
+<text x="8" y="195" font-size="12">knockback</text><rect x="130" y="184" width="286.444" height="14" fill="#c0392b" rx="2"/><line x1="412.415" y1="191" x2="420.47" y2="191" stroke="#333"/><line x1="412.415" y1="187" x2="412.415" y2="195" stroke="#333"/><line x1="420.47" y1="187" x2="420.47" y2="195" stroke="#333"/><text x="696" y="195" font-size="11">51.2%</text>
+<text x="8" y="217" font-size="12">healer</text><rect x="130" y="206" width="256.286" height="14" fill="#2980b9" rx="2"/><line x1="380.988" y1="213" x2="391.602" y2="213" stroke="#333"/><line x1="380.988" y1="209" x2="380.988" y2="217" stroke="#333"/><line x1="391.602" y1="209" x2="391.602" y2="217" stroke="#333"/><text x="696" y="217" font-size="11">45.8%</text>
+<text x="8" y="239" font-size="12">mend</text><rect x="130" y="228" width="256.177" height="14" fill="#2980b9" rx="2"/><line x1="381.222" y1="235" x2="391.146" y2="235" stroke="#333"/><line x1="381.222" y1="231" x2="381.222" y2="239" stroke="#333"/><line x1="391.146" y1="231" x2="391.146" y2="239" stroke="#333"/><text x="696" y="239" font-size="11">45.7%</text>
+<text x="8" y="261" font-size="12">fireball</text><rect x="130" y="250" width="251.802" height="14" fill="#2980b9" rx="2"/><line x1="377.791" y1="257" x2="385.824" y2="257" stroke="#333"/><line x1="377.791" y1="253" x2="377.791" y2="261" stroke="#333"/><line x1="385.824" y1="253" x2="385.824" y2="261" stroke="#333"/><text x="696" y="261" font-size="11">45.0%</text>
+<text x="8" y="283" font-size="12">shelter</text><rect x="130" y="272" width="249.398" height="14" fill="#2980b9" rx="2"/><line x1="374.45" y1="279" x2="384.365" y2="279" stroke="#333"/><line x1="374.45" y1="275" x2="374.45" y2="283" stroke="#333"/><line x1="384.365" y1="275" x2="384.365" y2="283" stroke="#333"/><text x="696" y="283" font-size="11">44.5%</text>
+<text x="8" y="305" font-size="12">glyph</text><rect x="130" y="294" width="240.32" height="14" fill="#2980b9" rx="2"/><line x1="365.377" y1="301" x2="375.287" y2="301" stroke="#333"/><line x1="365.377" y1="297" x2="365.377" y2="305" stroke="#333"/><line x1="375.287" y1="297" x2="375.287" y2="305" stroke="#333"/><text x="696" y="305" font-size="11">42.9%</text>
+<text x="8" y="327" font-size="12">portal</text><rect x="130" y="316" width="239.794" height="14" fill="#95a5a6" rx="2"/><line x1="364.855" y1="323" x2="374.758" y2="323" stroke="#333"/><line x1="364.855" y1="319" x2="364.855" y2="327" stroke="#333"/><line x1="374.758" y1="319" x2="374.758" y2="327" stroke="#333"/><text x="696" y="327" font-size="11">42.8%</text>
+<text x="8" y="349" font-size="12">rewind</text><rect x="130" y="338" width="239.178" height="14" fill="#2980b9" rx="2"/><line x1="364.27" y1="345" x2="374.112" y2="345" stroke="#333"/><line x1="364.27" y1="341" x2="364.27" y2="349" stroke="#333"/><line x1="374.112" y1="341" x2="374.112" y2="349" stroke="#333"/><text x="696" y="349" font-size="11">42.7%</text>
+<text x="8" y="371" font-size="12">bomb</text><rect x="130" y="360" width="237.567" height="14" fill="#2980b9" rx="2"/><line x1="362.664" y1="367" x2="372.498" y2="367" stroke="#333"/><line x1="362.664" y1="363" x2="362.664" y2="371" stroke="#333"/><line x1="372.498" y1="363" x2="372.498" y2="371" stroke="#333"/><text x="696" y="371" font-size="11">42.4%</text>
+</svg>
+<h2>Match length (half-turns, 2 = 1 round)</h2>
+<svg width="660" height="168" viewBox="0 0 660 168">
+<text x="8" y="23" font-size="11">0-7</text><rect x="80" y="11" width="261.271" height="16" fill="#5b8def" rx="2"/><text x="347.271" y="23" font-size="11">9150</text>
+<text x="8" y="45" font-size="11">8-15</text><rect x="80" y="33" width="520" height="16" fill="#5b8def" rx="2"/><text x="606" y="45" font-size="11">18211</text>
+<text x="8" y="67" font-size="11">16-23</text><rect x="80" y="55" width="56.3659" height="16" fill="#5b8def" rx="2"/><text x="142.366" y="67" font-size="11">1974</text>
+<text x="8" y="89" font-size="11">24-31</text><rect x="80" y="77" width="11.1361" height="16" fill="#5b8def" rx="2"/><text x="97.1361" y="89" font-size="11">390</text>
+<text x="8" y="111" font-size="11">32-39</text><rect x="80" y="99" width="4.68288" height="16" fill="#5b8def" rx="2"/><text x="90.6829" y="111" font-size="11">164</text>
+<text x="8" y="133" font-size="11">40-47</text><rect x="80" y="121" width="0.913733" height="16" fill="#5b8def" rx="2"/><text x="86.9137" y="133" font-size="11">32</text>
+<text x="8" y="155" font-size="11">48+</text><rect x="80" y="143" width="2.25578" height="16" fill="#5b8def" rx="2"/><text x="88.2558" y="155" font-size="11">79</text>
+</svg>
+<h2>Outcomes</h2>
+<svg width="670" height="146" viewBox="0 0 670 146">
+<text x="8" y="23" font-size="11">A wins (1st)</text><rect x="120" y="11" width="234.032" height="16" fill="#27ae60" rx="2"/><text x="360.032" y="23" font-size="11">48.8%</text>
+<text x="8" y="45" font-size="11">B wins (2nd)</text><rect x="120" y="33" width="243.104" height="16" fill="#2980b9" rx="2"/><text x="369.104" y="45" font-size="11">50.6%</text>
+<text x="8" y="67" font-size="11">draws (cap)</text><rect x="120" y="55" width="2.864" height="16" fill="#95a5a6" rx="2"/><text x="128.864" y="67" font-size="11">0.6%</text>
+<text x="8" y="89" font-size="11">end: spell kill</text><rect x="120" y="77" width="346.29" height="16" fill="#e67e22" rx="2"/><text x="472.29" y="89" font-size="11">72.1%</text>
+<text x="8" y="111" font-size="11">end: ring/storm</text><rect x="120" y="99" width="12.4261" height="16" fill="#8e44ad" rx="2"/><text x="138.426" y="111" font-size="11">2.6%</text>
+<text x="8" y="133" font-size="11">end: collision</text><rect x="120" y="121" width="121.284" height="16" fill="#c0392b" rx="2"/><text x="247.284" y="133" font-size="11">25.3%</text>
+</svg>
+<h2>Stat spending — win rate by what the build bought</h2>
+<p class="meta">Each bar = win rate of builds that spent points on that stat (bar past the dashed 50% line = wins more than half). Points go to spells first and stats with the leftover, so this compares lean builds with stat padding against spell-crammed ones.</p>
+<svg width="740" height="146" viewBox="0 0 740 146">
+<line x1="130" y1="20" x2="130" y2="142" stroke="#e8e8e8"/><text x="130" y="16" font-size="10" fill="#888" text-anchor="middle">0%</text>
+<line x1="250" y1="20" x2="250" y2="142" stroke="#e8e8e8"/><text x="250" y="16" font-size="10" fill="#888" text-anchor="middle">25%</text>
+<line x1="370" y1="20" x2="370" y2="142" stroke="#888" stroke-dasharray="4 3"/><text x="370" y="16" font-size="10" fill="#888" text-anchor="middle">50%</text>
+<line x1="490" y1="20" x2="490" y2="142" stroke="#e8e8e8"/><text x="490" y="16" font-size="10" fill="#888" text-anchor="middle">75%</text>
+<line x1="610" y1="20" x2="610" y2="142" stroke="#e8e8e8"/><text x="610" y="16" font-size="10" fill="#888" text-anchor="middle">100%</text>
+<text x="8" y="41" font-size="12">bought +HP</text><rect x="130" y="30" width="238.42" height="14" fill="#7f8c8d" rx="2"/><line x1="362.463" y1="37" x2="374.379" y2="37" stroke="#333"/><text x="616" y="41" font-size="11">49.7% (n=6229)</text>
+<text x="8" y="63" font-size="12">bought +AP</text><rect x="130" y="52" width="254.71" height="14" fill="#27ae60" rx="2"/><line x1="378.763" y1="59" x2="390.638" y2="59" stroke="#333"/><text x="616" y="63" font-size="11">53.1% (n=6249)</text>
+<text x="8" y="85" font-size="12">bought +MP</text><rect x="130" y="74" width="224.313" height="14" fill="#c0392b" rx="2"/><line x1="348.377" y1="81" x2="360.27" y2="81" stroke="#333"/><text x="616" y="85" font-size="11">46.7% (n=6227)</text>
+<text x="8" y="107" font-size="12">bought +Init</text><rect x="130" y="96" width="223.336" height="14" fill="#c0392b" rx="2"/><line x1="350.388" y1="103" x2="356.289" y2="103" stroke="#333"/><text x="616" y="107" font-size="11">46.5% (n=25290)</text>
+<text x="8" y="129" font-size="12">no stat spend</text><rect x="130" y="118" width="245.067" height="14" fill="#27ae60" rx="2"/><line x1="372.495" y1="125" x2="377.638" y2="125" stroke="#333"/><text x="616" y="129" font-size="11">51.1% (n=33442)</text>
+</svg>
+<h2>Stat spending — win rate by total points spent on stats</h2>
+<p class="meta">Groups builds by how many of their points went to stats (rather than spells). A rising trend means durability/tempo beats cramming extra spells.</p>
+<svg width="740" height="124" viewBox="0 0 740 124">
+<line x1="130" y1="20" x2="130" y2="120" stroke="#e8e8e8"/><text x="130" y="16" font-size="10" fill="#888" text-anchor="middle">0%</text>
+<line x1="250" y1="20" x2="250" y2="120" stroke="#e8e8e8"/><text x="250" y="16" font-size="10" fill="#888" text-anchor="middle">25%</text>
+<line x1="370" y1="20" x2="370" y2="120" stroke="#888" stroke-dasharray="4 3"/><text x="370" y="16" font-size="10" fill="#888" text-anchor="middle">50%</text>
+<line x1="490" y1="20" x2="490" y2="120" stroke="#e8e8e8"/><text x="490" y="16" font-size="10" fill="#888" text-anchor="middle">75%</text>
+<line x1="610" y1="20" x2="610" y2="120" stroke="#e8e8e8"/><text x="610" y="16" font-size="10" fill="#888" text-anchor="middle">100%</text>
+<text x="8" y="41" font-size="12">0 pts (all spells)</text><rect x="130" y="30" width="245.067" height="14" fill="#27ae60" rx="2"/><line x1="372.495" y1="37" x2="377.638" y2="37" stroke="#333"/><text x="616" y="41" font-size="11">51.1% (n=33442)</text>
+<text x="8" y="63" font-size="12">1-3 pts</text><rect x="130" y="52" width="224.889" height="14" fill="#c0392b" rx="2"/><line x1="351.424" y1="59" x2="358.359" y2="59" stroke="#333"/><text x="616" y="63" font-size="11">46.9% (n=18328)</text>
+<text x="8" y="85" font-size="12">4-6 pts</text><text x="134" y="85" font-size="11" fill="#888">(too few: n=0)</text>
+<text x="8" y="107" font-size="12">7+ pts</text><rect x="130" y="96" width="242.625" height="14" fill="#7f8c8d" rx="2"/><line x1="367.44" y1="103" x2="377.807" y2="103" stroke="#333"/><text x="616" y="107" font-size="11">50.5% (n=8230)</text>
+</svg>
+<h2>Top spell synergies</h2>
+<p class="meta"><b>Synergy</b> = how much more the pair wins than the two spells do on their own (average). Positive = better together than apart. <b>Games together</b> = number of simulated games whose build had both spells.</p>
+<table><tr><th>spell pair</th><th>win rate together</th><th>games together</th><th>synergy (vs. each alone)</th></tr>
+<tr><td>harpoon + brute</td><td>73.8%</td><td>3384</td><td>+14.5 pts</td></tr>
+<tr><td>attack + harpoon</td><td>71.3%</td><td>5503</td><td>+13.3 pts</td></tr>
+<tr><td>harpoon + blocker</td><td>69.0%</td><td>3382</td><td>+11.4 pts</td></tr>
+<tr><td>harpoon + bulwark</td><td>68.7%</td><td>5459</td><td>+7.1 pts</td></tr>
+<tr><td>harpoon + invisible</td><td>67.6%</td><td>3978</td><td>+8.4 pts</td></tr>
+<tr><td>bulwark + invisible</td><td>67.5%</td><td>2538</td><td>+9.7 pts</td></tr>
+<tr><td>poison + harpoon</td><td>67.3%</td><td>3990</td><td>+9.8 pts</td></tr>
+<tr><td>poison + bulwark</td><td>65.5%</td><td>3991</td><td>+9.5 pts</td></tr>
+<tr><td>knockback + harpoon</td><td>65.4%</td><td>5537</td><td>+8.4 pts</td></tr>
+<tr><td>attack + bulwark</td><td>65.0%</td><td>5402</td><td>+8.5 pts</td></tr>
+<tr><td>knockback + bulwark</td><td>64.5%</td><td>5423</td><td>+8.8 pts</td></tr>
+<tr><td>knockback + invisible</td><td>62.3%</td><td>3967</td><td>+9.1 pts</td></tr>
+</table>
+<p class="meta">Full text detail: balance_report.txt &middot; raw data: *.spells.csv, *.pairs.csv, *.length.csv, *.outcomes.csv</p>
+</body></html>

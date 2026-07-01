@@ -71,8 +71,9 @@ core as data or pulled *out* of it through an accessor.
 `Battle` owns `std::vector<Entity> units_`, addressed by a stable
 `EntityId` (a raw index). The vector is **append-only** — entities are never
 erased — so an id is permanent and safe to hold across turns, in the AI, in the
-renderer, and (eventually) over the wire. When summons arrive, the typedef can
-hide a free-list without churning the public API.
+renderer, and (eventually) over the wire. Summons and objects enter the roster
+this way mid-battle; should the vector ever need slot reuse, the typedef can hide
+a free-list without churning the public API.
 
 ### Why the core is deterministic
 
@@ -168,9 +169,9 @@ The loader carries:
 3. **CI is a validity gate, not a drift gate.** Because the data file is
    canonical, CI runs `tb_catalog_gen --check data/catalog.json` (it must load +
    validate) rather than diffing it against the compiled seed. The same applies
-   to `creatures.json` (and `rules.json` once it lands).
+   to `creatures.json` and `rules.json` (CI runs `--check` on all three).
 
-Crucially, **`core/` does not change** when this lands. `SpellCatalog` keeps its
+Crucially, **`core/` did not change** for any of this. `SpellCatalog` keeps its
 current interface; only *where the entries come from* moves from a compiled
 function to a validated file. Compiled content remains available as the fallback
 and as the generator of the official file.
@@ -593,13 +594,13 @@ ever, for casual customs.
 | You want to… | Where | Status |
 |--------------|-------|--------|
 | **Restyle the game with your own sprites/palette** | drop a pack folder + `pack.json` in; no code, no recompile, no server involvement (§6). | seam planned; primitive fallback works now |
-| **Add / change a spell** | the catalog: edit `makeDefaultCatalog()` today, or `data/catalog.json` once the loader lands. Combine existing `Effect`s. | works now (compiled); data path planned |
+| **Add / change a spell** | the catalog: edit `data/catalog.json` (or `makeDefaultCatalog()`, the compiled fallback). Combine existing `Effect`s. | works now (data + compiled) |
 | **Add a new _mechanic_** (something no `Effect` can express) | extend the `Effect`/`StatusEffect`/`GroundKind` vocabulary in `core/`, then resolve it in `Battle`. This is an *engine* change, reviewed accordingly. | core change |
 | **Write your own AI** | `AI.cpp` today. A pluggable `Brain` strategy interface (so alternatives drop in without forking) is planned. | compiled today; interface planned |
 | **Write a whole new frontend** (different engine, web, TUI…) | implement against the `Battle` read API (`grid()`, `units()`, `affectedTiles()`, …) and drive it with intents. `render/` + `main.cpp` are the reference frontend. | API stable |
-| **Change the match format** (team size, banned spells, closing-ring, arena, economy) | edit `data/rules.json` — read by both the game and the balance sim. | ruleset planned (MILESTONES "Match rulesets") |
+| **Change the match format** (team size, banned spells, closing-ring, arena, economy) | edit `data/rules.json` — read by both the game and the balance sim via a shared `buildMatch()`. | works now |
 | **Swap persistence** | implement `BuildRepository` (in-memory and flat-file impls ship; `schema.sql` targets SQLite/Postgres). | seam in place |
-| **Tune balance** | `tb_balance [matches] [seed] [outfile]` — Monte-Carlo report; reads `data/catalog.json` (and `data/rules.json` once it lands). | works now |
+| **Tune balance** | `tb_balance [matches] [seed] [outfile]` — per-spell Monte-Carlo report (text + HTML charts + CSV); reads `data/catalog.json` + `data/rules.json`. `tb_team_balance` is the NvN team-composition sibling. | works now |
 
 The read-only `Battle` API (`grid()`, `units()`, `unitAt()`, `affectedTiles()`,
 `unitsAt()`, `clearLineOfSight()`, storm/ring accessors) is deliberately rich so
@@ -634,13 +635,11 @@ Ordered roughly by how much each unlocks the sandbox vision.
 *(Items 1–2 — catalog loader + content hash — are done; see MILESTONES Phase 1.
 Creatures.json followed the same pattern.)*
 
-**Match rulesets (next data/engine work).** `data/rules.json` — the **third
-pinned artifact** beside catalog + creatures — datafies the match format (team
-size, banned spells, closing-ring, arena, economy) and is read by **both** the
-game and the balance sim via a shared `buildMatch()`, so they construct matches
-identically. Preceded by a small **core split** (separate `Combat`/`Entity`/
-`Battle` headers). Full breakdown in `MILESTONES.md` ("Core split" + "Match
-rulesets").
+**Match rulesets (shipped).** `data/rules.json` — the **third pinned artifact**
+beside catalog + creatures — datafies the match format (team size, banned spells,
+closing-ring, arena, economy) and is read by **both** the game and the balance sim
+via a shared `buildMatch()`, so they construct matches identically. Full breakdown
+in `MILESTONES.md` ("Core split" + "Match rulesets").
 
 **Parallel track — Web/WASM build.** Independent of the sequence above and
 available now that the GUI exists: because `core/` is portable C++20 and Raylib

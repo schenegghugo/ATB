@@ -183,6 +183,7 @@ std::vector<PlannedAction> enumerateActions(const Battle& b, EntityId self) {
                                     hasStatusEffect(sp, StatusEffect::Kind::Shield);
             const bool selfBuff = hasStatusEffect(sp, StatusEffect::Kind::Invisible);
             const bool placement = has(sp, Effect::Type::Spawn);
+            const bool summon = has(sp, Effect::Type::Summon);
 
             std::vector<Vec2i> targets;
             if (offensive) targets.insert(targets.end(), foeTiles.begin(), foeTiles.end());
@@ -193,6 +194,23 @@ std::vector<PlannedAction> enumerateActions(const Battle& b, EntityId self) {
                 const Vec2i dir = cardinalToward(me.pos, fp);
                 const int step = std::min(sp.maxRange, std::max(1, manhattan(me.pos, fp) - 1));
                 targets.push_back(Vec2i{me.pos.x + dir.x * step, me.pos.y + dir.y * step});
+            }
+            // Summons spawn onto their target tile, which must be free and walkable
+            // (an occupied tile silently no-ops the spawn but still spends AP). Offer
+            // the caster's empty neighbours plus a spot stepping toward the nearest
+            // foe, and let the beam search pick — evalState rewards the extra unit.
+            if (summon) {
+                auto offer = [&](Vec2i t) {
+                    if (b.grid().isWalkable(t) && !b.unitAt(t)) targets.push_back(t);
+                };
+                for (Vec2i d : {Vec2i{1, 0}, Vec2i{-1, 0}, Vec2i{0, 1}, Vec2i{0, -1}})
+                    offer(Vec2i{me.pos.x + d.x, me.pos.y + d.y});
+                if (!foeTiles.empty()) {
+                    const Vec2i fp = foeTiles.front();
+                    const Vec2i dir = cardinalToward(me.pos, fp);
+                    const int step = std::min(sp.maxRange, std::max(1, manhattan(me.pos, fp) - 1));
+                    offer(Vec2i{me.pos.x + dir.x * step, me.pos.y + dir.y * step});
+                }
             }
             for (Vec2i t : targets)
                 if (b.canCast(self, slot, t)) acts.push_back({PlannedAction::Kind::Cast, slot, t});

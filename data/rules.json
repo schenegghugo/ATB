@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "format": {
     "teamSize": 1
   },
@@ -8,7 +8,7 @@
     "pointBudget": 12,
     "baseHp": 30,
     "hpStep": 5,
-    "hpCost": 1,
+    "hpCost": 2,
     "baseAp": 4,
     "apCost": 3,
     "baseMp": 3,

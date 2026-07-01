@@ -85,7 +85,11 @@ cmake --build build -j
 ./build/tb_headless        # headless deterministic battle log
 ./build/tb_build_demo      # catalog + build validation + persistence round-trip
 ./build/tb_spells_demo     # asserts cooldowns + shelter/glyph/portal/invisible
-./build/tb_balance [N] [seed]  # Monte-Carlo balance report over N random matches
+./build/tb_balance [N] [seed]       # per-spell Monte-Carlo balance report (txt + html + csv)
+./build/tb_team_balance [N] [seed]  # NvN team-composition report (set ATB_TEAM=2/3)
+
+scripts/balance.sh -n 30000 --map duel     # friendlier wrapper (builds + runs)
+scripts/team_balance.sh --team 2 -n 8000   # 2v2 composition analysis
 ```
 
 For a **headless / server / CI build**, add `-DTB_BUILD_GUI=OFF`: this skips
@@ -162,20 +166,56 @@ when a Wall blocks it. Pink ticks above a unit are active status effects.
 ## Balance tuning
 
 `tb_balance [matches] [seed] [outfile]` runs thousands of AI-vs-AI matches
-between randomly generated point-buy builds on random arenas and writes a full
-report (stdout + `balance_report.txt`) — the loop for tuning costs and the stat
-economy. The report has:
+between randomly generated point-buy builds — the loop for tuning costs and the
+stat economy. Each run writes three siblings from `<outfile>` (default
+`balance_report.txt`): the **text report** (also echoed to stdout), a
+self-contained **`.html`** with charts (inline SVG, no dependencies), and
+machine-readable **`.csv`** tables (`.spells` / `.pairs` / `.length` /
+`.outcomes`) you can open in a spreadsheet. It uses the **same data the game
+does**: `data/catalog.json`, `data/creatures.json`, and `data/rules.json`
+(format, economy, banned spells, arena), so editing those files drives the
+report. Point it at a different content set with `ATB_DATA_DIR=<dir>`, a specific
+battlefield with `ATB_MAP=<key|path.json>` (or `''` for random), and a team size
+with `ATB_TEAM=<n>` (1v1, 2v2, 3v3 — the per-spell stats hold for any format).
+
+The friendlier wrapper `scripts/balance.sh` builds the binary and exposes these
+as flags — `scripts/balance.sh --help`:
+
+```bash
+scripts/balance.sh -n 30000 -s 42            # 30k matches on the ruleset's arena
+scripts/balance.sh --map duel                # test a specific static map
+scripts/balance.sh --team 2 -n 10000         # 2v2 instead of 1v1
+scripts/balance.sh --data /tmp/mymod --map arena -o mymod.txt
+```
+
+The report opens with a plain-English **SUMMARY** (which spells look too strong /
+too weak, the first-move edge, typical game length), then:
 
 - **Outcomes** — first- vs second-actor win rate + draw rate (95% Wilson CIs).
 - **How decisive matches end** — spell kill / ring (storm) / collision split.
 - **Match length** — min/median/mean/p90/max + a histogram.
-- **Per-spell** — pick rate, win rate ± CI, `lift` (vs 50%) and `val/pt` (cost
-  efficiency); non-overlapping CIs mean a real gap, not noise.
-- **Stat investment** — win rate by stat-point spend and per stat bought.
+- **Per-spell** — pick rate, win rate ± CI, `lift` (vs 50%), `val/pt` (cost
+  efficiency), and a plain-English **verdict** (`balanced` / `TOO STRONG` /
+  `too weak` / `niche` / `AI-unused`); non-overlapping CIs mean a real gap.
+- **Stat investment** — win rate by stat-point spend and per stat bought
+  (HP / AP / MP / **Init**).
 - **Top synergies** — spell pairs by joint win rate and lift `vs solo-avg`
   (surfaces emergent combos the planner finds).
 
 Re-run it after any balance change to see the effect, deterministically per seed.
+
+### Team composition (2v2 / 3v3)
+
+`tb_team_balance` (wrapper `scripts/team_balance.sh`) is the NvN sibling. Instead
+of per-spell stats it **auto-classifies each build into an archetype** — Aggro /
+Control / Summoner / Support / Evasion — and reports win rate by **team
+make-up** plus a composition-vs-composition **matchup matrix** (HTML heatmap up to
+2v2; CSV always). Answers "does Summoner+Support beat two Aggro builds?"
+
+```bash
+scripts/team_balance.sh --team 2 -n 8000     # 2v2 composition report
+scripts/team_balance.sh --team 3 --map duel  # 3v3 on a fixed map
+```
 
 The AI is a **turn-level planner**, not a greedy picker: it beam-searches
 sequences of actions within the AP/MP budget (cloning the `Battle` and

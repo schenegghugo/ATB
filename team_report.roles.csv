@@ -1,0 +1,6 @@
+role,pick_pct,winrate_pct,ci_lo_pct,ci_hi_pct,n
+Aggro,19.0,43.4,42.8,44.0,22761
+Control,23.2,53.2,52.6,53.8,27856
+Summoner,12.8,52.4,51.6,53.2,15395
+Support,36.1,51.6,51.1,52.1,43374
+Evasion,8.8,42.0,41.1,43.0,10614

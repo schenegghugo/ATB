@@ -5,7 +5,7 @@
     {
       "id": 1,
       "key": "attack",
-      "buildCost": 1,
+      "buildCost": 2,
       "tags": [
         "damage",
         "single"
@@ -28,7 +28,7 @@
     {
       "id": 2,
       "key": "fireball",
-      "buildCost": 3,
+      "buildCost": 2,
       "tags": [
         "damage",
         "ranged",
@@ -104,7 +104,7 @@
       "effects": [
         {
           "type": "damage",
-          "amount": 8
+          "amount": 6
         },
         {
           "type": "push",
@@ -138,7 +138,7 @@
         },
         {
           "type": "damage",
-          "amount": 8
+          "amount": 6
         }
       ]
     },
@@ -157,7 +157,7 @@
       "needsLineOfSight": false,
       "shape": "single",
       "radius": 0,
-      "cooldown": 3,
+      "cooldown": 2,
       "effects": [
         {
           "type": "applyStatus",
@@ -172,7 +172,7 @@
     {
       "id": 7,
       "key": "mend",
-      "buildCost": 2,
+      "buildCost": 3,
       "tags": [
         "support",
         "buff"
@@ -184,7 +184,7 @@
       "needsLineOfSight": false,
       "shape": "single",
       "radius": 0,
-      "cooldown": 2,
+      "cooldown": 3,
       "effects": [
         {
           "type": "heal",
@@ -229,7 +229,7 @@
         "mobility"
       ],
       "name": "Invisible",
-      "apCost": 2,
+      "apCost": 3,
       "minRange": 0,
       "maxRange": 0,
       "needsLineOfSight": false,

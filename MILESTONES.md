@@ -6,7 +6,8 @@ Design rationale for each piece lives in [`ARCHITECTURE.md`](ARCHITECTURE.md);
 this file is the *sequence* and the *step-by-step* for getting there.
 
 **Phase order:** CI + contributing → catalog loader (with hash) → spell bar +
-sprite packs → pluggable AI → networked PvP → replays.
+sprite packs → pluggable AI (→ self-teaching AI, optional depth item) → networked
+PvP → replays.
 
 Off the critical path, a **Web/WASM build** (see *Parallel track* below) can be
 picked up anytime now that the GUI exists — it's frontend-only and independent of
@@ -339,25 +340,26 @@ turn; reaching 0 HP (ignition, an attack, or a shove into a wall) detonates earl
 Cast via the `bomb` spell (`Effect::Type::Summon` → spawns the "bomb" creature at
 the target). Pushable/pullable/rewindable for free (it's an entity). Covered by
 `tb_roster_demo` (summon → armed → 2-turn fuse → blast). Portal-on-forced-move
-stays off for v1 (confirmed). *(AI doesn't cast Summon spells yet — like Portal,
-expected; tune later.)*
+stays off for v1 (confirmed). *(The champion beam planner now casts `Summon`
+spells — `enumerateActions` offers empty in-range tiles as spawn targets — so
+bombs/summons appear in AI play and in the balance sim.)*
 
 **Summons** ☑ — three `Summon` templates in `core/Creatures.cpp`, each with one
 innate ability and a **dead-simple, single-purpose AI** (`summonTakeOneAction` —
 deliberately *not* the beam planner; summons aren't meant to be clever):
-- **blocker** (HP 45) — a **self-centred Cross Pull, range 4** (the 4 straight
+- **blocker** (HP 18) — a **self-centred Cross Pull, range 4** (the 4 straight
   lines): yanks every unit on its arms toward it; foes stop adjacent and take
   collision damage. Self-casts when a foe is on an arm, else advances.
-- **healer** (HP 20) — heals the most-wounded ally within range, else closes in.
-- **brute** (HP 30) — strikes the nearest foe, else closes in.
+- **healer** (HP 10) — heals the most-wounded ally within range, else closes in.
+- **brute** (HP 18) — strikes the nearest foe, else closes in.
 
 Cast via the `blocker`/`healer`/`brute` spells (`Effect::Type::Summon`). **Per-team
 cap of 2** enforced in `spawnCreature`. Excluded from victory (foundation).
 `main.cpp` now drives turns by **`controlOf`** (player inputs only their
 Champions; summons run the AI; objects auto-pass). Covered by `tb_roster_demo`
-(cap + the blocker pull). *(Two v1 notes: the Pull is friendly-fire like every
-effect — it also drags allies on the arms; and champions' beam AI doesn't cast
-Summon spells yet, like Portal — tune later.)*
+(cap + the blocker pull). *(v1 note: the Pull is friendly-fire like every effect —
+it also drags allies on the arms. The champion beam AI **does** now cast Summon
+spells; only Portal remains AI-unused.)*
 
 **Milestone complete.** ✅ foundation ☑ → Bombs ☑ → Summons ☑ → datafy creatures ☑.
 Both content types (spells + creatures) are now hand-editable JSON sharing one
@@ -621,6 +623,77 @@ Let a match pick a `Brain` by name so community AIs drop in without forking
 
 **Acceptance:** a second toy `Brain` (e.g. greedy) can be selected and runs in
 `tb_headless` / `tb_balance` without touching combat code.
+
+---
+
+## Phase 3.5 — Self-teaching AI (learned evaluator, NNUE-style)
+
+Branches off Phase 3; **off the PvP critical path** (a depth item, not a
+blocker). Replaces the hand-tuned `evalState` with a *learned* scalar — the beam
+search (`planTurn`) is untouched, exactly as chess NNUE swapped the leaf eval
+without changing alpha-beta. The engine already has the two hard prerequisites: a
+**deterministic, cloneable `Battle`** (`Battle s2 = n.state;`) and a **scalar eval
+at a clean seam** (`evalState` + `EvalWeights`). `tb_balance` is already both the
+self-play *data generator* (thousands of deterministic matches/sec) and the
+*gauntlet* for accepting a new net. No policy net / MCTS needed — `enumerateActions`
+does move selection; the net only judges positions (why NNUE fits better than
+AlphaZero here). The eval it replaces lives in `AI.cpp` (`evalState`); the
+pluggable-AI seam is `ARCHITECTURE.md` §9–10.
+
+### 3.5.1 ☐ Split the seam: `Evaluator` (state → score) under `Brain`
+Extract `evalState` behind an `Evaluator` interface; `HandcraftedEvaluator` wraps
+today's `EvalWeights`. The default beam `Brain` (Phase 3) is composed from an
+`Evaluator&`. Pure refactor, zero behaviour change — gate with `tb_balance`:
+handcrafted-vs-handcrafted must stay ~50%.
+
+### 3.5.2 ☐ Versioned feature encoder `featurize(Battle, Faction)`
+Shared by data-gen **and** inference so they can't drift; version + hash the
+layout. Hybrid: sparse `(side, EntityKind, tile)` one-hots (the
+incrementally-updatable part) + pooled, order-invariant dense per-side scalars
+(effHP / AP / MP / pending DoT / shields / #invisible / reachable offensive damage
+/ `foeField` distance / #in-storm) + globals (round, storm radius/damage,
+side-to-move).
+
+### 3.5.3 ☐ Self-play data export
+A flag on the `buildMatch` sim loop logs `(features, label)` per turn; label =
+that side's eventual result (+1/−1), optionally blended with the beam score at
+that node (bootstrapping, as NNUE trained on Stockfish evals — converges far
+faster than pure win/loss). Reuses existing headless throughput.
+
+### 3.5.4 ☐ Offline training + weights artifact
+Python/PyTorch trains a small MLP (value in [−1, 1]); export to a flat,
+**versioned, `sha256`-pinned** weights file — a *fourth pinned artifact* beside
+catalog/creatures/rules, loaded with the same valid/absent/malformed policy
+(**absent ⇒ fall back to `HandcraftedEvaluator`**, invalid ⇒ hard error). Add a
+`tb_*_gen --check` CI gate. No Python at runtime.
+
+### 3.5.5 ☐ C++ inference `LearnedEvaluator`
+Dependency-free (a couple of matmuls + activation) behind the `Evaluator` seam.
+Deterministic given `(weights, state)` — the eval only chooses the AI's move, not
+game rules, so replays and server authority are unaffected.
+
+### 3.5.6 ☐ Improvement loop + gating
+Self-play with net *vN* → retrain → *vN+1*; promote **only if it beats vN
+>~55%** over N sim matches (reuse the Wilson CI already in `tb_balance`). This is
+AlphaZero's loop with the beam search standing in for MCTS.
+
+### 3.5.7 ☐ (Optional) NNUE-grade speed
+Sparse features + an **incrementally updatable accumulator** tied to the beam's
+clone→apply (a *move* flips one `(side,kind,tile)` feature → subtract/add one
+embedding row; AoE / summons / forced-moves recompute), plus int8 quantization.
+
+**First vertical slice:** 3.5.1 + a minimal 3.5.2–3.5.5 whose training target is
+the *handcrafted* score (imitation). Success = the learned eval reproduces
+handcrafted play (~50% in the gauntlet), proving the whole
+featurize→train→export→load→search pipeline at **zero strength risk**. *Then*
+switch the target to game outcomes and let it surpass the hand weights.
+
+**Acceptance:** `LearnedEvaluator` loads a checked-in weights file and plays a
+full `tb_balance` run; on the imitation target it holds ~50% vs
+`HandcraftedEvaluator`, and an outcome-trained net beats it >55% in the gauntlet.
+Absent/invalid weights fall back to handcrafted with a loud message.
+**Stretch (non-goal for v1):** a policy network + MCTS (full AlphaZero) — only if
+the eval-only net plateaus.
 
 ---
 
