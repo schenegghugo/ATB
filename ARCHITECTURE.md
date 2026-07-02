@@ -59,12 +59,33 @@ core as data or pulled *out* of it through an accessor.
 | `Spells` | The **catalog** (dictionary of skills): `SpellDef` = gameplay `Spell` + stable id + build-point cost. |
 | `Build` | Classless point-buy `CharacterBuild`: a budget spent across catalog skills and stat upgrades, validated, then *hydrated* into a live `Entity`. |
 | `AI` | A headless turn-level planner — beam-searches action sequences within the AP/MP budget, scoring end-of-turn states. |
+| `Combat` / `Entity` | The spell/effect **data model** (`Combat.h`) and the `Entity` + its kind/control/snapshot (`Entity.h`), split out of `Battle.h` so the data types don't drag in the engine. |
+| `Event` | The structured, deterministic **combat event stream** (`Event.h`) — a read-only narration of a turn (see below). |
+| `Ruleset` / `Match` | The datafied match format (`Ruleset.h`, ring config in `Storm.h`) and the single `buildMatch()` construction path (`Match.{h,cpp}`) shared by the game and the balance sim. |
+| `Creatures` | The bestiary of mid-battle entrants — bombs and summons — datafied in `creatures.json`. |
 
-> **Planned (MILESTONES "Core split"):** `Battle.h` is being split by concern —
-> `core/Combat.h` (the spell/effect data model), `core/Entity.h` (`Entity` + its
-> kind/control/snapshot), and `core/Battle.h` (the engine only). `Grid` stays the
-> arena terrain; match *config* (the closing ring, economy, …) moves into the
-> `Ruleset` (below), leaving `Battle` as pure engine state + logic.
+> **Core split (done).** `Battle.h` was split by concern — `core/Combat.h` (the
+> spell/effect data model), `core/Entity.h` (`Entity` + its kind/control/snapshot),
+> and `core/Battle.h` (the engine only). `Grid` stays the arena terrain, and match
+> *config* (the closing ring, economy, team size, arena, bans) now lives in the
+> `Ruleset` (below), leaving `Battle` as pure engine state + logic. It was a
+> behaviour-preserving refactor — same public surface, full suite green.
+
+### The combat event stream
+
+As `Battle` resolves a turn it appends typed, ordered `BattleEvent`s
+(`TurnStart`, `Move`, `Cast`, `Damage`, `Heal`, `Status`, `Death`) to a log it
+exposes via `events()`. This is **pure data, deterministic, and never affects
+resolution** — it only *narrates* what happened, in order, addressing entities by
+stable `EntityId`. One stream feeds four consumers, so it's built once:
+
+- the GUI **combat log** panel (shipped, §6);
+- **animation** event-clips — a `Cast` event triggers a unit's cast clip (§6);
+- **replays** (Phase 5) — an ordered, replayable record;
+- **PvP state deltas** (§7) — the same shape the server would broadcast.
+
+The AI turns event recording *off* on its planning clones (`setEventRecording`),
+so the search stays cheap.
 
 ### The roster invariant
 
@@ -249,18 +270,23 @@ Entirely in `render/`. `tb_core` stays graphics-free (§1). The engine's only jo
 is to expose **stable semantic keys** the renderer can map to art — it already
 does this for almost everything.
 
-### How the renderer works today (the baseline)
+### How the renderer works (baseline + packs)
 
-`Renderer.cpp` is **pure geometric primitives with a hardcoded palette**: tiles
-are colored rectangles keyed off `TileType`, units are circles colored by
-`Faction`, ground effects are shapes keyed off `GroundKind`, statuses are dots.
-There are *no* textures and *no* asset loading yet. Every draw is driven by
-read-only `Battle` state plus the per-frame `ViewState` — the frontend already
-knows nothing the engine didn't hand it.
+`Renderer.cpp`'s **baseline is pure geometric primitives with a hardcoded
+palette**: tiles are colored rectangles keyed off `TileType`, units are circles
+colored by `Faction`, ground effects are shapes keyed off `GroundKind`, statuses
+are dots. Every draw is driven by read-only `Battle` state plus the per-frame
+`ViewState` — the frontend knows nothing the engine didn't hand it.
 
-This primitive renderer becomes the **built-in default pack / fallback** (see
-below). It is never removed: it guarantees the game is *always* renderable, even
-with no pack or a half-finished one.
+That primitive renderer is the **built-in default pack / fallback**, and it is
+never removed: it guarantees the game is *always* renderable, even with no pack or
+a half-finished one. **On top of it, the sprite-pack seam has shipped**
+(`render/PackManifest` parses + validates `pack.json` headlessly; `render/SpritePack`
+owns the atlas textures and resolves keys). Tiles, units, and spell-bar icons now
+route through the pack with the fallback ladder below; point the game at a pack
+with `ATB_PACK=<dir>` (absent ⇒ primitives, unchanged). Everything below the
+baseline paragraph is now *implemented*, not aspirational, except where a
+subsection marks a piece as a follow-up.
 
 ### The semantic keys a pack targets
 
@@ -275,11 +301,13 @@ and slugs — no engine change needed for most of it:
 | Status markers (DoT, Shield, buffs, Invisible) | `StatusEffect::Kind` |
 | Spell icons / cast VFX | `Spell::name` / the catalog `key` slug (`"fireball"`) |
 
-The **one small, optional, cosmetic addition** for per-creature art: an
-`appearanceKey` string on a build/entity (e.g. `"pyromancer"`), defaulting
-gracefully so a pack that doesn't supply it just falls back to the `Faction`
-tint. It is purely cosmetic — it never affects resolution, so it carries no
-trust weight even though it can be authored in data.
+Per-creature art needed **no core change at all**: summons and objects resolve
+through `units.<name>` then `spells.<name>` (e.g. a summoned `brute` → `units.brute`
+→ `spells.brute`), and champions fall back to `units.player` / `units.enemy` with
+a faction tint. A dedicated per-*champion* `appearanceKey` string (e.g.
+`"pyromancer"`) remains an *optional* future refinement — purely cosmetic, no
+trust weight — but the name-keyed lookup already gives packs on-field creature art
+for free, so it hasn't been needed.
 
 ### Pack format (atlas-based)
 
@@ -332,20 +360,28 @@ drawn; only the rect coordinates matter. Loose per-file PNGs stay a possible
 *authoring* convenience (the engine can pack a folder into a runtime atlas), but
 the canonical on-disk and in-VRAM form is the atlas.
 
-### Animations
+### Animations (shipped)
 
-A **clip** is an ordered list of atlas sub-rects plus `fps` and `loop`. Two
-sources drive them:
+A **clip** is an ordered list of atlas sub-rects (`rects`) plus `fps` and `loop`,
+parsed and validated by `PackManifest` (`Clip::frameAt` / `duration` pick the
+frame for a given time). Two sources drive them:
 
 - **Ambient** (`anim`) — loops while a unit simply exists (idle / flap).
-- **Event** (`cast`, later `hit` / `death` / `move`) — played once when the
-  engine reports that event, then the sprite returns to its ambient state. The
-  engine surfaces these as state deltas the renderer already sees (a cast, a
-  damage application); the renderer maps delta → clip.
+- **Event** (`cast`, later `hit` / `death`) — played *once* when the engine
+  reports that event, then the sprite reverts to ambient / static.
 
-Because clips are just rects on the already-bound atlas, animation costs no extra
-texture loads or binds. Static-only packs are fully valid — a still sprite is
-just a one-frame clip.
+The event trigger rides the **combat event stream** (§2): `render/Animator`
+consumes new `Cast` events off `battle.events()` each frame and stamps the actor's
+trigger time; `SpritePack::drawSprite`'s frame-aware overload then picks *cast
+clip while running → ambient loop → static rect*, and the renderer routes unit
+sprites through it. Animation state is transient frontend memory — it lives in
+`render/`, never `core/`, because it's cosmetic and touches no resolution.
+
+Because clips are just rects on the already-bound atlas, animation costs **no
+extra texture loads or binds**. Static-only packs are fully valid — a still sprite
+is just a one-frame clip. The shipped `default` and `example_upscaled` packs
+author a champion **cast flash** from existing atlas cells (no new art);
+`packs/README.md` has the artist-facing authoring guide.
 
 ### Resolution + fallback (packs are incremental)
 
@@ -363,18 +399,18 @@ are partial by design, which makes them approachable for first-time artists.
 
 ### Loading & selection
 
-A client setting points at a pack directory; it loads at startup, with optional
-**hot-reload** for fast iteration (re-scan the folder, re-upload textures — no
-restart, no recompile). Multiple installed packs can be switched in a settings
-menu. None of this involves the server.
+Today the `ATB_PACK=<dir>` environment variable points at a pack directory; it
+loads once at startup (absent/unloadable ⇒ primitives). **Hot-reload** (re-scan +
+re-upload textures for fast iteration) and an in-app **pack switcher** are natural
+follow-ups — both purely `render/`, and neither involves the server.
 
 ### Spell icons & the clickable spell bar
 
 Spell icons are the first place a pack's art becomes *interactive*, not just
-decorative. The battle screen gets a **clickable spell bar**: a HUD row of the
-active unit's loadout, where clicking a button selects that spell — so the player
-isn't forced to memorise the `1`–`9` hotkeys. The bar is *additive*: the hotkey
-digit stays drawn on each button, so the keyboard path still works.
+decorative. The battle screen has a **clickable spell bar** (shipped): a HUD row
+of the active unit's loadout, where clicking a button selects that spell — so the
+player isn't forced to memorise the `1`–`9` hotkeys. The bar is *additive*: the
+hotkey digit stays drawn on each button, so the keyboard path still works.
 
 Each slot's visual state is fully derivable from the `Entity` the renderer
 already receives (`spells[i]`, `spellCooldowns[i]`, current `ap`):
@@ -398,8 +434,9 @@ spells.<key> sprite in the active pack  →  built-in default icon  →  procedu
 badge (the hotkey digit + a short name on a faction-tinted chip)
 ```
 
-The same atlas sprite is reused in the **editor's skill dictionary** — one
-frame, both screens.
+The same atlas sprite is *designed* to be reused in the **editor's skill
+dictionary** — one frame, both screens — though wiring the editor cards through
+the pack is still a follow-up (the battle bar routes through it today).
 
 **Resolving the icon key without touching `core/`.** `Entity.spells[i]` is a
 `Spell` (combat data only) — it deliberately carries no catalog slug or id. The
@@ -417,15 +454,17 @@ board move. `ViewState` gains `selectedSpell` plus a parallel `spellIconKeys`
 (the slugs the frontend resolved); the renderer reads cost/cooldown/AP straight
 off the active `Entity`.
 
-### v1 scope vs later
+### What's shipped vs later
 
-- **v1**: atlas-based packs (static `rect` per key) + palette, manifest-driven,
-  fallback to primitives; clickable spell bar with procedural-badge fallback for
-  icons. One atlas page, no animation required.
-- **Later**: ambient `anim` + event clips (`cast`/`hit`/`death`), multi-page
-  atlases, runtime packing of loose PNGs, particles, and sound packs (the same
-  key→asset manifest idea, mapping events like "fireball cast" → a sound). The
-  manifest already reserves `anim`/`cast`, so adding these is additive.
+- **Shipped**: atlas-based packs (static `rect` per key) + palette, manifest-driven,
+  fallback to primitives; the clickable spell bar with procedural-badge fallback
+  for icons; the combat log (§2); and **animations** — ambient `anim` + the `cast`
+  event clip, driven off the event stream.
+- **Later**: more event clips (`hit` / `death`), ambient idle loops once packs
+  supply frames, multi-page atlases, ground-effect + status-marker pack routing,
+  editor-card icons, hot-reload, runtime packing of loose PNGs, particles, and
+  sound packs (the same key→asset manifest idea, mapping "fireball cast" → a
+  sound). All additive — the manifest and event stream already carry the seams.
 
 ---
 
@@ -557,9 +596,9 @@ A common misconception is that a match server must "host every possible match."
 It does not. A match is a *computation*, not a stored document. The server holds
 exactly three things:
 
-1. **Catalogs** — a handful of small JSON files (the official versions). The
-   11-spell catalog is a few KB; even hundreds of spells is ~100 KB. Custom
-   lobbies pin their own by hash for the lobby's lifetime.
+1. **Catalogs** — a handful of small JSON files (the official versions). The base
+   catalog is a few KB; even hundreds of spells is ~100 KB. Custom lobbies pin
+   their own by hash for the lobby's lifetime.
 2. **Live matches** — `Battle` objects in **RAM, not disk**: a 20×15 grid plus a
    few entities, a few KB each, **freed the instant the match ends**. Matches are
    constructed on demand when players queue, never enumerated or pre-generated.
@@ -593,7 +632,7 @@ ever, for casual customs.
 
 | You want to… | Where | Status |
 |--------------|-------|--------|
-| **Restyle the game with your own sprites/palette** | drop a pack folder + `pack.json` in; no code, no recompile, no server involvement (§6). | seam planned; primitive fallback works now |
+| **Restyle the game with your own sprites/palette** | drop a pack folder + `pack.json` in and point `ATB_PACK` at it; no code, no recompile, no server involvement (§6). Atlas sprites, palette re-themes, and `anim`/`cast` animations all supported. | works now |
 | **Add / change a spell** | the catalog: edit `data/catalog.json` (or `makeDefaultCatalog()`, the compiled fallback). Combine existing `Effect`s. | works now (data + compiled) |
 | **Add a new _mechanic_** (something no `Effect` can express) | extend the `Effect`/`StatusEffect`/`GroundKind` vocabulary in `core/`, then resolve it in `Battle`. This is an *engine* change, reviewed accordingly. | core change |
 | **Write your own AI** | `AI.cpp` today. A pluggable `Brain` strategy interface (so alternatives drop in without forking) is planned. | compiled today; interface planned |
@@ -615,13 +654,14 @@ Ordered roughly by how much each unlocks the sandbox vision.
 1. **Catalog loader** — `data/catalog.json` + schema validation; `makeDefaultCatalog()`
    becomes its generator. Engine `core/` unchanged. *(Foundational for content modding.)*
 2. **Catalog versioning + content hash** — the trust anchor for §5/§7.
-3. **Sprite/asset pack seam** — route the renderer's draws through a pack
-   manifest with primitive fallback (§6); add the optional cosmetic
-   `appearanceKey`. *(Foundational for presentation modding — independent of the
-   content track, and safe to ship first since it touches no authority.)*
-4. **Clickable spell bar + spell icons** — a HUD loadout row that selects spells
-   by click (not just `1`–`9`), with the pack-icon → default → procedural-badge
-   fallback (§6). Pairs with the asset seam; touches only `render/` + `main.cpp`.
+3. **Sprite/asset pack seam (done)** — the renderer's draws route through a pack
+   manifest with primitive fallback (§6); per-creature art resolves by name key
+   (no `appearanceKey` needed). *(Foundational for presentation modding —
+   independent of the content track, and safe since it touches no authority.
+   Ships with the combat log and `anim`/`cast` animations, both also in §6.)*
+4. **Clickable spell bar + spell icons (done)** — a HUD loadout row that selects
+   spells by click (not just `1`–`9`), with the pack-icon → default →
+   procedural-badge fallback (§6). `render/` + `main.cpp` only.
 5. **Pluggable AI** — a `Brain` strategy interface so community AIs drop in
    without forking `AI.cpp`.
 6. **Networked PvP** — transport (WebSocket/TCP), lobby/matchmaking, the
@@ -632,8 +672,11 @@ Ordered roughly by how much each unlocks the sandbox vision.
    needs deeper planning than the beam search reaches); Fireball is the weakest
    attack (radius-buff candidate). Good first issues.
 
-*(Items 1–2 — catalog loader + content hash — are done; see MILESTONES Phase 1.
-Creatures.json followed the same pattern.)*
+*(Items 1–4 are done: catalog loader + content hash (MILESTONES Phase 1;
+`creatures.json` followed the same pattern), and the presentation track — pack
+seam, spell bar, combat log, and animations (Phase 2.1–2.4). Remaining in Phase
+2: the `packs/default/` authoring guide polish and secondary pack routing.
+Pluggable AI (item 5) and PvP (item 6) are the next unstarted milestones.)*
 
 **Match rulesets (shipped).** `data/rules.json` — the **third pinned artifact**
 beside catalog + creatures — datafies the match format (team size, banned spells,
