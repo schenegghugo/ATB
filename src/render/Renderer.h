@@ -67,8 +67,10 @@ struct ViewState {
 // Optional presentation pack (art/palette). Null = the built-in primitives, so
 // the renderer works identically with no pack. Defined in SpritePack.h.
 class SpritePack;
+// Optional per-entity clip playback state (§2.4); null = no event animations.
+class Animator;
 
 void drawFrame(const Layout& l, const Battle& battle, const ViewState& view,
-               const SpritePack* pack = nullptr);
+               const SpritePack* pack = nullptr, const Animator* anim = nullptr);
 
 } // namespace tb::render

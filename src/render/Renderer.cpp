@@ -1,5 +1,6 @@
 #include "Renderer.h"
 
+#include "Animator.h"
 #include "SpritePack.h"
 
 #include "raylib.h"
@@ -229,8 +230,9 @@ Vec2i screenToGrid(const Layout& l, int px, int py) {
 }
 
 void drawFrame(const Layout& l, const Battle& battle, const ViewState& view,
-               const SpritePack* pack) {
+               const SpritePack* pack, const Animator* anim) {
     const Grid& g = battle.grid();
+    const double now = GetTime(); // one clock for every ambient/event clip this frame
     ClearBackground(kBackground);
 
     // --- Tiles ---------------------------------------------------------------
@@ -297,8 +299,11 @@ void drawFrame(const Layout& l, const Battle& battle, const ViewState& view,
 
     // --- Entities ------------------------------------------------------------
     const auto& units = battle.units();
-    for (const Entity& e : units) {
+    for (EntityId id = 0; id < units.size(); ++id) {
+        const Entity& e = units[id];
         if (!e.alive()) continue;
+        // How far into a cast clip this unit is (−1 = not casting); ambient uses `now`.
+        const double castT = anim ? anim->castElapsed(id, now) : -1.0;
         Color color = e.team == Faction::Player ? kPlayer : kEnemy;
         if (e.invisible()) color = Fade(color, 0.35f); // concealed: drawn ghosted
         Vector2 c = tileCenter(l, e.pos);
@@ -319,11 +324,11 @@ void drawFrame(const Layout& l, const Battle& battle, const ViewState& view,
         bool drew = false;
         if (pack) {
             if (e.kind != EntityKind::Champion)
-                drew = pack->drawSprite("units." + e.name, dest, tint) ||
-                       pack->drawSprite("spells." + e.name, dest, tint);
+                drew = pack->drawSprite("units." + e.name, dest, now, castT, tint) ||
+                       pack->drawSprite("spells." + e.name, dest, now, castT, tint);
             if (!drew)
                 drew = pack->drawSprite(e.team == Faction::Player ? "units.player" : "units.enemy",
-                                        dest, tint);
+                                        dest, now, castT, tint);
         }
         if (!drew) {
             DrawCircleV(c, l.tileSize * 0.36f, color);

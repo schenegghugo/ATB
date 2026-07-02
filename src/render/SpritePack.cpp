@@ -34,12 +34,26 @@ void SpritePack::unload() {
 }
 
 bool SpritePack::drawSprite(const std::string& key, Rectangle dest, Color tint) const {
+    return drawSprite(key, dest, /*now=*/0.0, /*castElapsed=*/-1.0, tint);
+}
+
+bool SpritePack::drawSprite(const std::string& key, Rectangle dest, double now, double castElapsed,
+                            Color tint) const {
     const SpriteDef* sd = manifest_.findSprite(key);
     if (!sd) return false;
     auto it = atlases_.find(sd->atlas);
     if (it == atlases_.end()) return false; // atlas image didn't load → fall back
-    const Rectangle src{static_cast<float>(sd->x), static_cast<float>(sd->y),
-                        static_cast<float>(sd->w), static_cast<float>(sd->h)};
+
+    // Pick the source rect: a running one-shot cast clip wins, then ambient, then
+    // the static rect. `castElapsed` past the clip's duration means it finished.
+    std::array<int, 4> r{sd->x, sd->y, sd->w, sd->h};
+    if (castElapsed >= 0.0 && sd->cast && castElapsed < sd->cast->duration())
+        r = sd->cast->frameAt(castElapsed);
+    else if (sd->anim)
+        r = sd->anim->frameAt(now);
+
+    const Rectangle src{static_cast<float>(r[0]), static_cast<float>(r[1]),
+                        static_cast<float>(r[2]), static_cast<float>(r[3])};
     DrawTexturePro(it->second, src, dest, Vector2{0, 0}, 0.0f, tint);
     return true;
 }

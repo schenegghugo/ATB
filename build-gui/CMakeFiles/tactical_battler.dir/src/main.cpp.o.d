@@ -142,18 +142,18 @@ CMakeFiles/tactical_battler.dir/src/main.cpp.o: \
  /home/hugo/Projects/ATB/src/data/CreatureJson.h \
  /home/hugo/Projects/ATB/src/data/MapJson.h \
  /home/hugo/Projects/ATB/src/data/RulesetJson.h \
- /home/hugo/Projects/ATB/src/render/BuildEditorScreen.h \
- /home/hugo/Projects/ATB/src/render/ContentPaths.h \
- /home/hugo/Projects/ATB/src/render/Renderer.h \
- /home/hugo/Projects/ATB/src/render/SpritePack.h \
- /home/hugo/Projects/ATB/src/render/PackManifest.h \
+ /home/hugo/Projects/ATB/src/render/Animator.h \
  /usr/include/c++/16.1.1/unordered_map \
  /usr/include/c++/16.1.1/bits/unordered_map.h \
  /usr/include/c++/16.1.1/bits/hashtable.h \
  /usr/include/c++/16.1.1/bits/hashtable_policy.h \
  /usr/include/c++/16.1.1/ext/aligned_buffer.h \
  /usr/include/c++/16.1.1/bits/node_handle.h \
- /home/hugo/Projects/ATB/build-gui/_deps/raylib-src/src/raylib.h \
+ /home/hugo/Projects/ATB/src/render/BuildEditorScreen.h \
+ /home/hugo/Projects/ATB/src/render/ContentPaths.h \
+ /home/hugo/Projects/ATB/src/render/Renderer.h \
+ /home/hugo/Projects/ATB/src/render/SpritePack.h \
+ /home/hugo/Projects/ATB/src/render/PackManifest.h \
  /usr/include/c++/16.1.1/algorithm \
  /usr/include/c++/16.1.1/bits/stl_algo.h \
  /usr/include/c++/16.1.1/bits/algorithmfwd.h \
@@ -164,6 +164,8 @@ CMakeFiles/tactical_battler.dir/src/main.cpp.o: \
  /usr/include/c++/16.1.1/bits/ranges_algobase.h \
  /usr/include/c++/16.1.1/pstl/glue_algorithm_defs.h \
  /usr/include/c++/16.1.1/pstl/execution_defs.h \
+ /usr/include/c++/16.1.1/array \
+ /home/hugo/Projects/ATB/build-gui/_deps/raylib-src/src/raylib.h \
  /usr/include/c++/16.1.1/memory \
  /usr/include/c++/16.1.1/bits/stl_raw_storage_iter.h \
  /usr/include/c++/16.1.1/bits/align.h \

@@ -6,6 +6,7 @@
 //
 #include "render/PackManifest.h"
 
+#include <array>
 #include <cstdio>
 #include <string>
 
@@ -35,9 +36,11 @@ int main() {
             "palette": { "wall": "#464e60", "floor": "#1e2230ff" },
             "sprites": {
               "tiles.wall":      { "atlas": "main", "rect": [0, 0, 32, 32] },
-              "units.player":    { "atlas": "main", "rect": [0, 64, 32, 48], "anchor": "bottom" },
+              "units.player":    { "atlas": "main", "rect": [0, 64, 32, 48], "anchor": "bottom",
+                                   "anim": { "rects": [[0,64,32,48],[32,64,32,48]], "fps": 4 } },
               "spells.fireball": { "atlas": "main", "rect": [0, 96, 32, 32],
-                                   "cast": { "rects": [[0,96,32,32]], "fps": 12, "loop": false } }
+                                   "cast": { "rects": [[0,96,32,32],[32,96,32,32],[64,96,32,32]],
+                                             "fps": 12, "loop": false } }
             }
         })";
         PackManifestLoad r = loadPackManifestFromString(src);
@@ -48,7 +51,20 @@ int main() {
               "atlas filename parsed");
         const SpriteDef* fb = r.manifest.findSprite("spells.fireball");
         CHECK(fb && fb->w == 32 && fb->h == 32, "sprite rect parsed");
+        // Cast clip (one-shot): 3 frames, fps 12, non-looping.
+        CHECK(fb && fb->cast && fb->cast->frames.size() == 3, "cast clip frames parsed");
+        CHECK(fb && fb->cast && fb->cast->fps == 12.0 && !fb->cast->loop, "cast fps/loop parsed");
+        // frameAt: holds first before start, advances by fps, holds last past the end.
+        CHECK(fb && fb->cast->frameAt(-1.0) == (std::array<int, 4>{0, 96, 32, 32}), "cast t<0 → frame 0");
+        CHECK(fb && fb->cast->frameAt(0.10) == (std::array<int, 4>{32, 96, 32, 32}), "cast advances (frame 1)");
+        CHECK(fb && fb->cast->frameAt(5.0) == (std::array<int, 4>{64, 96, 32, 32}), "one-shot holds last frame");
+        CHECK(fb && fb->cast->duration() > 0.24 && fb->cast->duration() < 0.26, "cast duration = frames/fps");
+        // Ambient clip (loops): defaults loop → true, wraps.
         const SpriteDef* pl = r.manifest.findSprite("units.player");
+        CHECK(pl && pl->anim && pl->anim->loop, "anim defaults to loop=true");
+        CHECK(pl && pl->anim->duration() == 0.0, "a looping clip reports no fixed duration");
+        CHECK(pl && pl->anim->frameAt(0.30) == (std::array<int, 4>{32, 64, 32, 48}), "ambient advances (frame 1)");
+        CHECK(pl && pl->anim->frameAt(0.55) == (std::array<int, 4>{0, 64, 32, 48}), "ambient loop wraps to frame 0");
         CHECK(pl && pl->anchor == SpriteDef::Anchor::Bottom, "anchor 'bottom' parsed");
         CHECK(fb && fb->anchor == SpriteDef::Anchor::Center, "anchor defaults to center");
         const RGBA* wall = r.manifest.findPalette("wall");
@@ -84,6 +100,24 @@ int main() {
         CHECK(rejectsWith(R"({"schema":1,"palette":{"wall":"#zzzzzz"}})", "non-hex"),
               "palette non-hex rejected");
         CHECK(rejectsWith("not json", "parse error"), "garbage rejected");
+    }
+
+    std::printf("Strict validation rejects malformed clips\n");
+    {
+        auto sprite = [](const char* clip) {
+            return std::string(R"({"schema":1,"atlases":{"m":"a.png"},"sprites":{"x":{"atlas":"m",)"
+                               R"("rect":[0,0,8,8],)") + clip + "}}}";
+        };
+        CHECK(rejectsWith(sprite(R"("cast":{"rects":[]})"), "non-empty"),
+              "empty clip rects rejected");
+        CHECK(rejectsWith(sprite(R"("cast":{"rects":[[0,0,8]]})"), "[x, y, w, h]"),
+              "clip frame with wrong arity rejected");
+        CHECK(rejectsWith(sprite(R"("cast":{"rects":[[0,0,0,8]]})"), "width/height"),
+              "clip frame with zero size rejected");
+        CHECK(rejectsWith(sprite(R"("anim":{"rects":[[0,0,8,8]],"fps":0})"), "fps"),
+              "clip fps <= 0 rejected");
+        CHECK(rejectsWith(sprite(R"("anim":{"rects":[[0,0,8,8]],"bogus":1})"), "unknown field"),
+              "unknown clip field rejected");
     }
 
     if (g_fails == 0) std::printf("\nALL PASS (0 failures)\n");

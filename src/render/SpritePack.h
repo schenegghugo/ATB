@@ -28,8 +28,17 @@ public:
 
     // Blit the sprite for `key` into `dest` (source scaled to fill it), returning
     // true if it drew. False = no such sprite, or its atlas image didn't load →
-    // the caller should paint its primitive instead.
+    // the caller should paint its primitive instead. Always the static frame.
     bool drawSprite(const std::string& key, Rectangle dest, Color tint = WHITE) const;
+
+    // Frame-aware draw (§2.4). Picks the source sub-rect by clip state:
+    //   - if `castElapsed >= 0` and the sprite has a `cast` clip still running,
+    //     play that one-shot at that offset;
+    //   - else if the sprite has an ambient `anim` clip, loop it at time `now`;
+    //   - else the static rect.
+    // Same true/false contract as drawSprite (false → caller paints its primitive).
+    bool drawSprite(const std::string& key, Rectangle dest, double now, double castElapsed,
+                    Color tint = WHITE) const;
 
     // Palette colour for `key`, or `fallback` if the pack doesn't override it.
     [[nodiscard]] Color paletteOr(const std::string& key, Color fallback) const;

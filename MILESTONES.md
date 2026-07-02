@@ -555,9 +555,9 @@ markers wiring, the editor skill-dictionary icons, animation clips (2.4).
 - **v1**: static `rect` per key + palette, one atlas page, hot-reload. Animation
   (`anim`/`cast`) fields are reserved in the manifest but optional.
 
-### 2.3 ◐ Combat log + structured engine event stream
+### 2.3 ☑ Combat log + structured engine event stream
 *Engine stream shipped + headless-tested (`tb_event_demo`, in CI); GUI log panel
-implemented, pending a visual pass.* `core/Event.h` (`BattleEvent`/`EventType`);
+implemented and visually confirmed in-game.* `core/Event.h` (`BattleEvent`/`EventType`);
 `Battle` appends via `emit()` at TurnStart/Move/Cast/Damage/Heal/Status/Death and
 exposes `events()`. The AI disables recording on its planning clones
 (`setEventRecording`) so they stay cheap. Renderer draws a scrolling log in the
@@ -577,11 +577,22 @@ displacement isn't emitted as Move yet.
   and is the natural basis for **replays** (Phase 5) and **PvP state deltas**
   (Phase 4). Build it once, here.
 
-### 2.4 ☐ Animations (after the static seam works)
-- A **clip** = ordered atlas sub-rects + `fps` + `loop`. **Ambient** (`anim`,
-  loops) vs **event** (`cast`, later `hit`/`death`, played once when the matching
-  **engine event** from 2.3 arrives, then back to ambient). Cheap — no extra
-  texture binds.
+### 2.4 ☑ Animations (after the static seam works)
+*Clip data model + parsing shipped and headless-tested (`tb_pack_demo`, in CI);
+event-driven cast flash visually confirmed in-game.* A **clip** = ordered atlas
+sub-rects (`rects`) + `fps` + `loop`, parsed/validated by `PackManifest`
+(`Clip::frameAt`/`duration` pick the frame). **Ambient** (`anim`, loops) vs
+**event** (`cast`, plays once then reverts). The one-shot trigger reuses the
+§2.3 event stream: `render/Animator` consumes new `Cast` events off
+`battle.events()` and stamps the actor's trigger time; `SpritePack::drawSprite`
+gained a frame-aware overload (cast clip while running → ambient loop → static
+rect); the renderer routes **unit** sprites through it (`main.cpp` syncs the
+`Animator` each frame, resets it on new battle/rematch). Cheap — same single
+atlas bind, no extra textures. The shipped `default` + `example_upscaled` packs
+author a champion **cast flash** from existing atlas cells (no new art), and
+`tools/gen_pack.py` emits it too. Artist-facing authoring guide added to
+`packs/README.md` (*Editing the art* + *Animations*). *(Later `hit`/`death`
+event clips + ambient idle loops are pure data once packs supply the frames.)*
 
 ### 2.5 ☐ Ship a `packs/default/` example
 A copy-able starter (an atlas + manifest, or palette-only) + a short

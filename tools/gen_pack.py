@@ -202,6 +202,14 @@ def main():
         fn(pen, col) if col is not None else fn(pen)
         sprites[key] = {"atlas": "main", "rect": [ox, oy, CELL, CELL]}
 
+    # Cast flash (§2.4): when a champion casts, it pops to the attack-burst cell
+    # for a couple of frames, then settles back to its own sprite. The frames just
+    # point at cells already in the atlas, so it costs no extra art. See
+    # packs/README.md ("Animations") for how to author your own.
+    burst = sprites["spells.attack"]["rect"]
+    for who in ("units.player", "units.enemy"):
+        sprites[who]["cast"] = {"rects": [burst, burst, sprites[who]["rect"]], "fps": 12}
+
     with open(os.path.join(out, "atlas.png"), "wb") as f:
         f.write(atlas.png_bytes())
 

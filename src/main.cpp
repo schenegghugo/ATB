@@ -30,6 +30,7 @@
 #include "data/CreatureJson.h"
 #include "data/MapJson.h"
 #include "data/RulesetJson.h"
+#include "render/Animator.h"
 #include "render/BuildEditorScreen.h"
 #include "render/ContentPaths.h"
 #include "render/Renderer.h"
@@ -209,6 +210,7 @@ int main() {
 
     AppState state = AppState::Editor;
     std::optional<Battle> battle;
+    render::Animator animator; // per-entity event-clip playback (cast flashes, §2.4)
     std::string status;
     int selectedSpell = 0;
     int logScroll = 0; // combat-log scrollback (0 = pinned to newest)
@@ -220,6 +222,7 @@ int main() {
         battle.emplace(buildMatch(session.ruleset, editor.playerTeam(), editor.enemyTeam(),
                                   session.catalog, /*seed=*/0, session.creatures,
                                   session.staticArena ? &*session.staticArena : nullptr));
+        animator.reset();
         selectedSpell = 0;
         logScroll = 0;
         aiTimer = 0.0f;
@@ -252,6 +255,7 @@ int main() {
             battle.emplace(buildMatch(session.ruleset, editor.playerTeam(), editor.enemyTeam(),
                                       session.catalog, /*seed=*/0, session.creatures,
                                       session.staticArena ? &*session.staticArena : nullptr));
+            animator.reset();
             selectedSpell = 0;
             logScroll = 0;
             status = "New arena. Player turn.";
@@ -347,8 +351,11 @@ int main() {
             }
         }
 
+        // Trigger cast-clip animations off the same event stream the log reads.
+        animator.sync(*battle, GetTime());
+
         BeginDrawing();
-        render::drawFrame(layout, *battle, view, pack ? &*pack : nullptr);
+        render::drawFrame(layout, *battle, view, pack ? &*pack : nullptr, &animator);
         EndDrawing();
     }
 

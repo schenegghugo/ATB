@@ -15,8 +15,10 @@
     "tiles.floor":       { "atlas": "main", "rect": [0, 0, 96, 96] },
     "tiles.wall":        { "atlas": "main", "rect": [96, 0, 96, 96] },
     "tiles.obstacle":    { "atlas": "main", "rect": [192, 0, 96, 96] },
-    "units.player":      { "atlas": "main", "rect": [288, 0, 96, 96] },
-    "units.enemy":       { "atlas": "main", "rect": [384, 0, 96, 96] },
+    "units.player":      { "atlas": "main", "rect": [288, 0, 96, 96],
+                           "cast": { "rects": [[480,0,96,96],[480,0,96,96],[288,0,96,96]], "fps": 12 } },
+    "units.enemy":       { "atlas": "main", "rect": [384, 0, 96, 96],
+                           "cast": { "rects": [[480,0,96,96],[480,0,96,96],[384,0,96,96]], "fps": 12 } },
     "spells.attack":     { "atlas": "main", "rect": [480, 0, 96, 96] },
 
     "spells.fireball":   { "atlas": "main", "rect": [0, 96, 96, 96] },

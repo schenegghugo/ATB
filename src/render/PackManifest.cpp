@@ -39,6 +39,44 @@ bool parseHexColor(const std::string& s, const std::string& ctx, RGBA& out, Erro
     return true;
 }
 
+// Parse an `anim`/`cast` clip: { "rects": [[x,y,w,h], ...], "fps"?, "loop"? }.
+// `defaultLoop` differs per flavour (ambient loops; a one-shot doesn't).
+void parseClip(const json::Value& v, const std::string& ctx, bool defaultLoop, Clip& out,
+               Errors& e) {
+    if (!v.isObject()) { e.push_back(ctx + ": expected an object"); return; }
+    jsonread::checkAllowed(v, {"rects", "fps", "loop"}, ctx, e);
+
+    const json::Value* rects = v.find("rects");
+    if (!rects || !rects->isArray() || rects->asArray().empty()) {
+        e.push_back(ctx + ": \"rects\" must be a non-empty array of [x, y, w, h]");
+    } else {
+        for (std::size_t f = 0; f < rects->asArray().size(); ++f) {
+            const json::Value& fr = rects->asArray()[f];
+            const std::string fctx = ctx + ".rects[" + std::to_string(f) + "]";
+            if (!fr.isArray() || fr.asArray().size() != 4) {
+                e.push_back(fctx + ": must be [x, y, w, h]");
+                continue;
+            }
+            int r[4] = {0, 0, 0, 0};
+            bool okvals = true;
+            for (int i = 0; i < 4; ++i)
+                if (!jsonread::toInt(fr.asArray()[static_cast<std::size_t>(i)], r[i]) || r[i] < 0) {
+                    e.push_back(fctx + ": values must be non-negative integers");
+                    okvals = false;
+                }
+            if (okvals && (r[2] <= 0 || r[3] <= 0)) {
+                e.push_back(fctx + ": width/height must be > 0");
+                okvals = false;
+            }
+            if (okvals) out.frames.push_back({r[0], r[1], r[2], r[3]});
+        }
+    }
+
+    out.fps = jsonread::optDouble(v, "fps", 8.0, ctx, e);
+    if (out.fps <= 0.0) e.push_back(ctx + ": \"fps\" must be > 0");
+    out.loop = jsonread::optBool(v, "loop", defaultLoop, ctx, e);
+}
+
 void parseSprite(const json::Value& v, const std::string& key, const PackManifest& m,
                  SpriteDef& out, Errors& e) {
     const std::string ctx = "sprites." + key;
@@ -72,7 +110,17 @@ void parseSprite(const json::Value& v, const std::string& key, const PackManifes
         else if (a->asString() == "bottom")
             out.anchor = SpriteDef::Anchor::Bottom;
     }
-    // anim/cast tolerated but not interpreted in v1.
+
+    if (const json::Value* a = v.find("anim")) {
+        Clip c;
+        parseClip(*a, ctx + ".anim", /*defaultLoop=*/true, c, e);
+        out.anim = std::move(c);
+    }
+    if (const json::Value* c = v.find("cast")) {
+        Clip clip;
+        parseClip(*c, ctx + ".cast", /*defaultLoop=*/false, clip, e);
+        out.cast = std::move(clip);
+    }
 }
 
 } // namespace
