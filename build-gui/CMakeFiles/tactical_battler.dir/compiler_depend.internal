@@ -10,6 +10,7 @@ CMakeFiles/tactical_battler.dir/src/main.cpp.o
  /home/hugo/Projects/ATB/src/core/Combat.h
  /home/hugo/Projects/ATB/src/core/Creatures.h
  /home/hugo/Projects/ATB/src/core/Entity.h
+ /home/hugo/Projects/ATB/src/core/Event.h
  /home/hugo/Projects/ATB/src/core/Grid.h
  /home/hugo/Projects/ATB/src/core/Match.h
  /home/hugo/Projects/ATB/src/core/Ruleset.h
@@ -920,6 +921,7 @@ CMakeFiles/tactical_battler.dir/src/render/Renderer.cpp.o
  /home/hugo/Projects/ATB/src/core/Battle.h
  /home/hugo/Projects/ATB/src/core/Combat.h
  /home/hugo/Projects/ATB/src/core/Entity.h
+ /home/hugo/Projects/ATB/src/core/Event.h
  /home/hugo/Projects/ATB/src/core/Grid.h
  /home/hugo/Projects/ATB/src/core/Storm.h
  /home/hugo/Projects/ATB/src/render/PackManifest.h
@@ -1004,6 +1006,7 @@ CMakeFiles/tactical_battler.dir/src/render/Renderer.cpp.o
  /usr/include/c++/16.1.1/bits/hash_bytes.h
  /usr/include/c++/16.1.1/bits/hashtable.h
  /usr/include/c++/16.1.1/bits/hashtable_policy.h
+ /usr/include/c++/16.1.1/bits/intcmp.h
  /usr/include/c++/16.1.1/bits/invoke.h
  /usr/include/c++/16.1.1/bits/iterator_concepts.h
  /usr/include/c++/16.1.1/bits/localefwd.h
@@ -1040,6 +1043,7 @@ CMakeFiles/tactical_battler.dir/src/render/Renderer.cpp.o
  /usr/include/c++/16.1.1/bits/stl_iterator_base_funcs.h
  /usr/include/c++/16.1.1/bits/stl_iterator_base_types.h
  /usr/include/c++/16.1.1/bits/stl_pair.h
+ /usr/include/c++/16.1.1/bits/stl_relops.h
  /usr/include/c++/16.1.1/bits/stl_tempbuf.h
  /usr/include/c++/16.1.1/bits/stl_uninitialized.h
  /usr/include/c++/16.1.1/bits/stl_vector.h
@@ -1085,6 +1089,7 @@ CMakeFiles/tactical_battler.dir/src/render/Renderer.cpp.o
  /usr/include/c++/16.1.1/type_traits
  /usr/include/c++/16.1.1/typeinfo
  /usr/include/c++/16.1.1/unordered_map
+ /usr/include/c++/16.1.1/utility
  /usr/include/c++/16.1.1/vector
  /usr/include/c++/16.1.1/x86_64-pc-linux-gnu/bits/c++allocator.h
  /usr/include/c++/16.1.1/x86_64-pc-linux-gnu/bits/c++config.h

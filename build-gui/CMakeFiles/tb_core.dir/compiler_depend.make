@@ -6,6 +6,7 @@ CMakeFiles/tb_core.dir/src/core/AI.cpp.o: /home/hugo/Projects/ATB/src/core/AI.cp
   /home/hugo/Projects/ATB/src/core/Battle.h \
   /home/hugo/Projects/ATB/src/core/Combat.h \
   /home/hugo/Projects/ATB/src/core/Entity.h \
+  /home/hugo/Projects/ATB/src/core/Event.h \
   /home/hugo/Projects/ATB/src/core/Grid.h \
   /home/hugo/Projects/ATB/src/core/Storm.h \
   /usr/include/alloca.h \
@@ -193,6 +194,7 @@ CMakeFiles/tb_core.dir/src/core/Battle.cpp.o: /home/hugo/Projects/ATB/src/core/B
   /home/hugo/Projects/ATB/src/core/Battle.h \
   /home/hugo/Projects/ATB/src/core/Combat.h \
   /home/hugo/Projects/ATB/src/core/Entity.h \
+  /home/hugo/Projects/ATB/src/core/Event.h \
   /home/hugo/Projects/ATB/src/core/Grid.h \
   /home/hugo/Projects/ATB/src/core/Storm.h \
   /usr/include/alloca.h \
@@ -1139,6 +1141,7 @@ CMakeFiles/tb_core.dir/src/core/Match.cpp.o: /home/hugo/Projects/ATB/src/core/Ma
   /home/hugo/Projects/ATB/src/core/Build.h \
   /home/hugo/Projects/ATB/src/core/Combat.h \
   /home/hugo/Projects/ATB/src/core/Entity.h \
+  /home/hugo/Projects/ATB/src/core/Event.h \
   /home/hugo/Projects/ATB/src/core/Grid.h \
   /home/hugo/Projects/ATB/src/core/Match.h \
   /home/hugo/Projects/ATB/src/core/Ruleset.h \
@@ -3673,10 +3676,6 @@ CMakeFiles/tb_core.dir/src/data/SpellJson.cpp.o: /home/hugo/Projects/ATB/src/dat
 
 /usr/include/c++/16.1.1/bits/unordered_set.h:
 
-/usr/include/c++/16.1.1/string:
-
-/usr/include/bits/pthread_stack_min-dynamic.h:
-
 /usr/include/c++/16.1.1/bits/stl_deque.h:
 
 /usr/include/c++/16.1.1/bits/string_view.tcc:
@@ -3847,6 +3846,8 @@ CMakeFiles/tb_core.dir/src/data/SpellJson.cpp.o: /home/hugo/Projects/ATB/src/dat
 
 /usr/include/bits/types/__fpos64_t.h:
 
+/home/hugo/Projects/ATB/src/core/Event.h:
+
 /home/hugo/Projects/ATB/src/core/Combat.h:
 
 /home/hugo/Projects/ATB/src/core/Entity.h:
@@ -3867,6 +3868,26 @@ CMakeFiles/tb_core.dir/src/data/SpellJson.cpp.o: /home/hugo/Projects/ATB/src/dat
 
 /usr/include/bits/libc-header-start.h:
 
+/usr/include/bits/byteswap.h:
+
+/usr/include/bits/time64.h:
+
+/usr/include/bits/stdlib-float.h:
+
+/usr/include/c++/16.1.1/bits/ranges_algo.h:
+
+/usr/include/c++/16.1.1/bits/stl_construct.h:
+
+/usr/include/c++/16.1.1/bits/version.h:
+
+/usr/include/bits/libm-simd-decl-stubs.h:
+
+/usr/include/bits/pthreadtypes-arch.h:
+
+/usr/include/c++/16.1.1/new:
+
+/usr/include/bits/types/struct_FILE.h:
+
 /usr/include/bits/errno.h:
 
 /usr/include/c++/16.1.1/bits/ranges_base.h:
@@ -3885,10 +3906,6 @@ CMakeFiles/tb_core.dir/src/data/SpellJson.cpp.o: /home/hugo/Projects/ATB/src/dat
 
 /usr/include/bits/types/clock_t.h:
 
-/usr/include/c++/16.1.1/bits/uses_allocator_args.h:
-
-/usr/include/asm-generic/errno-base.h:
-
 /usr/include/c++/16.1.1/cstdint:
 
 /usr/include/c++/16.1.1/initializer_list:
@@ -3896,26 +3913,6 @@ CMakeFiles/tb_core.dir/src/data/SpellJson.cpp.o: /home/hugo/Projects/ATB/src/dat
 /usr/include/asm-generic/bitsperlong.h:
 
 /usr/include/asm-generic/types.h:
-
-/usr/include/c++/16.1.1/bits/ranges_algo.h:
-
-/usr/include/c++/16.1.1/bits/stl_construct.h:
-
-/usr/include/c++/16.1.1/bits/version.h:
-
-/usr/include/bits/libm-simd-decl-stubs.h:
-
-/usr/include/bits/pthreadtypes-arch.h:
-
-/usr/include/c++/16.1.1/new:
-
-/usr/include/bits/types/struct_FILE.h:
-
-/usr/include/bits/byteswap.h:
-
-/usr/include/bits/time64.h:
-
-/usr/include/bits/stdlib-float.h:
 
 /usr/include/bits/stdlib-bsearch.h:
 
@@ -4008,6 +4005,14 @@ CMakeFiles/tb_core.dir/src/data/SpellJson.cpp.o: /home/hugo/Projects/ATB/src/dat
 /usr/include/c++/16.1.1/bits/stl_algo.h:
 
 /usr/include/c++/16.1.1/bits/stl_pair.h:
+
+/usr/include/asm-generic/errno-base.h:
+
+/usr/include/c++/16.1.1/bits/uses_allocator_args.h:
+
+/usr/include/c++/16.1.1/string:
+
+/usr/include/bits/pthread_stack_min-dynamic.h:
 
 /usr/include/c++/16.1.1/bits/vector.tcc:
 

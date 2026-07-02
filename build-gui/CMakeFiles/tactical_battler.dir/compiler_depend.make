@@ -9,6 +9,7 @@ CMakeFiles/tactical_battler.dir/src/main.cpp.o: /home/hugo/Projects/ATB/src/main
   /home/hugo/Projects/ATB/src/core/Combat.h \
   /home/hugo/Projects/ATB/src/core/Creatures.h \
   /home/hugo/Projects/ATB/src/core/Entity.h \
+  /home/hugo/Projects/ATB/src/core/Event.h \
   /home/hugo/Projects/ATB/src/core/Grid.h \
   /home/hugo/Projects/ATB/src/core/Match.h \
   /home/hugo/Projects/ATB/src/core/Ruleset.h \
@@ -915,6 +916,7 @@ CMakeFiles/tactical_battler.dir/src/render/Renderer.cpp.o: /home/hugo/Projects/A
   /home/hugo/Projects/ATB/src/core/Battle.h \
   /home/hugo/Projects/ATB/src/core/Combat.h \
   /home/hugo/Projects/ATB/src/core/Entity.h \
+  /home/hugo/Projects/ATB/src/core/Event.h \
   /home/hugo/Projects/ATB/src/core/Grid.h \
   /home/hugo/Projects/ATB/src/core/Storm.h \
   /home/hugo/Projects/ATB/src/render/PackManifest.h \
@@ -999,6 +1001,7 @@ CMakeFiles/tactical_battler.dir/src/render/Renderer.cpp.o: /home/hugo/Projects/A
   /usr/include/c++/16.1.1/bits/hash_bytes.h \
   /usr/include/c++/16.1.1/bits/hashtable.h \
   /usr/include/c++/16.1.1/bits/hashtable_policy.h \
+  /usr/include/c++/16.1.1/bits/intcmp.h \
   /usr/include/c++/16.1.1/bits/invoke.h \
   /usr/include/c++/16.1.1/bits/iterator_concepts.h \
   /usr/include/c++/16.1.1/bits/localefwd.h \
@@ -1035,6 +1038,7 @@ CMakeFiles/tactical_battler.dir/src/render/Renderer.cpp.o: /home/hugo/Projects/A
   /usr/include/c++/16.1.1/bits/stl_iterator_base_funcs.h \
   /usr/include/c++/16.1.1/bits/stl_iterator_base_types.h \
   /usr/include/c++/16.1.1/bits/stl_pair.h \
+  /usr/include/c++/16.1.1/bits/stl_relops.h \
   /usr/include/c++/16.1.1/bits/stl_tempbuf.h \
   /usr/include/c++/16.1.1/bits/stl_uninitialized.h \
   /usr/include/c++/16.1.1/bits/stl_vector.h \
@@ -1080,6 +1084,7 @@ CMakeFiles/tactical_battler.dir/src/render/Renderer.cpp.o: /home/hugo/Projects/A
   /usr/include/c++/16.1.1/type_traits \
   /usr/include/c++/16.1.1/typeinfo \
   /usr/include/c++/16.1.1/unordered_map \
+  /usr/include/c++/16.1.1/utility \
   /usr/include/c++/16.1.1/vector \
   /usr/include/c++/16.1.1/x86_64-pc-linux-gnu/bits/c++allocator.h \
   /usr/include/c++/16.1.1/x86_64-pc-linux-gnu/bits/c++config.h \
@@ -1532,6 +1537,10 @@ CMakeFiles/tactical_battler.dir/src/render/Renderer.cpp.o:
 
 /usr/include/gnu/stubs.h:
 
+/usr/include/linux/posix_types.h:
+
+/usr/include/bits/types/FILE.h:
+
 /usr/include/bits/types.h:
 
 /usr/include/c++/16.1.1/bits/utility.h:
@@ -1549,6 +1558,8 @@ CMakeFiles/tactical_battler.dir/src/render/Renderer.cpp.o:
 /usr/include/bits/types/time_t.h:
 
 /usr/include/bits/struct_mutex.h:
+
+/usr/include/c++/16.1.1/bits/range_access.h:
 
 /usr/include/asm-generic/errno.h:
 
@@ -1569,16 +1580,6 @@ CMakeFiles/tactical_battler.dir/src/render/Renderer.cpp.o:
 /usr/include/c++/16.1.1/cstdint:
 
 /usr/include/c++/16.1.1/initializer_list:
-
-libtb_core.a:
-
-/usr/include/c++/16.1.1/bits/functional_hash.h:
-
-/usr/include/c++/16.1.1/tr1/legendre_function.tcc:
-
-/usr/include/alloca.h:
-
-/usr/include/bits/stdint-least.h:
 
 /home/hugo/Projects/ATB/src/core/Combat.h:
 
@@ -1622,6 +1623,12 @@ _deps/raylib-src/src/raylib.h:
 
 /home/hugo/Projects/ATB/src/core/AI.h:
 
+/home/hugo/Projects/ATB/src/core/Event.h:
+
+/usr/include/c++/16.1.1/tr1/poly_laguerre.tcc:
+
+/usr/include/c++/16.1.1/typeinfo:
+
 /usr/include/c++/16.1.1/bits/allocator.h:
 
 /usr/include/c++/16.1.1/backward/binders.h:
@@ -1642,14 +1649,6 @@ _deps/raylib-src/src/raylib.h:
 
 /home/hugo/Projects/ATB/src/core/Entity.h:
 
-/usr/include/ctype.h:
-
-/usr/include/c++/16.1.1/bits/new_allocator.h:
-
-/usr/include/c++/16.1.1/tr1/modified_bessel_func.tcc:
-
-/usr/include/asm-generic/posix_types.h:
-
 /usr/include/bits/typesizes.h:
 
 /usr/include/c++/16.1.1/bits/shared_ptr_atomic.h:
@@ -1664,6 +1663,20 @@ _deps/raylib-src/src/raylib.h:
 
 /usr/include/asm-generic/int-ll64.h:
 
+/usr/include/c++/16.1.1/tr1/legendre_function.tcc:
+
+/usr/include/alloca.h:
+
+/usr/include/bits/stdint-least.h:
+
+/usr/include/ctype.h:
+
+/usr/include/c++/16.1.1/bits/new_allocator.h:
+
+/usr/include/c++/16.1.1/tr1/modified_bessel_func.tcc:
+
+/usr/include/asm-generic/posix_types.h:
+
 /usr/include/c++/16.1.1/tr1/hypergeometric.tcc:
 
 /usr/include/c++/16.1.1/pstl/execution_defs.h:
@@ -1671,10 +1684,6 @@ _deps/raylib-src/src/raylib.h:
 /home/hugo/Projects/ATB/src/core/Spells.h:
 
 /usr/include/bits/types/error_t.h:
-
-/usr/include/c++/16.1.1/memory:
-
-/home/hugo/Projects/ATB/src/core/Storm.h:
 
 /usr/lib/libxcb.so.1:
 
@@ -1766,6 +1775,12 @@ _deps/raylib-src/src/raylib.h:
 
 /usr/include/bits/stdint-uintn.h:
 
+/usr/include/bits/types/__FILE.h:
+
+/usr/include/features.h:
+
+/usr/include/bits/sched.h:
+
 /usr/include/bits/select.h:
 
 /usr/include/c++/16.1.1/x86_64-pc-linux-gnu/bits/c++locale.h:
@@ -1794,19 +1809,15 @@ _deps/raylib-src/src/raylib.h:
 
 /usr/include/c++/16.1.1/bits/shared_ptr_base.h:
 
-/usr/include/bits/types/FILE.h:
-
-/usr/include/linux/posix_types.h:
-
 /usr/include/bits/stdlib-bsearch.h:
 
-/usr/include/features.h:
+libtb_core.a:
 
-/usr/include/bits/sched.h:
+/usr/include/c++/16.1.1/bits/functional_hash.h:
 
-/usr/include/bits/types/__FILE.h:
+/home/hugo/Projects/ATB/src/core/Storm.h:
 
-/usr/include/c++/16.1.1/bits/range_access.h:
+/usr/include/c++/16.1.1/memory:
 
 /usr/include/c++/16.1.1/bits/hash_bytes.h:
 
@@ -2021,10 +2032,6 @@ _deps/raylib-src/src/raylib.h:
 /usr/include/bits/types/__sigset_t.h:
 
 /usr/include/c++/16.1.1/tuple:
-
-/usr/include/c++/16.1.1/tr1/poly_laguerre.tcc:
-
-/usr/include/c++/16.1.1/typeinfo:
 
 /usr/include/c++/16.1.1/x86_64-pc-linux-gnu/bits/atomic_word.h:
 

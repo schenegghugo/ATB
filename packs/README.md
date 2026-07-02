@@ -48,18 +48,24 @@ walls, or ship **only a palette and no art at all** (like `example/` here).
 
 ### Keys the renderer looks up (v1)
 
-| Element        | Sprite key            | Palette key            |
-|----------------|-----------------------|------------------------|
-| Floor tile     | `tiles.floor`         | `floor`                |
-| Wall tile      | `tiles.wall`          | `wall`                 |
-| Obstacle tile  | `tiles.obstacle`      | `obstacle`             |
-| Player unit    | `units.player`        | *(faction tint)*       |
-| Enemy unit     | `units.enemy`         | *(faction tint)*       |
-| Spell icon     | `spells.<catalog key>` (e.g. `spells.fireball`) | — |
+| Element          | Sprite key            | Palette key            |
+|------------------|-----------------------|------------------------|
+| Floor tile       | `tiles.floor`         | `floor`                |
+| Wall tile        | `tiles.wall`          | `wall`                 |
+| Obstacle tile    | `tiles.obstacle`      | `obstacle`             |
+| Player champion  | `units.player`        | *(faction tint)*       |
+| Enemy champion   | `units.enemy`         | *(faction tint)*       |
+| Summon / object  | `units.<name>` then `spells.<name>` (e.g. `units.brute` → `spells.brute`) | — |
+| Spell icon (bar) | `spells.<catalog key>` (e.g. `spells.fireball`) | — |
 
 Resolution ladder per element: **atlas sprite → palette colour → built-in
-primitive**. `anchor` is `center` (default) or `bottom`; `anim`/`cast` clip
-fields are reserved for the animation milestone and ignored in v1.
+primitive**. For a **summoned creature or object** (bomb, blocker, healer, brute)
+the renderer tries `units.<name>` first, then falls back to its **spell icon**
+`spells.<name>`, then to the faction sprite — so a pack that already draws the
+spell icons gets on-field creature art for free (add a dedicated `units.<name>`
+only if you want the field look to differ from the bar icon). `anchor` is
+`center` (default) or `bottom`; `anim`/`cast` clip fields are reserved for the
+animation milestone and ignored in v1.
 
 Ground effects and status markers aren't pack-routed yet — that wiring is a
 follow-up; the seam already supports the same key→sprite lookup.

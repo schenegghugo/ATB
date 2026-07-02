@@ -302,13 +302,30 @@ void drawFrame(const Layout& l, const Battle& battle, const ViewState& view,
         Color color = e.team == Faction::Player ? kPlayer : kEnemy;
         if (e.invisible()) color = Fade(color, 0.35f); // concealed: drawn ghosted
         Vector2 c = tileCenter(l, e.pos);
-        // Pack unit sprite (units.player / units.enemy) → primitive circle. Tint
-        // carries the ghosting so concealed units read the same either way.
-        const char* uk = e.team == Faction::Player ? "units.player" : "units.enemy";
         const Rectangle dest{c.x - l.tileSize * 0.5f, c.y - l.tileSize * 0.5f,
                              static_cast<float>(l.tileSize), static_cast<float>(l.tileSize)};
-        const Color tint = e.invisible() ? Color{255, 255, 255, 90} : WHITE;
-        if (!(pack && pack->drawSprite(uk, dest, tint))) {
+        // A summon/object shares its sprite across teams (a brute looks like a
+        // brute), so tint the *opponent's* warm-red to mark ownership; the player's
+        // stay natural. Champions already have distinct faction sprites. Ghosting
+        // (invisibility) rides on the alpha channel.
+        Color tint = (e.kind != EntityKind::Champion && e.team == Faction::Enemy)
+                         ? Color{255, 130, 130, 255}
+                         : WHITE;
+        if (e.invisible()) tint.a = 90;
+        // Sprite ladder: summons/objects get their own creature look (units.<name>,
+        // then the spell icon spells.<name>), so a summoned brute/healer/blocker/bomb
+        // doesn't wear the champion's sprite; champions fall to their faction art.
+        // Anything unresolved drops to the primitive circle.
+        bool drew = false;
+        if (pack) {
+            if (e.kind != EntityKind::Champion)
+                drew = pack->drawSprite("units." + e.name, dest, tint) ||
+                       pack->drawSprite("spells." + e.name, dest, tint);
+            if (!drew)
+                drew = pack->drawSprite(e.team == Faction::Player ? "units.player" : "units.enemy",
+                                        dest, tint);
+        }
+        if (!drew) {
             DrawCircleV(c, l.tileSize * 0.36f, color);
             DrawCircleLines(static_cast<int>(c.x), static_cast<int>(c.y),
                             l.tileSize * 0.36f, Color{0, 0, 0, 160});
