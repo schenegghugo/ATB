@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "name": "Example (palette-only re-theme)",
+  "version": "1.0.0",
+  "tileSize": 32,
+  "palette": {
+    "floor": "#20303a",
+    "wall": "#3f6b5a",
+    "obstacle": "#8a5a2b"
+  }
+}
