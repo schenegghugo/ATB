@@ -151,11 +151,7 @@ std::vector<int> buildFoeField(const Battle& b, Faction me) {
 }
 
 // --- Action model -----------------------------------------------------------
-struct PlannedAction {
-    enum class Kind { Cast, Move } kind = Kind::Cast;
-    int slot = -1;
-    Vec2i target{};
-};
+// (PlannedAction is public — see AI.h — so Brains can express plans.)
 
 void applyAction(Battle& b, EntityId self, const PlannedAction& a) {
     if (a.kind == PlannedAction::Kind::Cast) b.cast(self, a.slot, a.target);
@@ -269,6 +265,17 @@ std::vector<PlannedAction> planTurn(const Battle& battle, EntityId self) {
     return bestSeq;
 }
 
+// The default Brain: a thin wrapper over the beam search above. Stateless, so a
+// single shared instance is safe (see defaultBrain()).
+class BeamSearchBrain final : public Brain {
+public:
+    [[nodiscard]] std::vector<PlannedAction> planTurn(const Battle& battle,
+                                                      EntityId self) const override {
+        return tb::planTurn(battle, self);
+    }
+    [[nodiscard]] std::string_view name() const override { return "beam"; }
+};
+
 AIAction executeFirst(Battle& battle, EntityId self, const PlannedAction& a) {
     if (a.kind == PlannedAction::Kind::Cast) {
         battle.cast(self, a.slot, a.target);
@@ -344,25 +351,31 @@ AIAction summonTakeOneAction(Battle& b, EntityId self) {
 
 } // namespace
 
-AIAction enemyTakeOneAction(Battle& battle, EntityId self) {
+const Brain& defaultBrain() {
+    static const BeamSearchBrain brain;
+    return brain;
+}
+
+AIAction enemyTakeOneAction(Battle& battle, EntityId self, const Brain& brain) {
     if (battle.phase() == Phase::Finished || !battle.unit(self).alive()) return AIAction::Done;
     if (battle.unit(self).kind == EntityKind::Summon) return summonTakeOneAction(battle, self);
-    const std::vector<PlannedAction> plan = planTurn(battle, self);
+    const std::vector<PlannedAction> plan = brain.planTurn(battle, self);
     if (plan.empty()) return AIAction::Done;
     // Execute just the first step (movement one tile at a time for animation);
     // the next call re-plans from the resulting state.
     return executeFirst(battle, self, plan.front());
 }
 
-void runEnemyTurn(Battle& battle, bool autoEndTurn) {
+void runEnemyTurn(Battle& battle, bool autoEndTurn, const Brain& brain) {
     const EntityId self = battle.activeUnit();
     if (battle.unit(self).kind == EntityKind::Summon) {
-        // Simple summons act one step at a time until they're spent.
+        // Simple summons act one step at a time until they're spent. (Summons are
+        // deliberately not Brain-driven — they run a fixed, simple behaviour.)
         for (int i = 0; i < 8 && battle.phase() != Phase::Finished; ++i)
             if (summonTakeOneAction(battle, self) == AIAction::Done) break;
     } else {
         // Plan once, execute the whole sequence (efficient for headless / sim).
-        for (const PlannedAction& a : planTurn(battle, self)) {
+        for (const PlannedAction& a : brain.planTurn(battle, self)) {
             if (battle.phase() == Phase::Finished) break;
             applyAction(battle, self, a);
         }

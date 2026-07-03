@@ -659,9 +659,18 @@ unaffected.
 
 Opens an AI-authoring lane; self-contained in `core/`.
 
-### 3.1 ☐ Extract a `Brain` strategy interface
-e.g. `decide(const Battle&, EntityId) -> PlannedAction` (or full-turn plan).
-The current beam-search planner becomes the default `Brain`.
+### 3.1 ☑ Extract a `Brain` strategy interface
+`core/AI.h` now defines `Brain` — `planTurn(const Battle&, EntityId) ->
+std::vector<PlannedAction>` (full-turn plan; the caller picks execution
+granularity) + `name()`. `PlannedAction` was promoted to the public header. The
+beam search is now `BeamSearchBrain`, exposed as the stable singleton
+`defaultBrain()`. `enemyTakeOneAction` / `runEnemyTurn` gained `const Brain&`
+overloads and the old signatures delegate to `defaultBrain()`, so every caller
+(`main.cpp` + 7 tests) compiles unchanged. Summons stay deliberately off the Brain
+seam (fixed `summonTakeOneAction`). **Behaviour-preserving:** full headless suite
+passes and `tb_balance 400 7` is byte-identical to the pre-change AI apart from the
+wall-clock timing line (determinism intact). *(Registry / by-name selection + a toy
+Brain are 3.2.)*
 
 ### 3.2 ☐ Registry / selection
 Let a match pick a `Brain` by name so community AIs drop in without forking
