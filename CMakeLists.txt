@@ -117,6 +117,32 @@ add_executable(tb_matchsource_demo tests/matchsource_demo.cpp src/render/MatchSo
 target_link_libraries(tb_matchsource_demo PRIVATE tb_core)
 
 # ---------------------------------------------------------------------------
+# Netcode transport (Phase 4.4) — POSIX TCP + the authoritative 1v1 match
+# server/client. Kept OUT of tb_core (which stays portable + socket-free);
+# headless, so it builds and tests in the no-GUI CI job.
+# ---------------------------------------------------------------------------
+find_package(Threads REQUIRED)
+
+add_library(tb_transport STATIC
+    src/net/Socket.cpp
+    src/net/GameServer.cpp
+    src/net/GameClient.cpp
+    src/net/MirrorSession.cpp
+)
+target_link_libraries(tb_transport PUBLIC tb_core)
+
+add_executable(tb_server tools/server_main.cpp)
+target_link_libraries(tb_server PRIVATE tb_transport)
+
+add_executable(tb_net_transport_demo tests/net_transport_demo.cpp)
+target_link_libraries(tb_net_transport_demo PRIVATE tb_transport Threads::Threads)
+
+# The GUI's RemoteMatchSource is header-only + raylib-free, so its exact code path
+# is exercised headless here against the real server.
+add_executable(tb_remote_demo tests/remote_demo.cpp)
+target_link_libraries(tb_remote_demo PRIVATE tb_transport Threads::Threads)
+
+# ---------------------------------------------------------------------------
 # Raylib (graphical frontend). Use a system install if present, otherwise fetch.
 # Skipped entirely when TB_BUILD_GUI is OFF (headless/server/CI builds).
 # ---------------------------------------------------------------------------
@@ -164,7 +190,7 @@ add_executable(tactical_battler
     src/render/PackManifest.cpp
     src/render/SpritePack.cpp
 )
-target_link_libraries(tactical_battler PRIVATE tb_core raylib)
+target_link_libraries(tactical_battler PRIVATE tb_core tb_transport raylib)
 
 # On Linux, Raylib needs these system libs when built statically.
 if(UNIX AND NOT APPLE)

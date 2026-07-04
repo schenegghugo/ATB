@@ -1,4 +1,5 @@
 /build/
+/build-gui/
 *.o
 *.a
 tb_headless

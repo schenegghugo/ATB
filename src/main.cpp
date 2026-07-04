@@ -30,10 +30,13 @@
 #include "data/MapJson.h"
 #include "data/Net.h"
 #include "data/RulesetJson.h"
+#include "net/GameServer.h"   // contentHashOf
+#include "net/MirrorSession.h"
 #include "render/Animator.h"
 #include "render/BuildEditorScreen.h"
 #include "render/ContentPaths.h"
 #include "render/MatchSource.h"
+#include "render/RemoteMatchSource.h"
 #include "render/Renderer.h"
 #include "render/SpritePack.h"
 
@@ -219,7 +222,29 @@ int main() {
     int selectedSpell = 0;
     int logScroll = 0; // combat-log scrollback (0 = pinned to newest)
 
-    auto newMatch = [&]() {
+    // Build the match source. With ATB_CONNECT=host[:port] set, join a networked
+    // match on that server (RemoteMatchSource — same render path, authoritative
+    // server); otherwise drive an in-process Battle (LocalMatchSource). A failed
+    // connect logs and falls back to local so the game is still playable.
+    auto newMatch = [&]() -> std::unique_ptr<render::MatchSource> {
+        if (const char* conn = std::getenv("ATB_CONNECT"); conn && *conn) {
+            std::string hp = conn;
+            const auto colon = hp.find(':');
+            const std::string host = colon == std::string::npos ? hp : hp.substr(0, colon);
+            const uint16_t port = static_cast<uint16_t>(
+                colon == std::string::npos ? 5555 : std::atoi(hp.substr(colon + 1).c_str()));
+            std::string err;
+            std::unique_ptr<net::MirrorSession> ms = net::MirrorSession::connect(
+                host, port, net::contentHashOf(session.catalog), editor.playerTeam().front(),
+                session.ruleset, session.catalog, session.creatures, &err);
+            if (ms) {
+                TraceLog(LOG_INFO, "Connected to %s — playing as %s.", conn,
+                         ms->seat() == Faction::Player ? "player" : "enemy");
+                return std::make_unique<render::RemoteMatchSource>(std::move(ms));
+            }
+            TraceLog(LOG_ERROR, "Remote connect to %s failed: %s — using a local match.", conn,
+                     err.c_str());
+        }
         return std::make_unique<render::LocalMatchSource>(
             buildMatch(session.ruleset, editor.playerTeam(), editor.enemyTeam(), session.catalog,
                        /*seed=*/0, session.creatures,

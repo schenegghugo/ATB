@@ -844,10 +844,43 @@ never awaited — the server plays it).
 **Acceptance:** ☑ the intent → apply → snapshot loop runs through the
 authoritative runner in-process and is provably deterministic; `core/` untouched.
 
-### 4.4 ☐ Real transport + 1v1 custom match
-WebSocket/TCP, direct connect / join code. Server validates: handshake hash →
-`validateBuild()` → per-intent ownership + `canCast` legality. Never trust
-client outcomes.
+### 4.4 ☑ Real transport + 1v1 custom match
+A new **`net/` transport** (kept out of `tb_core` so the engine stays portable +
+socket-free): **hand-rolled, zero-dependency TCP** (`net/Socket.{h,cpp}` —
+length-prefixed frames over Berkeley sockets, `MSG_NOSIGNAL`, non-blocking poll)
+matching the project's ethos; a tiny JSON message layer (`net/Protocol.h`) whose
+payloads reuse the §4.1 wire serializers verbatim; `net/GameServer.{h,cpp}`
+(`serveOneMatch`) wrapping the §4.3 `MatchRunner` with the two admission
+checkpoints — **handshake content hash** (`contentHashOf`) then **`validateBuild`
+vs the ruleset** — and per-intent ownership + legality already enforced by the
+runner (never trusts a client outcome). Ships a self-hosted **`tb_server`** binary
+that serves `data/` content.
+
+**Deterministic mirror (the client model):** the server sends match setup (both
+builds + a concrete arena seed) in `welcome`, then broadcasts only the **applied
+human intents**; each client (`net/MirrorSession`) rebuilds an identical
+`MatchRunner` and replays that stream, reproducing everything else (AI/summon/inert
+turns) locally — so the client renders a byte-identical mirror of the authoritative
+Battle with minimal wire traffic. The **GUI remote client** is `render/`
+`RemoteMatchSource` (a `MatchSource` over the mirror — same render path as local,
+only the source of truth swaps); `main.cpp` joins a networked match when
+`ATB_CONNECT=host[:port]` is set (else local), falling back to local on a failed
+connect.
+
+Verified: `tb_net_transport_demo` (two mirror clients) and `tb_remote_demo` (the
+GUI's `RemoteMatchSource` vs a client) each play a **full authoritative 1v1 over a
+real localhost socket** — opposite seats, run to a winner, **all parties agree on
+the identical final snapshot** — plus **content-hash-mismatch rejection**; both in
+CI and stress-run 20×+ clean. The real `tb_server` binary + two clients complete a
+match end to end, and the GUI compiles/links the remote path. *(Two real bugs
+fixed en route: a silent `SIGPIPE` on half-open writes → `MSG_NOSIGNAL`; and
+`buildMatch(seed=0)` **time-seeding a different arena per process** → the server now
+picks one concrete seed and ships it, so all mirrors match. Transport: TCP, zero-dep;
+WebSocket can layer on later for the browser build.)*
+
+**Follow-ups (not blockers):** optimistic client-side prediction (today the mirror
+waits for the server echo — imperceptible on localhost, matters under real latency);
+a connect/join-code lobby UI (Phase 4.5 territory); teams >1 over the wire.
 
 ### 4.5 ☐ Lobby, matchmaking, accounts, ranked MMR
 SQLite (the `BuildRepository` / `schema.sql` seam) for accounts, results,

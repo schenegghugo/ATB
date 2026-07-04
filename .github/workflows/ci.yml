@@ -38,6 +38,11 @@ jobs:
           ./build/tb_roster_demo
           ./build/tb_event_demo
           ./build/tb_pack_demo
+          ./build/tb_net_demo
+          ./build/tb_matchsource_demo
+          ./build/tb_loopback_demo
+          ./build/tb_net_transport_demo
+          ./build/tb_remote_demo
 
       - name: Balance sanity (fixed seed, fast)
         run: ./build/tb_balance 200 1
