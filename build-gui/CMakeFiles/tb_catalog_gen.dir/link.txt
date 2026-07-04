@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/tb_catalog_gen.dir/link.d CMakeFiles/tb_catalog_gen.dir/tools/catalog_gen.cpp.o -o tb_catalog_gen  libtb_core.a

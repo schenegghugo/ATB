@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/tb_map_demo.dir/link.d CMakeFiles/tb_map_demo.dir/tests/map_demo.cpp.o -o tb_map_demo  libtb_core.a

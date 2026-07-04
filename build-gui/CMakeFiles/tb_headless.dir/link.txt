@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/tb_headless.dir/link.d CMakeFiles/tb_headless.dir/tests/headless_demo.cpp.o -o tb_headless  libtb_core.a

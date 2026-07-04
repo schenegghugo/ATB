@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/tb_creature_demo.dir/link.d CMakeFiles/tb_creature_demo.dir/tests/creature_demo.cpp.o -o tb_creature_demo  libtb_core.a

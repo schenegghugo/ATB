@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/tb_pack_demo.dir/link.d CMakeFiles/tb_pack_demo.dir/tests/pack_demo.cpp.o CMakeFiles/tb_pack_demo.dir/src/render/PackManifest.cpp.o -o tb_pack_demo  libtb_core.a

@@ -35,6 +35,7 @@ add_library(tb_core STATIC
     src/data/MapJson.cpp
     src/data/Net.cpp
     src/data/Sha256.cpp
+    src/net/MatchRunner.cpp
 )
 target_include_directories(tb_core PUBLIC src)
 target_compile_options(tb_core PRIVATE
@@ -85,6 +86,9 @@ target_link_libraries(tb_sha256_demo PRIVATE tb_core)
 
 add_executable(tb_net_demo tests/net_demo.cpp)
 target_link_libraries(tb_net_demo PRIVATE tb_core)
+
+add_executable(tb_loopback_demo tests/loopback_demo.cpp)
+target_link_libraries(tb_loopback_demo PRIVATE tb_core)
 
 # Generators: write data/catalog.json + data/creatures.json from compiled seeds.
 add_executable(tb_catalog_gen tools/catalog_gen.cpp)

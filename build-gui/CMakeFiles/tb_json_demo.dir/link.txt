@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/tb_json_demo.dir/link.d CMakeFiles/tb_json_demo.dir/tests/json_demo.cpp.o -o tb_json_demo  libtb_core.a

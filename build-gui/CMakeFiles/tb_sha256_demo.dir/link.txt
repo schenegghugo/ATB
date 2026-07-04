@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/tb_sha256_demo.dir/link.d CMakeFiles/tb_sha256_demo.dir/tests/sha256_demo.cpp.o -o tb_sha256_demo  libtb_core.a

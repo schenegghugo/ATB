@@ -13,14 +13,17 @@ Off the critical path, a **Web/WASM build** (see *Parallel track* below) can be
 picked up anytime now that the GUI exists — it's frontend-only and independent of
 the content and PvP work.
 
-**Recommended next (data/engine):** the **Core split** (separate `core/` headers)
-→ the **Match rulesets** milestone (a datafied `rules.json` that unifies how the
-game and the balance sim build matches, and exposes format/bans/ring/arena to
-modders + competitive play). Both sections are below, ahead of Phase 2.
+**Where we are:** Phases 0–2 (contributor-safe repo, catalog loader + hash,
+spell bar + sprite packs), the **Core split**, the **Match rulesets** milestone,
+and **pluggable AI** (3.1 `Brain` seam + 3.2 registry/selection) are all done. In
+Phase 4 (networked PvP), the offline foundation is in place: **4.1** serialization
++ round-trip tests, **4.2** the client `MatchSource` seam, and **4.3** the
+authoritative in-process loopback runner. **Next: 4.4** — real transport + a 1v1
+custom match (the first socket).
 
-**The one rule:** do not start any netcode before the catalog loader, content
-hash, and serialization round-trip tests exist (Phase 1 + the first step of
-Phase 4). PvP without those is built on sand.
+**The one rule (satisfied):** no netcode before the catalog loader, content hash,
+and serialization round-trip tests exist (Phase 1 + 4.1) — all now done, so the
+transport work in 4.4+ rests on solid ground.
 
 Status legend: ☐ todo ◐ in progress ☑ done
 
@@ -765,9 +768,12 @@ the eval-only net plateaus.
 
 ## Phase 4 — Networked PvP
 
-Only start once Phase 1 (catalog loader + hash) is done. Build order and trust
-model are detailed in `ARCHITECTURE.md` §7. Each step is independently
-verifiable.
+Build order and trust model are detailed in `ARCHITECTURE.md` §7. Each step is
+independently verifiable. **The offline foundation (4.1–4.3) is done:** wire
+formats + round-trip tests, the client `MatchSource` seam, and the authoritative
+in-process loopback runner — all deterministic and headless-tested, with no
+sockets yet. Remaining work (4.4+) adds the transport and lobby on top; it does
+not change `core/`.
 
 ### 4.1 ☑ Serialization + headless round-trip tests
 `data/Net.{h,cpp}` adds the three PvP wire payloads (§7), built on the existing
@@ -816,9 +822,27 @@ the headless test exercises.
 GUI compiles/launches), `core/` untouched, and the interface is ready for a remote
 impl.
 
-### 4.3 ☐ In-process loopback "server"
-Run the intent/snapshot loop through an authoritative match runner with no real
-socket, to prove the end-to-end loop is deterministic.
+### 4.3 ☑ In-process loopback "server"
+A new **`net/` tier**: `net/MatchRunner.{h,cpp}` is the authoritative resolver
+(§7 component #2) — it owns one `Battle` and is the *only* thing that mutates it.
+Per-`Faction` **`Seat { Human, AI }`** decides who drives each side; summons and
+inert objects are always server-driven. `submit(seat, intent)` enforces the trust
+checks — **ownership** (the seat must own the active Champion) and **legality**
+(the engine verbs refuse illegal casts/moves without mutating) — then applies the
+intent via `net::applyIntent` and `advance()`s every server-controlled turn
+(AI champions/summons via `runEnemyTurn`, inert passes) to the next human decision
+point. `snapshot()` is the broadcast state. No new combat logic — a thin loop over
+`tb_core`; no sockets.
+
+`tb_loopback_demo` (14 checks, in CI) proves the goal — **end-to-end
+determinism**: an all-AI runner and a fully intent-driven (`Human`×`Human`,
+scripted by the Brain) run are each **byte-identical to the raw engine**
+(`runEnemyTurn`) and reproducible across runs. Plus the authority checks
+(wrong-seat + illegal intents rejected without mutation) and PvE (the AI seat is
+never awaited — the server plays it).
+
+**Acceptance:** ☑ the intent → apply → snapshot loop runs through the
+authoritative runner in-process and is provably deterministic; `core/` untouched.
 
 ### 4.4 ☐ Real transport + 1v1 custom match
 WebSocket/TCP, direct connect / join code. Server validates: handshake hash →

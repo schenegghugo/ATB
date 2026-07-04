@@ -1,7 +1,0 @@
-{
-	"InstallScripts" : 
-	[
-		"/home/hugo/Projects/ATB/build-gui/_deps/raylib-subbuild/cmake_install.cmake"
-	],
-	"Parallel" : false
-}
