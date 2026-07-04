@@ -12,12 +12,14 @@
 /home/hugo/Projects/ATB/build-gui/CMakeFiles/tb_ruleset_demo.dir
 /home/hugo/Projects/ATB/build-gui/CMakeFiles/tb_map_demo.dir
 /home/hugo/Projects/ATB/build-gui/CMakeFiles/tb_sha256_demo.dir
+/home/hugo/Projects/ATB/build-gui/CMakeFiles/tb_net_demo.dir
 /home/hugo/Projects/ATB/build-gui/CMakeFiles/tb_catalog_gen.dir
 /home/hugo/Projects/ATB/build-gui/CMakeFiles/tb_creature_gen.dir
 /home/hugo/Projects/ATB/build-gui/CMakeFiles/tb_ruleset_gen.dir
 /home/hugo/Projects/ATB/build-gui/CMakeFiles/tb_balance.dir
 /home/hugo/Projects/ATB/build-gui/CMakeFiles/tb_team_balance.dir
 /home/hugo/Projects/ATB/build-gui/CMakeFiles/tb_pack_demo.dir
+/home/hugo/Projects/ATB/build-gui/CMakeFiles/tb_matchsource_demo.dir
 /home/hugo/Projects/ATB/build-gui/CMakeFiles/tactical_battler.dir
 /home/hugo/Projects/ATB/build-gui/CMakeFiles/package.dir
 /home/hugo/Projects/ATB/build-gui/CMakeFiles/package_source.dir

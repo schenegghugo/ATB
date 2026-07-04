@@ -6,6 +6,7 @@ tactical_battler: \
   CMakeFiles/tactical_battler.dir/src/render/Renderer.cpp.o \
   CMakeFiles/tactical_battler.dir/src/render/BuildEditorScreen.cpp.o \
   CMakeFiles/tactical_battler.dir/src/render/ContentPaths.cpp.o \
+  CMakeFiles/tactical_battler.dir/src/render/MatchSource.cpp.o \
   CMakeFiles/tactical_battler.dir/src/render/PackManifest.cpp.o \
   CMakeFiles/tactical_battler.dir/src/render/SpritePack.cpp.o \
   libtb_core.a \
@@ -72,6 +73,8 @@ CMakeFiles/tactical_battler.dir/src/render/Renderer.cpp.o:
 CMakeFiles/tactical_battler.dir/src/render/BuildEditorScreen.cpp.o:
 
 CMakeFiles/tactical_battler.dir/src/render/ContentPaths.cpp.o:
+
+CMakeFiles/tactical_battler.dir/src/render/MatchSource.cpp.o:
 
 CMakeFiles/tactical_battler.dir/src/render/PackManifest.cpp.o:
 

@@ -17,7 +17,6 @@
 //     Tab          : return to the build editor
 //     Esc          : quit
 //
-#include "core/AI.h"
 #include "core/Battle.h"
 #include "core/Build.h"
 #include "core/Creatures.h"
@@ -29,10 +28,12 @@
 #include "data/CatalogJson.h"
 #include "data/CreatureJson.h"
 #include "data/MapJson.h"
+#include "data/Net.h"
 #include "data/RulesetJson.h"
 #include "render/Animator.h"
 #include "render/BuildEditorScreen.h"
 #include "render/ContentPaths.h"
+#include "render/MatchSource.h"
 #include "render/Renderer.h"
 #include "render/SpritePack.h"
 
@@ -209,23 +210,27 @@ int main() {
     render::BuildEditorScreen editor(session.catalog, *session.repo, session.ruleset);
 
     AppState state = AppState::Editor;
-    std::optional<Battle> battle;
+    // The source of match truth behind a seam: LocalMatchSource drives the Battle
+    // in-process (a future RemoteMatchSource would mirror a server). The UI feeds
+    // it player Intents and reads source->battle() to render (Phase 4.2).
+    std::unique_ptr<render::MatchSource> source;
     render::Animator animator; // per-entity event-clip playback (cast flashes, §2.4)
     std::string status;
     int selectedSpell = 0;
     int logScroll = 0; // combat-log scrollback (0 = pinned to newest)
 
-    constexpr float kAiTick = 0.35f;
-    float aiTimer = 0.0f;
+    auto newMatch = [&]() {
+        return std::make_unique<render::LocalMatchSource>(
+            buildMatch(session.ruleset, editor.playerTeam(), editor.enemyTeam(), session.catalog,
+                       /*seed=*/0, session.creatures,
+                       session.staticArena ? &*session.staticArena : nullptr));
+    };
 
     auto enterBattle = [&]() {
-        battle.emplace(buildMatch(session.ruleset, editor.playerTeam(), editor.enemyTeam(),
-                                  session.catalog, /*seed=*/0, session.creatures,
-                                  session.staticArena ? &*session.staticArena : nullptr));
+        source = newMatch();
         animator.reset();
         selectedSpell = 0;
         logScroll = 0;
-        aiTimer = 0.0f;
         status = "Player turn — left-click move, click a spell (or 1-9), right-click cast, Tab=editor.";
         state = AppState::Battle;
     };
@@ -245,28 +250,26 @@ int main() {
 
         // -------------------------- Battle state -----------------------------
         Vec2i hovered = render::screenToGrid(layout, GetMouseX(), GetMouseY());
-        const bool hoveredValid = battle->grid().inBounds(hovered);
+        const bool hoveredValid = source->battle().grid().inBounds(hovered);
 
         // Combat-log scrollback: wheel up = older, down = newer (clamped ≥ 0).
         logScroll = std::max(0, logScroll + static_cast<int>(GetMouseWheelMove()));
 
         if (IsKeyPressed(KEY_TAB)) { state = AppState::Editor; continue; }
         if (IsKeyPressed(KEY_R)) {
-            battle.emplace(buildMatch(session.ruleset, editor.playerTeam(), editor.enemyTeam(),
-                                      session.catalog, /*seed=*/0, session.creatures,
-                                      session.staticArena ? &*session.staticArena : nullptr));
+            source = newMatch();
             animator.reset();
             selectedSpell = 0;
             logScroll = 0;
             status = "New arena. Player turn.";
         }
 
-        const bool finished = battle->phase() == Phase::Finished;
-        const EntityId active = finished ? 0 : battle->activeUnit();
-        // Drive turns by control, not team: a player only inputs for their own
-        // Champions; summons (either team) are AI, and objects (bombs) auto-pass.
-        const Control ctrl = finished ? Control::AI : battle->controlOf(active);
-        const bool playerControl = !finished && ctrl == Control::Player;
+        const bool finished = source->battle().phase() == Phase::Finished;
+        const EntityId active = finished ? 0 : source->battle().activeUnit();
+        // The seam decides who drives: the local player inputs only for their own
+        // Champions; summons (either team) are AI and objects (bombs) auto-pass —
+        // all handled by source->update().
+        const bool playerControl = source->awaitingLocalInput();
 
         // Which spell button (if any) the cursor is over — set inside the player
         // block below; also read later when composing the view (hover tooltip).
@@ -274,56 +277,41 @@ int main() {
 
         if (playerControl) {
             const EntityId me = active;
-            const int spellCount = static_cast<int>(battle->unit(me).spells.size());
+            const int spellCount = static_cast<int>(source->battle().unit(me).spells.size());
             for (int k = 0; k < spellCount && k < 9; ++k)
                 if (IsKeyPressed(KEY_ONE + k)) selectedSpell = k;
             if (selectedSpell >= spellCount) selectedSpell = 0;
 
             // Hit-test the spell buttons against the same rects the renderer draws.
             for (int s = 0; s < spellCount; ++s)
-                if (render::spellSlotRect(layout, battle->grid(), s, spellCount)
+                if (render::spellSlotRect(layout, source->battle().grid(), s, spellCount)
                         .contains(GetMouseX(), GetMouseY())) {
                     hoveredSpell = s;
                     break;
                 }
 
             // Spell bar is hit-tested *before* the board so a HUD click selects a
-            // spell instead of being read as a move.
+            // spell instead of being read as a move. Selection is pure UI state; the
+            // move/cast/endTurn actions go to the seam as Intents.
             if (hoveredSpell >= 0 && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                 selectedSpell = hoveredSpell;
-                status = TextFormat("Selected %s.", battle->unit(me).spells[selectedSpell].name.c_str());
+                status = TextFormat("Selected %s.",
+                                    source->battle().unit(me).spells[selectedSpell].name.c_str());
             } else if (hoveredValid && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-                int moved = battle->moveToward(me, hovered);
-                status = moved > 0 ? TextFormat("Moved %d tile(s).", moved) : "Can't move there.";
+                if (auto s = source->submit(net::Intent::move(hovered))) status = *s;
             }
             if (hoveredValid && IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
-                if (battle->cast(me, selectedSpell, hovered))
-                    status = TextFormat("Cast %s!", battle->unit(me).spells[selectedSpell].name.c_str());
-                else
-                    status = "Cast failed (check AP, range, LOS).";
+                if (auto s = source->submit(net::Intent::cast(selectedSpell, hovered))) status = *s;
             }
             if (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER)) {
-                battle->endTurn();
-                aiTimer = 0.0f;
+                source->submit(net::Intent::endTurn());
             }
         } else if (!finished) {
-            aiTimer += dt;
-            if (aiTimer >= kAiTick) {
-                aiTimer = 0.0f;
-                if (ctrl == Control::Inert) {
-                    battle->endTurn(); // a bomb: its fuse/ignition ticked at turn start
-                } else {
-                    const std::string who = battle->unit(active).name;
-                    AIAction act = enemyTakeOneAction(*battle);
-                    if (act == AIAction::Attacked) status = who + " casts a spell.";
-                    else if (act == AIAction::Moved) status = who + " moves.";
-                    else battle->endTurn();
-                }
-            }
+            if (auto s = source->update(dt)) status = *s;
         }
 
         if (finished) {
-            auto w = battle->winner();
+            auto w = source->battle().winner();
             status = (w && *w == Faction::Player) ? "Victory! Tab=editor, R=rematch."
                                                   : "Defeat. Tab=editor, R=rematch.";
         }
@@ -337,8 +325,9 @@ int main() {
         view.logScroll = logScroll;
         if (playerControl) {
             const EntityId me = active;
-            const Entity& u = battle->unit(me);
-            view.reachable = reachableWithin(battle->grid(), u.pos, u.mp, battle->occupancy(me));
+            const Entity& u = source->battle().unit(me);
+            view.reachable =
+                reachableWithin(source->battle().grid(), u.pos, u.mp, source->battle().occupancy(me));
             view.showLosToHover = true;
             view.showSpellBar = true;
             view.selectedSpell = selectedSpell;
@@ -346,16 +335,16 @@ int main() {
             view.spellLabel = spellLabel(u, hoveredSpell >= 0 ? hoveredSpell : selectedSpell);
             for (const Spell& sp : u.spells) view.spellIconKeys.push_back(catalogKey(session.catalog, sp.name));
             if (hoveredValid && selectedSpell < static_cast<int>(u.spells.size())) {
-                view.spellCastable = battle->canCast(me, selectedSpell, hovered);
-                view.spellZone = battle->affectedTiles(u.spells[selectedSpell], u.pos, hovered);
+                view.spellCastable = source->battle().canCast(me, selectedSpell, hovered);
+                view.spellZone = source->battle().affectedTiles(u.spells[selectedSpell], u.pos, hovered);
             }
         }
 
         // Trigger cast-clip animations off the same event stream the log reads.
-        animator.sync(*battle, GetTime());
+        animator.sync(source->battle(), GetTime());
 
         BeginDrawing();
-        render::drawFrame(layout, *battle, view, pack ? &*pack : nullptr, &animator);
+        render::drawFrame(layout, source->battle(), view, pack ? &*pack : nullptr, &animator);
         EndDrawing();
     }
 

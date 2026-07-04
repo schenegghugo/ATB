@@ -268,10 +268,24 @@ CMakeFiles/tb_core.dir/src/data/MapJson.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tb_core.dir/src/data/MapJson.cpp.s"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/hugo/Projects/ATB/src/data/MapJson.cpp -o CMakeFiles/tb_core.dir/src/data/MapJson.cpp.s
 
+CMakeFiles/tb_core.dir/src/data/Net.cpp.o: CMakeFiles/tb_core.dir/flags.make
+CMakeFiles/tb_core.dir/src/data/Net.cpp.o: /home/hugo/Projects/ATB/src/data/Net.cpp
+CMakeFiles/tb_core.dir/src/data/Net.cpp.o: CMakeFiles/tb_core.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=$(CMAKE_PROGRESS_15) "Building CXX object CMakeFiles/tb_core.dir/src/data/Net.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/tb_core.dir/src/data/Net.cpp.o -MF CMakeFiles/tb_core.dir/src/data/Net.cpp.o.d -o CMakeFiles/tb_core.dir/src/data/Net.cpp.o -c /home/hugo/Projects/ATB/src/data/Net.cpp
+
+CMakeFiles/tb_core.dir/src/data/Net.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tb_core.dir/src/data/Net.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/hugo/Projects/ATB/src/data/Net.cpp > CMakeFiles/tb_core.dir/src/data/Net.cpp.i
+
+CMakeFiles/tb_core.dir/src/data/Net.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tb_core.dir/src/data/Net.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/hugo/Projects/ATB/src/data/Net.cpp -o CMakeFiles/tb_core.dir/src/data/Net.cpp.s
+
 CMakeFiles/tb_core.dir/src/data/Sha256.cpp.o: CMakeFiles/tb_core.dir/flags.make
 CMakeFiles/tb_core.dir/src/data/Sha256.cpp.o: /home/hugo/Projects/ATB/src/data/Sha256.cpp
 CMakeFiles/tb_core.dir/src/data/Sha256.cpp.o: CMakeFiles/tb_core.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=$(CMAKE_PROGRESS_15) "Building CXX object CMakeFiles/tb_core.dir/src/data/Sha256.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=$(CMAKE_PROGRESS_16) "Building CXX object CMakeFiles/tb_core.dir/src/data/Sha256.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/tb_core.dir/src/data/Sha256.cpp.o -MF CMakeFiles/tb_core.dir/src/data/Sha256.cpp.o.d -o CMakeFiles/tb_core.dir/src/data/Sha256.cpp.o -c /home/hugo/Projects/ATB/src/data/Sha256.cpp
 
 CMakeFiles/tb_core.dir/src/data/Sha256.cpp.i: cmake_force
@@ -298,6 +312,7 @@ tb_core_OBJECTS = \
 "CMakeFiles/tb_core.dir/src/data/CreatureJson.cpp.o" \
 "CMakeFiles/tb_core.dir/src/data/RulesetJson.cpp.o" \
 "CMakeFiles/tb_core.dir/src/data/MapJson.cpp.o" \
+"CMakeFiles/tb_core.dir/src/data/Net.cpp.o" \
 "CMakeFiles/tb_core.dir/src/data/Sha256.cpp.o"
 
 # External object files for target tb_core
@@ -317,10 +332,11 @@ libtb_core.a: CMakeFiles/tb_core.dir/src/data/CatalogJson.cpp.o
 libtb_core.a: CMakeFiles/tb_core.dir/src/data/CreatureJson.cpp.o
 libtb_core.a: CMakeFiles/tb_core.dir/src/data/RulesetJson.cpp.o
 libtb_core.a: CMakeFiles/tb_core.dir/src/data/MapJson.cpp.o
+libtb_core.a: CMakeFiles/tb_core.dir/src/data/Net.cpp.o
 libtb_core.a: CMakeFiles/tb_core.dir/src/data/Sha256.cpp.o
 libtb_core.a: CMakeFiles/tb_core.dir/build.make
 libtb_core.a: CMakeFiles/tb_core.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=$(CMAKE_PROGRESS_16) "Linking CXX static library libtb_core.a"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/home/hugo/Projects/ATB/build-gui/CMakeFiles --progress-num=$(CMAKE_PROGRESS_17) "Linking CXX static library libtb_core.a"
 	$(CMAKE_COMMAND) -P CMakeFiles/tb_core.dir/cmake_clean_target.cmake
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/tb_core.dir/link.txt --verbose=$(VERBOSE)
 

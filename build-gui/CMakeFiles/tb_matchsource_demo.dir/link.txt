@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/tb_matchsource_demo.dir/link.d CMakeFiles/tb_matchsource_demo.dir/tests/matchsource_demo.cpp.o CMakeFiles/tb_matchsource_demo.dir/src/render/MatchSource.cpp.o -o tb_matchsource_demo  libtb_core.a

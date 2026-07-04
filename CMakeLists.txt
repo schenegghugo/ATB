@@ -107,6 +107,11 @@ target_link_libraries(tb_team_balance PRIVATE tb_core)
 add_executable(tb_pack_demo tests/pack_demo.cpp src/render/PackManifest.cpp)
 target_link_libraries(tb_pack_demo PRIVATE tb_core)
 
+# The frontend match-driver seam (render/MatchSource) is raylib-free too, so the
+# turn-driving logic the GUI runs behind it is verified headless here.
+add_executable(tb_matchsource_demo tests/matchsource_demo.cpp src/render/MatchSource.cpp)
+target_link_libraries(tb_matchsource_demo PRIVATE tb_core)
+
 # ---------------------------------------------------------------------------
 # Raylib (graphical frontend). Use a system install if present, otherwise fetch.
 # Skipped entirely when TB_BUILD_GUI is OFF (headless/server/CI builds).
@@ -151,6 +156,7 @@ add_executable(tactical_battler
     src/render/Renderer.cpp
     src/render/BuildEditorScreen.cpp
     src/render/ContentPaths.cpp
+    src/render/MatchSource.cpp
     src/render/PackManifest.cpp
     src/render/SpritePack.cpp
 )

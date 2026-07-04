@@ -23,6 +23,8 @@ file(REMOVE_RECURSE
   "CMakeFiles/tb_core.dir/src/data/Json.cpp.o.d"
   "CMakeFiles/tb_core.dir/src/data/MapJson.cpp.o"
   "CMakeFiles/tb_core.dir/src/data/MapJson.cpp.o.d"
+  "CMakeFiles/tb_core.dir/src/data/Net.cpp.o"
+  "CMakeFiles/tb_core.dir/src/data/Net.cpp.o.d"
   "CMakeFiles/tb_core.dir/src/data/RulesetJson.cpp.o"
   "CMakeFiles/tb_core.dir/src/data/RulesetJson.cpp.o.d"
   "CMakeFiles/tb_core.dir/src/data/Sha256.cpp.o"

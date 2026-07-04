@@ -792,9 +792,29 @@ playing it through the engine verbs (`runEnemyTurn`). No sockets.
 **Acceptance:** ☑ intents/snapshots/builds round-trip deterministically offline,
 wired into CI; `core/` untouched.
 
-### 4.2 ☐ `MatchSource` refactor (local only)
-Abstract `main.cpp`'s in-process `Battle` driving behind an interface; ship the
-**local** impl first. Pure refactor — the game plays identically.
+### 4.2 ☑ `MatchSource` refactor (local only)
+`render/MatchSource.{h,cpp}` introduces the **frontend seam** between the UI
+(input + rendering) and *who drives the Battle*: `battle()` (the state to render),
+`awaitingLocalInput()` (is it the local player's turn?), `submit(net::Intent)`
+(apply a move/cast/endTurn), and `update(dt)` (advance AI/inert turns on the watch
+timer). `LocalMatchSource` holds the in-process `Battle` — the exact turn-driving
+logic `main.cpp` ran inline, moved behind the seam **verbatim**. `main.cpp` now
+turns clicks/keys into **Intents** (the §4.1 vocabulary) and submits them; it
+reads `source->battle()` to render and never mutates the Battle directly (it no
+longer includes `core/AI.h` — the AI lives behind the seam). This is the shape a
+`RemoteMatchSource` (4.6) fills: send Intents, mirror server snapshots; render
+code unchanged.
+
+`LocalMatchSource` is **raylib-free** (pure core + net), so `tb_matchsource_demo`
+(12 checks, in CI) verifies the seam headless: the `awaitingLocalInput`/`submit`/
+`update` contract (paced AI, illegal cast refused without mutating) and that a
+full match driven through the seam is deterministic. The GUI compiles + launches
+(catalog/creatures/ruleset load, editor runs); the battle path is the same calls
+the headless test exercises.
+
+**Acceptance:** ☑ pure refactor — the seam plays identically (verified headless +
+GUI compiles/launches), `core/` untouched, and the interface is ready for a remote
+impl.
 
 ### 4.3 ☐ In-process loopback "server"
 Run the intent/snapshot loop through an authoritative match runner with no real

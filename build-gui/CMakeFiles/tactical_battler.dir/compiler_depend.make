@@ -20,6 +20,7 @@ CMakeFiles/tactical_battler.dir/src/main.cpp.o: /home/hugo/Projects/ATB/src/main
   /home/hugo/Projects/ATB/src/data/CreatureJson.h \
   /home/hugo/Projects/ATB/src/data/MapJson.h \
   /home/hugo/Projects/ATB/src/data/RulesetJson.h \
+  /home/hugo/Projects/ATB/src/render/Animator.h \
   /home/hugo/Projects/ATB/src/render/BuildEditorScreen.h \
   /home/hugo/Projects/ATB/src/render/ContentPaths.h \
   /home/hugo/Projects/ATB/src/render/PackManifest.h \
@@ -101,6 +102,7 @@ CMakeFiles/tactical_battler.dir/src/main.cpp.o: /home/hugo/Projects/ATB/src/main
   /usr/include/bits/wctype-wchar.h \
   /usr/include/bits/wordsize.h \
   /usr/include/c++/16.1.1/algorithm \
+  /usr/include/c++/16.1.1/array \
   /usr/include/c++/16.1.1/backward/auto_ptr.h \
   /usr/include/c++/16.1.1/backward/binders.h \
   /usr/include/c++/16.1.1/bit \
@@ -728,8 +730,11 @@ CMakeFiles/tactical_battler.dir/src/render/PackManifest.cpp.o: /home/hugo/Projec
   /usr/include/bits/wchar.h \
   /usr/include/bits/wctype-wchar.h \
   /usr/include/bits/wordsize.h \
+  /usr/include/c++/16.1.1/algorithm \
+  /usr/include/c++/16.1.1/array \
   /usr/include/c++/16.1.1/backward/binders.h \
   /usr/include/c++/16.1.1/bit \
+  /usr/include/c++/16.1.1/bits/algorithmfwd.h \
   /usr/include/c++/16.1.1/bits/alloc_traits.h \
   /usr/include/c++/16.1.1/bits/allocator.h \
   /usr/include/c++/16.1.1/bits/basic_ios.h \
@@ -783,6 +788,8 @@ CMakeFiles/tactical_battler.dir/src/render/PackManifest.cpp.o: /home/hugo/Projec
   /usr/include/c++/16.1.1/bits/predefined_ops.h \
   /usr/include/c++/16.1.1/bits/ptr_traits.h \
   /usr/include/c++/16.1.1/bits/range_access.h \
+  /usr/include/c++/16.1.1/bits/ranges_algo.h \
+  /usr/include/c++/16.1.1/bits/ranges_algobase.h \
   /usr/include/c++/16.1.1/bits/ranges_base.h \
   /usr/include/c++/16.1.1/bits/ranges_cmp.h \
   /usr/include/c++/16.1.1/bits/ranges_util.h \
@@ -793,21 +800,25 @@ CMakeFiles/tactical_battler.dir/src/render/PackManifest.cpp.o: /home/hugo/Projec
   /usr/include/c++/16.1.1/bits/stdexcept_except.h \
   /usr/include/c++/16.1.1/bits/stdexcept_throw.h \
   /usr/include/c++/16.1.1/bits/stdexcept_throwfwd.h \
+  /usr/include/c++/16.1.1/bits/stl_algo.h \
   /usr/include/c++/16.1.1/bits/stl_algobase.h \
   /usr/include/c++/16.1.1/bits/stl_bvector.h \
   /usr/include/c++/16.1.1/bits/stl_construct.h \
   /usr/include/c++/16.1.1/bits/stl_function.h \
+  /usr/include/c++/16.1.1/bits/stl_heap.h \
   /usr/include/c++/16.1.1/bits/stl_iterator.h \
   /usr/include/c++/16.1.1/bits/stl_iterator_base_funcs.h \
   /usr/include/c++/16.1.1/bits/stl_iterator_base_types.h \
   /usr/include/c++/16.1.1/bits/stl_pair.h \
   /usr/include/c++/16.1.1/bits/stl_relops.h \
+  /usr/include/c++/16.1.1/bits/stl_tempbuf.h \
   /usr/include/c++/16.1.1/bits/stl_uninitialized.h \
   /usr/include/c++/16.1.1/bits/stl_vector.h \
   /usr/include/c++/16.1.1/bits/streambuf.tcc \
   /usr/include/c++/16.1.1/bits/streambuf_iterator.h \
   /usr/include/c++/16.1.1/bits/string_view.tcc \
   /usr/include/c++/16.1.1/bits/stringfwd.h \
+  /usr/include/c++/16.1.1/bits/uniform_int_dist.h \
   /usr/include/c++/16.1.1/bits/unordered_map.h \
   /usr/include/c++/16.1.1/bits/uses_allocator.h \
   /usr/include/c++/16.1.1/bits/uses_allocator_args.h \
@@ -842,7 +853,10 @@ CMakeFiles/tactical_battler.dir/src/render/PackManifest.cpp.o: /home/hugo/Projec
   /usr/include/c++/16.1.1/limits \
   /usr/include/c++/16.1.1/new \
   /usr/include/c++/16.1.1/numbers \
+  /usr/include/c++/16.1.1/optional \
   /usr/include/c++/16.1.1/ostream \
+  /usr/include/c++/16.1.1/pstl/execution_defs.h \
+  /usr/include/c++/16.1.1/pstl/glue_algorithm_defs.h \
   /usr/include/c++/16.1.1/pstl/pstl_config.h \
   /usr/include/c++/16.1.1/sstream \
   /usr/include/c++/16.1.1/stdexcept \
@@ -919,6 +933,7 @@ CMakeFiles/tactical_battler.dir/src/render/Renderer.cpp.o: /home/hugo/Projects/A
   /home/hugo/Projects/ATB/src/core/Event.h \
   /home/hugo/Projects/ATB/src/core/Grid.h \
   /home/hugo/Projects/ATB/src/core/Storm.h \
+  /home/hugo/Projects/ATB/src/render/Animator.h \
   /home/hugo/Projects/ATB/src/render/PackManifest.h \
   /home/hugo/Projects/ATB/src/render/Renderer.h \
   /home/hugo/Projects/ATB/src/render/SpritePack.h \
@@ -979,6 +994,7 @@ CMakeFiles/tactical_battler.dir/src/render/Renderer.cpp.o: /home/hugo/Projects/A
   /usr/include/bits/wchar.h \
   /usr/include/bits/wordsize.h \
   /usr/include/c++/16.1.1/algorithm \
+  /usr/include/c++/16.1.1/array \
   /usr/include/c++/16.1.1/backward/binders.h \
   /usr/include/c++/16.1.1/bit \
   /usr/include/c++/16.1.1/bits/algorithmfwd.h \
@@ -1170,8 +1186,11 @@ CMakeFiles/tactical_battler.dir/src/render/SpritePack.cpp.o: /home/hugo/Projects
   /usr/include/bits/waitstatus.h \
   /usr/include/bits/wchar.h \
   /usr/include/bits/wordsize.h \
+  /usr/include/c++/16.1.1/algorithm \
+  /usr/include/c++/16.1.1/array \
   /usr/include/c++/16.1.1/backward/binders.h \
   /usr/include/c++/16.1.1/bit \
+  /usr/include/c++/16.1.1/bits/algorithmfwd.h \
   /usr/include/c++/16.1.1/bits/alloc_traits.h \
   /usr/include/c++/16.1.1/bits/allocator.h \
   /usr/include/c++/16.1.1/bits/basic_string.h \
@@ -1181,10 +1200,12 @@ CMakeFiles/tactical_battler.dir/src/render/SpritePack.cpp.o: /home/hugo/Projects
   /usr/include/c++/16.1.1/bits/concept_check.h \
   /usr/include/c++/16.1.1/bits/cpp_type_traits.h \
   /usr/include/c++/16.1.1/bits/cxxabi_forced.h \
+  /usr/include/c++/16.1.1/bits/cxxabi_init_exception.h \
   /usr/include/c++/16.1.1/bits/enable_special_members.h \
   /usr/include/c++/16.1.1/bits/erase_if.h \
   /usr/include/c++/16.1.1/bits/exception.h \
   /usr/include/c++/16.1.1/bits/exception_defines.h \
+  /usr/include/c++/16.1.1/bits/exception_ptr.h \
   /usr/include/c++/16.1.1/bits/functional_hash.h \
   /usr/include/c++/16.1.1/bits/hash_bytes.h \
   /usr/include/c++/16.1.1/bits/hashtable.h \
@@ -1196,6 +1217,7 @@ CMakeFiles/tactical_battler.dir/src/render/SpritePack.cpp.o: /home/hugo/Projects
   /usr/include/c++/16.1.1/bits/memory_resource.h \
   /usr/include/c++/16.1.1/bits/memoryfwd.h \
   /usr/include/c++/16.1.1/bits/move.h \
+  /usr/include/c++/16.1.1/bits/nested_exception.h \
   /usr/include/c++/16.1.1/bits/new_allocator.h \
   /usr/include/c++/16.1.1/bits/new_except.h \
   /usr/include/c++/16.1.1/bits/new_throw.h \
@@ -1205,6 +1227,8 @@ CMakeFiles/tactical_battler.dir/src/render/SpritePack.cpp.o: /home/hugo/Projects
   /usr/include/c++/16.1.1/bits/predefined_ops.h \
   /usr/include/c++/16.1.1/bits/ptr_traits.h \
   /usr/include/c++/16.1.1/bits/range_access.h \
+  /usr/include/c++/16.1.1/bits/ranges_algo.h \
+  /usr/include/c++/16.1.1/bits/ranges_algobase.h \
   /usr/include/c++/16.1.1/bits/ranges_base.h \
   /usr/include/c++/16.1.1/bits/ranges_cmp.h \
   /usr/include/c++/16.1.1/bits/ranges_util.h \
@@ -1212,18 +1236,22 @@ CMakeFiles/tactical_battler.dir/src/render/SpritePack.cpp.o: /home/hugo/Projects
   /usr/include/c++/16.1.1/bits/std_abs.h \
   /usr/include/c++/16.1.1/bits/stdexcept_throw.h \
   /usr/include/c++/16.1.1/bits/stdexcept_throwfwd.h \
+  /usr/include/c++/16.1.1/bits/stl_algo.h \
   /usr/include/c++/16.1.1/bits/stl_algobase.h \
   /usr/include/c++/16.1.1/bits/stl_bvector.h \
   /usr/include/c++/16.1.1/bits/stl_construct.h \
   /usr/include/c++/16.1.1/bits/stl_function.h \
+  /usr/include/c++/16.1.1/bits/stl_heap.h \
   /usr/include/c++/16.1.1/bits/stl_iterator.h \
   /usr/include/c++/16.1.1/bits/stl_iterator_base_funcs.h \
   /usr/include/c++/16.1.1/bits/stl_iterator_base_types.h \
   /usr/include/c++/16.1.1/bits/stl_pair.h \
+  /usr/include/c++/16.1.1/bits/stl_tempbuf.h \
   /usr/include/c++/16.1.1/bits/stl_uninitialized.h \
   /usr/include/c++/16.1.1/bits/stl_vector.h \
   /usr/include/c++/16.1.1/bits/string_view.tcc \
   /usr/include/c++/16.1.1/bits/stringfwd.h \
+  /usr/include/c++/16.1.1/bits/uniform_int_dist.h \
   /usr/include/c++/16.1.1/bits/unordered_map.h \
   /usr/include/c++/16.1.1/bits/uses_allocator.h \
   /usr/include/c++/16.1.1/bits/uses_allocator_args.h \
@@ -1241,6 +1269,7 @@ CMakeFiles/tactical_battler.dir/src/render/SpritePack.cpp.o: /home/hugo/Projects
   /usr/include/c++/16.1.1/cwchar \
   /usr/include/c++/16.1.1/debug/assertions.h \
   /usr/include/c++/16.1.1/debug/debug.h \
+  /usr/include/c++/16.1.1/exception \
   /usr/include/c++/16.1.1/ext/aligned_buffer.h \
   /usr/include/c++/16.1.1/ext/alloc_traits.h \
   /usr/include/c++/16.1.1/ext/numeric_traits.h \
@@ -1251,11 +1280,15 @@ CMakeFiles/tactical_battler.dir/src/render/SpritePack.cpp.o: /home/hugo/Projects
   /usr/include/c++/16.1.1/limits \
   /usr/include/c++/16.1.1/new \
   /usr/include/c++/16.1.1/numbers \
+  /usr/include/c++/16.1.1/optional \
+  /usr/include/c++/16.1.1/pstl/execution_defs.h \
+  /usr/include/c++/16.1.1/pstl/glue_algorithm_defs.h \
   /usr/include/c++/16.1.1/pstl/pstl_config.h \
   /usr/include/c++/16.1.1/string \
   /usr/include/c++/16.1.1/string_view \
   /usr/include/c++/16.1.1/tuple \
   /usr/include/c++/16.1.1/type_traits \
+  /usr/include/c++/16.1.1/typeinfo \
   /usr/include/c++/16.1.1/unordered_map \
   /usr/include/c++/16.1.1/vector \
   /usr/include/c++/16.1.1/x86_64-pc-linux-gnu/bits/c++allocator.h \
@@ -1455,6 +1488,8 @@ CMakeFiles/tactical_battler.dir/src/render/ContentPaths.cpp.o:
 
 /usr/include/linux/stddef.h:
 
+/usr/include/gnu/stubs.h:
+
 /usr/include/c++/16.1.1/bits/exception.h:
 
 /usr/include/bits/fp-logb.h:
@@ -1513,8 +1548,6 @@ CMakeFiles/tactical_battler.dir/src/render/Renderer.cpp.o:
 
 /usr/include/bits/types/mbstate_t.h:
 
-/home/hugo/Projects/ATB/src/data/BuildRepository.h:
-
 /usr/include/bits/types/locale_t.h:
 
 /home/hugo/Projects/ATB/src/core/Creatures.h:
@@ -1535,8 +1568,6 @@ CMakeFiles/tactical_battler.dir/src/render/Renderer.cpp.o:
 
 /usr/include/bits/types/__locale_t.h:
 
-/usr/include/gnu/stubs.h:
-
 /usr/include/linux/posix_types.h:
 
 /usr/include/bits/types/FILE.h:
@@ -1544,6 +1575,10 @@ CMakeFiles/tactical_battler.dir/src/render/Renderer.cpp.o:
 /usr/include/bits/types.h:
 
 /usr/include/c++/16.1.1/bits/utility.h:
+
+/usr/include/linux/errno.h:
+
+/usr/include/c++/16.1.1/bits/uses_allocator.h:
 
 /usr/include/c++/16.1.1/bits/charconv.h:
 
@@ -1560,6 +1595,8 @@ CMakeFiles/tactical_battler.dir/src/render/Renderer.cpp.o:
 /usr/include/bits/struct_mutex.h:
 
 /usr/include/c++/16.1.1/bits/range_access.h:
+
+/usr/include/bits/stdlib-bsearch.h:
 
 /usr/include/asm-generic/errno.h:
 
@@ -1589,11 +1626,21 @@ CMakeFiles/tactical_battler.dir/src/render/Renderer.cpp.o:
 
 /home/hugo/Projects/ATB/src/data/CatalogJson.h:
 
+/home/hugo/Projects/ATB/src/data/BuildRepository.h:
+
+/home/hugo/Projects/ATB/src/render/Animator.h:
+
 CMakeFiles/tactical_battler.dir/src/render/BuildEditorScreen.cpp.o:
 
 /usr/lib/libatomic_asneeded.so:
 
 /usr/include/bits/types/struct_timeval.h:
+
+/usr/include/c++/16.1.1/tr1/legendre_function.tcc:
+
+/usr/include/alloca.h:
+
+/usr/include/bits/stdint-least.h:
 
 /home/hugo/Projects/ATB/src/core/Ruleset.h:
 
@@ -1663,12 +1710,6 @@ _deps/raylib-src/src/raylib.h:
 
 /usr/include/asm-generic/int-ll64.h:
 
-/usr/include/c++/16.1.1/tr1/legendre_function.tcc:
-
-/usr/include/alloca.h:
-
-/usr/include/bits/stdint-least.h:
-
 /usr/include/ctype.h:
 
 /usr/include/c++/16.1.1/bits/new_allocator.h:
@@ -1722,8 +1763,6 @@ _deps/raylib-src/src/raylib.h:
 /usr/include/bits/endianness.h:
 
 /usr/include/bits/floatn-common.h:
-
-/usr/include/c++/16.1.1/bits/exception_ptr.h:
 
 /usr/lib/libGLU.so:
 
@@ -1781,6 +1820,8 @@ _deps/raylib-src/src/raylib.h:
 
 /usr/include/bits/sched.h:
 
+/usr/include/c++/16.1.1/array:
+
 /usr/include/bits/select.h:
 
 /usr/include/c++/16.1.1/x86_64-pc-linux-gnu/bits/c++locale.h:
@@ -1809,7 +1850,7 @@ _deps/raylib-src/src/raylib.h:
 
 /usr/include/c++/16.1.1/bits/shared_ptr_base.h:
 
-/usr/include/bits/stdlib-bsearch.h:
+/usr/include/c++/16.1.1/bits/exception_ptr.h:
 
 libtb_core.a:
 
@@ -1931,9 +1972,9 @@ libtb_core.a:
 
 /usr/include/c++/16.1.1/bits/stl_raw_storage_iter.h:
 
-/usr/include/c++/16.1.1/bits/functexcept.h:
-
 /usr/include/bits/timex.h:
+
+/usr/include/c++/16.1.1/bits/functexcept.h:
 
 /usr/include/c++/16.1.1/iosfwd:
 
@@ -2008,10 +2049,6 @@ libtb_core.a:
 /home/hugo/Projects/ATB/src/render/SpritePack.h:
 
 /usr/include/c++/16.1.1/ext/alloc_traits.h:
-
-/usr/include/c++/16.1.1/bits/uses_allocator.h:
-
-/usr/include/linux/errno.h:
 
 /usr/include/c++/16.1.1/bits/ranges_util.h:
 

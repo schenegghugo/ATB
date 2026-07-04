@@ -364,6 +364,19 @@ tb_sha256_demo/fast:
 .PHONY : tb_sha256_demo/fast
 
 #=============================================================================
+# Target rules for targets named tb_net_demo
+
+# Build rule for target.
+tb_net_demo: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tb_net_demo
+.PHONY : tb_net_demo
+
+# fast build rule for target.
+tb_net_demo/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_net_demo.dir/build.make CMakeFiles/tb_net_demo.dir/build
+.PHONY : tb_net_demo/fast
+
+#=============================================================================
 # Target rules for targets named tb_catalog_gen
 
 # Build rule for target.
@@ -440,6 +453,19 @@ tb_pack_demo: cmake_check_build_system
 tb_pack_demo/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_pack_demo.dir/build.make CMakeFiles/tb_pack_demo.dir/build
 .PHONY : tb_pack_demo/fast
+
+#=============================================================================
+# Target rules for targets named tb_matchsource_demo
+
+# Build rule for target.
+tb_matchsource_demo: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tb_matchsource_demo
+.PHONY : tb_matchsource_demo
+
+# fast build rule for target.
+tb_matchsource_demo/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_matchsource_demo.dir/build.make CMakeFiles/tb_matchsource_demo.dir/build
+.PHONY : tb_matchsource_demo/fast
 
 #=============================================================================
 # Target rules for targets named tactical_battler
@@ -794,6 +820,30 @@ src/data/MapJson.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_core.dir/build.make CMakeFiles/tb_core.dir/src/data/MapJson.cpp.s
 .PHONY : src/data/MapJson.cpp.s
 
+src/data/Net.o: src/data/Net.cpp.o
+.PHONY : src/data/Net.o
+
+# target to build an object file
+src/data/Net.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_core.dir/build.make CMakeFiles/tb_core.dir/src/data/Net.cpp.o
+.PHONY : src/data/Net.cpp.o
+
+src/data/Net.i: src/data/Net.cpp.i
+.PHONY : src/data/Net.i
+
+# target to preprocess a source file
+src/data/Net.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_core.dir/build.make CMakeFiles/tb_core.dir/src/data/Net.cpp.i
+.PHONY : src/data/Net.cpp.i
+
+src/data/Net.s: src/data/Net.cpp.s
+.PHONY : src/data/Net.s
+
+# target to generate assembly for a file
+src/data/Net.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_core.dir/build.make CMakeFiles/tb_core.dir/src/data/Net.cpp.s
+.PHONY : src/data/Net.cpp.s
+
 src/data/RulesetJson.o: src/data/RulesetJson.cpp.o
 .PHONY : src/data/RulesetJson.o
 
@@ -937,6 +987,33 @@ src/render/ContentPaths.s: src/render/ContentPaths.cpp.s
 src/render/ContentPaths.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tactical_battler.dir/build.make CMakeFiles/tactical_battler.dir/src/render/ContentPaths.cpp.s
 .PHONY : src/render/ContentPaths.cpp.s
+
+src/render/MatchSource.o: src/render/MatchSource.cpp.o
+.PHONY : src/render/MatchSource.o
+
+# target to build an object file
+src/render/MatchSource.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_matchsource_demo.dir/build.make CMakeFiles/tb_matchsource_demo.dir/src/render/MatchSource.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tactical_battler.dir/build.make CMakeFiles/tactical_battler.dir/src/render/MatchSource.cpp.o
+.PHONY : src/render/MatchSource.cpp.o
+
+src/render/MatchSource.i: src/render/MatchSource.cpp.i
+.PHONY : src/render/MatchSource.i
+
+# target to preprocess a source file
+src/render/MatchSource.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_matchsource_demo.dir/build.make CMakeFiles/tb_matchsource_demo.dir/src/render/MatchSource.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tactical_battler.dir/build.make CMakeFiles/tactical_battler.dir/src/render/MatchSource.cpp.i
+.PHONY : src/render/MatchSource.cpp.i
+
+src/render/MatchSource.s: src/render/MatchSource.cpp.s
+.PHONY : src/render/MatchSource.s
+
+# target to generate assembly for a file
+src/render/MatchSource.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_matchsource_demo.dir/build.make CMakeFiles/tb_matchsource_demo.dir/src/render/MatchSource.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tactical_battler.dir/build.make CMakeFiles/tactical_battler.dir/src/render/MatchSource.cpp.s
+.PHONY : src/render/MatchSource.cpp.s
 
 src/render/PackManifest.o: src/render/PackManifest.cpp.o
 .PHONY : src/render/PackManifest.o
@@ -1253,6 +1330,54 @@ tests/map_demo.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_map_demo.dir/build.make CMakeFiles/tb_map_demo.dir/tests/map_demo.cpp.s
 .PHONY : tests/map_demo.cpp.s
 
+tests/matchsource_demo.o: tests/matchsource_demo.cpp.o
+.PHONY : tests/matchsource_demo.o
+
+# target to build an object file
+tests/matchsource_demo.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_matchsource_demo.dir/build.make CMakeFiles/tb_matchsource_demo.dir/tests/matchsource_demo.cpp.o
+.PHONY : tests/matchsource_demo.cpp.o
+
+tests/matchsource_demo.i: tests/matchsource_demo.cpp.i
+.PHONY : tests/matchsource_demo.i
+
+# target to preprocess a source file
+tests/matchsource_demo.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_matchsource_demo.dir/build.make CMakeFiles/tb_matchsource_demo.dir/tests/matchsource_demo.cpp.i
+.PHONY : tests/matchsource_demo.cpp.i
+
+tests/matchsource_demo.s: tests/matchsource_demo.cpp.s
+.PHONY : tests/matchsource_demo.s
+
+# target to generate assembly for a file
+tests/matchsource_demo.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_matchsource_demo.dir/build.make CMakeFiles/tb_matchsource_demo.dir/tests/matchsource_demo.cpp.s
+.PHONY : tests/matchsource_demo.cpp.s
+
+tests/net_demo.o: tests/net_demo.cpp.o
+.PHONY : tests/net_demo.o
+
+# target to build an object file
+tests/net_demo.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_net_demo.dir/build.make CMakeFiles/tb_net_demo.dir/tests/net_demo.cpp.o
+.PHONY : tests/net_demo.cpp.o
+
+tests/net_demo.i: tests/net_demo.cpp.i
+.PHONY : tests/net_demo.i
+
+# target to preprocess a source file
+tests/net_demo.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_net_demo.dir/build.make CMakeFiles/tb_net_demo.dir/tests/net_demo.cpp.i
+.PHONY : tests/net_demo.cpp.i
+
+tests/net_demo.s: tests/net_demo.cpp.s
+.PHONY : tests/net_demo.s
+
+# target to generate assembly for a file
+tests/net_demo.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tb_net_demo.dir/build.make CMakeFiles/tb_net_demo.dir/tests/net_demo.cpp.s
+.PHONY : tests/net_demo.cpp.s
+
 tests/pack_demo.o: tests/pack_demo.cpp.o
 .PHONY : tests/pack_demo.o
 
@@ -1501,6 +1626,8 @@ help:
 	@echo "... tb_headless"
 	@echo "... tb_json_demo"
 	@echo "... tb_map_demo"
+	@echo "... tb_matchsource_demo"
+	@echo "... tb_net_demo"
 	@echo "... tb_pack_demo"
 	@echo "... tb_roster_demo"
 	@echo "... tb_ruleset_demo"
@@ -1544,6 +1671,9 @@ help:
 	@echo "... src/data/MapJson.o"
 	@echo "... src/data/MapJson.i"
 	@echo "... src/data/MapJson.s"
+	@echo "... src/data/Net.o"
+	@echo "... src/data/Net.i"
+	@echo "... src/data/Net.s"
 	@echo "... src/data/RulesetJson.o"
 	@echo "... src/data/RulesetJson.i"
 	@echo "... src/data/RulesetJson.s"
@@ -1562,6 +1692,9 @@ help:
 	@echo "... src/render/ContentPaths.o"
 	@echo "... src/render/ContentPaths.i"
 	@echo "... src/render/ContentPaths.s"
+	@echo "... src/render/MatchSource.o"
+	@echo "... src/render/MatchSource.i"
+	@echo "... src/render/MatchSource.s"
 	@echo "... src/render/PackManifest.o"
 	@echo "... src/render/PackManifest.i"
 	@echo "... src/render/PackManifest.s"
@@ -1601,6 +1734,12 @@ help:
 	@echo "... tests/map_demo.o"
 	@echo "... tests/map_demo.i"
 	@echo "... tests/map_demo.s"
+	@echo "... tests/matchsource_demo.o"
+	@echo "... tests/matchsource_demo.i"
+	@echo "... tests/matchsource_demo.s"
+	@echo "... tests/net_demo.o"
+	@echo "... tests/net_demo.i"
+	@echo "... tests/net_demo.s"
 	@echo "... tests/pack_demo.o"
 	@echo "... tests/pack_demo.i"
 	@echo "... tests/pack_demo.s"

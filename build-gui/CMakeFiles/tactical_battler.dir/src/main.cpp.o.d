@@ -1,6 +1,5 @@
 CMakeFiles/tactical_battler.dir/src/main.cpp.o: \
  /home/hugo/Projects/ATB/src/main.cpp /usr/include/stdc-predef.h \
- /home/hugo/Projects/ATB/src/core/AI.h \
  /home/hugo/Projects/ATB/src/core/Battle.h \
  /home/hugo/Projects/ATB/src/core/Combat.h \
  /usr/include/c++/16.1.1/cstdint \
@@ -141,6 +140,7 @@ CMakeFiles/tactical_battler.dir/src/main.cpp.o: \
  /home/hugo/Projects/ATB/src/data/CatalogJson.h \
  /home/hugo/Projects/ATB/src/data/CreatureJson.h \
  /home/hugo/Projects/ATB/src/data/MapJson.h \
+ /home/hugo/Projects/ATB/src/data/Net.h \
  /home/hugo/Projects/ATB/src/data/RulesetJson.h \
  /home/hugo/Projects/ATB/src/render/Animator.h \
  /usr/include/c++/16.1.1/unordered_map \
@@ -151,6 +151,7 @@ CMakeFiles/tactical_battler.dir/src/main.cpp.o: \
  /usr/include/c++/16.1.1/bits/node_handle.h \
  /home/hugo/Projects/ATB/src/render/BuildEditorScreen.h \
  /home/hugo/Projects/ATB/src/render/ContentPaths.h \
+ /home/hugo/Projects/ATB/src/render/MatchSource.h \
  /home/hugo/Projects/ATB/src/render/Renderer.h \
  /home/hugo/Projects/ATB/src/render/SpritePack.h \
  /home/hugo/Projects/ATB/src/render/PackManifest.h \

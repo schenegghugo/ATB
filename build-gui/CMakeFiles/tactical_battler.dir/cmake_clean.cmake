@@ -6,6 +6,8 @@ file(REMOVE_RECURSE
   "CMakeFiles/tactical_battler.dir/src/render/BuildEditorScreen.cpp.o.d"
   "CMakeFiles/tactical_battler.dir/src/render/ContentPaths.cpp.o"
   "CMakeFiles/tactical_battler.dir/src/render/ContentPaths.cpp.o.d"
+  "CMakeFiles/tactical_battler.dir/src/render/MatchSource.cpp.o"
+  "CMakeFiles/tactical_battler.dir/src/render/MatchSource.cpp.o.d"
   "CMakeFiles/tactical_battler.dir/src/render/PackManifest.cpp.o"
   "CMakeFiles/tactical_battler.dir/src/render/PackManifest.cpp.o.d"
   "CMakeFiles/tactical_battler.dir/src/render/Renderer.cpp.o"
