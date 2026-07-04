@@ -276,6 +276,52 @@ public:
     [[nodiscard]] std::string_view name() const override { return "beam"; }
 };
 
+// A deliberately weaker toy: a greedy 1-ply hill-climb. Each step picks the
+// single action that most improves evalState (ties keep the first enumerated, so
+// it's deterministic) and stops once nothing improves. No look-ahead — a foil
+// for the beam search and a worked template for community Brains (Phase 3.2).
+class GreedyBrain final : public Brain {
+public:
+    [[nodiscard]] std::vector<PlannedAction> planTurn(const Battle& battle,
+                                                      EntityId self) const override {
+        const Faction me = battle.unit(self).team;
+        const std::vector<int> foeField = buildFoeField(battle, me);
+        Battle state = battle;
+        state.setEventRecording(false); // throwaway sims don't narrate (and stay cheap to clone)
+        std::vector<PlannedAction> seq;
+        double cur = evalState(state, me, foeField);
+        for (int step = 0; step < kMaxPlies; ++step) {
+            if (state.phase() == Phase::Finished || !state.unit(self).alive()) break;
+            double best = cur;
+            std::optional<PlannedAction> pick;
+            Battle picked = state;
+            for (const PlannedAction& a : enumerateActions(state, self)) {
+                Battle s2 = state; // clone + simulate
+                applyAction(s2, self, a);
+                const double e = evalState(s2, me, foeField);
+                if (e > best) { best = e; pick = a; picked = std::move(s2); }
+            }
+            if (!pick) break; // no improving move — stop (greedy has no look-ahead)
+            seq.push_back(*pick);
+            state = std::move(picked);
+            cur = best;
+        }
+        return seq;
+    }
+    [[nodiscard]] std::string_view name() const override { return "greedy"; }
+};
+
+// The Brains known to brainByName()/selection. Built-ins are inserted on first
+// access; registerBrain() appends. Pointers are non-owning — every Brain here is
+// a static singleton that outlives the program.
+std::vector<const Brain*>& brainRegistry() {
+    static std::vector<const Brain*> reg = [] {
+        static const GreedyBrain greedy;
+        return std::vector<const Brain*>{&defaultBrain(), &greedy};
+    }();
+    return reg;
+}
+
 AIAction executeFirst(Battle& battle, EntityId self, const PlannedAction& a) {
     if (a.kind == PlannedAction::Kind::Cast) {
         battle.cast(self, a.slot, a.target);
@@ -354,6 +400,24 @@ AIAction summonTakeOneAction(Battle& b, EntityId self) {
 const Brain& defaultBrain() {
     static const BeamSearchBrain brain;
     return brain;
+}
+
+const Brain* brainByName(std::string_view name) {
+    for (const Brain* b : brainRegistry())
+        if (b->name() == name) return b;
+    return nullptr;
+}
+
+std::vector<std::string_view> brainNames() {
+    std::vector<std::string_view> out;
+    for (const Brain* b : brainRegistry()) out.push_back(b->name());
+    return out;
+}
+
+bool registerBrain(const Brain& brain) {
+    if (brainByName(brain.name())) return false; // name taken — keep the first
+    brainRegistry().push_back(&brain);
+    return true;
 }
 
 AIAction enemyTakeOneAction(Battle& battle, EntityId self, const Brain& brain) {

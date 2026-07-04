@@ -175,8 +175,10 @@ machine-readable **`.csv`** tables (`.spells` / `.pairs` / `.length` /
 does**: `data/catalog.json`, `data/creatures.json`, and `data/rules.json`
 (format, economy, banned spells, arena), so editing those files drives the
 report. Point it at a different content set with `ATB_DATA_DIR=<dir>`, a specific
-battlefield with `ATB_MAP=<key|path.json>` (or `''` for random), and a team size
-with `ATB_TEAM=<n>` (1v1, 2v2, 3v3 — the per-spell stats hold for any format).
+battlefield with `ATB_MAP=<key|path.json>` (or `''` for random), a team size
+with `ATB_TEAM=<n>` (1v1, 2v2, 3v3 — the per-spell stats hold for any format), and
+the AI both sides play with `ATB_BRAIN=<name>` (`beam`, the default, or the `greedy`
+toy — pluggable so a community AI can be gauntleted without touching combat code).
 
 The friendlier wrapper `scripts/balance.sh` builds the binary and exposes these
 as flags — `scripts/balance.sh --help`:
@@ -185,6 +187,7 @@ as flags — `scripts/balance.sh --help`:
 scripts/balance.sh -n 30000 -s 42            # 30k matches on the ruleset's arena
 scripts/balance.sh --map duel                # test a specific static map
 scripts/balance.sh --team 2 -n 10000         # 2v2 instead of 1v1
+scripts/balance.sh --brain greedy -n 5000    # gauntlet a different AI
 scripts/balance.sh --data /tmp/mymod --map arena -o mymod.txt
 ```
 

@@ -57,6 +57,25 @@ public:
 // doesn't supply a Brain. A stable process-wide singleton (stateless).
 [[nodiscard]] const Brain& defaultBrain();
 
+// --- Brain registry ---------------------------------------------------------
+// A match can pick a Brain by name so community AIs drop in without forking
+// AI.cpp (Phase 3.2 in MILESTONES.md). Two built-ins are always present:
+// "beam" (the default beam search) and "greedy" (a weaker 1-ply hill-climb toy,
+// a foil for the beam and a template for new Brains). Selection is app-level —
+// core stays pure and reads no environment.
+
+// The registered Brain named `name`, or nullptr if none matches.
+[[nodiscard]] const Brain* brainByName(std::string_view name);
+
+// All registered brain names, in registration order (built-ins first). For
+// help text / discovery.
+[[nodiscard]] std::vector<std::string_view> brainNames();
+
+// Register `brain` under brain.name() so brainByName()/selection can find it.
+// The Brain must outlive every match that uses it (pass a static/singleton).
+// No-op returning false if the name is already taken (the existing one stays).
+bool registerBrain(const Brain& brain);
+
 // Performs at most one action for the given unit and returns what it did.
 [[nodiscard]] AIAction enemyTakeOneAction(Battle& battle, EntityId self, const Brain& brain);
 [[nodiscard]] inline AIAction enemyTakeOneAction(Battle& battle, EntityId self) {

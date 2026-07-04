@@ -15,6 +15,7 @@ map=""
 map_set=0
 data=""
 team=""
+brain=""
 
 usage() {
     cat <<'EOF'
@@ -27,12 +28,14 @@ Usage: scripts/balance.sh [options]
                       a path to a map .json, or '' to force a random arena
   -d, --data DIR      data directory holding catalog/creatures/rules (+ maps/)
   -t, --team N        team size: 1 = 1v1, 2 = 2v2, 3 = 3v3 (default: from rules.json)
+  -b, --brain NAME    AI both sides play: 'beam' (default) or 'greedy' (toy)
   -h, --help          show this help
 
 Examples:
   scripts/balance.sh -n 30000 -s 42
   scripts/balance.sh --map duel
   scripts/balance.sh --team 2 -n 10000
+  scripts/balance.sh --brain greedy -n 5000
   scripts/balance.sh --map data/maps/duel.json -n 10000
   scripts/balance.sh --data /tmp/mymod --map arena -o mymod_report.txt
 EOF
@@ -46,6 +49,7 @@ while [[ $# -gt 0 ]]; do
         -m | --map) map="$2"; map_set=1; shift 2 ;;
         -d | --data) data="$2"; shift 2 ;;
         -t | --team) team="$2"; shift 2 ;;
+        -b | --brain) brain="$2"; shift 2 ;;
         -h | --help) usage; exit 0 ;;
         *) echo "balance.sh: unknown option '$1'" >&2; usage; exit 1 ;;
     esac
@@ -62,8 +66,9 @@ cmake --build build --target tb_balance -j >/dev/null
 # arena even if rules.json names a map.
 [[ "$map_set" == 1 ]] && export ATB_MAP="$map"
 [[ -n "$team" ]] && export ATB_TEAM="$team"
+[[ -n "$brain" ]] && export ATB_BRAIN="$brain"
 
-echo "balance: ${matches} matches, seed ${seed}${team:+, ${team}v${team}}${map:+, map='${map}'}${data:+, data='${data}'}"
+echo "balance: ${matches} matches, seed ${seed}${team:+, ${team}v${team}}${map:+, map='${map}'}${brain:+, brain='${brain}'}${data:+, data='${data}'}"
 ./build/tb_balance "$matches" "$seed" "$out"
 base="${out%.txt}"
 echo "balance: wrote ${out}, ${base}.html (charts), and ${base}.{spells,pairs,length,outcomes}.csv"

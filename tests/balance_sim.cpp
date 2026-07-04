@@ -109,7 +109,7 @@ Build randomBuild(std::mt19937& rng, const SpellCatalog& catalog, const BuildRul
 }
 
 // ---- Match simulation ------------------------------------------------------
-void takeTurn(Battle& b) { runEnemyTurn(b, /*autoEndTurn=*/true); }
+void takeTurn(Battle& b, const Brain& brain) { runEnemyTurn(b, /*autoEndTurn=*/true, brain); }
 
 struct Outcome {
     int result = 0; // +1 A (first actor), -1 B, 0 draw
@@ -119,11 +119,13 @@ struct Outcome {
 
 Outcome runMatch(const Ruleset& ruleset, const SpellCatalog& catalog,
                  const std::vector<CharacterBuild>& A, const std::vector<CharacterBuild>& B,
-                 unsigned seed, const Grid* staticArena, const std::vector<Entity>& creatures) {
+                 unsigned seed, const Grid* staticArena, const std::vector<Entity>& creatures,
+                 const Brain& brain) {
     Battle battle = buildMatch(ruleset, A, B, catalog, seed, creatures, staticArena);
 
     Outcome o;
-    for (; o.length < kHalfTurnCap && battle.phase() != Phase::Finished; ++o.length) takeTurn(battle);
+    for (; o.length < kHalfTurnCap && battle.phase() != Phase::Finished; ++o.length)
+        takeTurn(battle, brain);
     auto w = battle.winner();
     if (w) {
         o.result = (*w == Faction::Player) ? 1 : -1;
@@ -277,6 +279,19 @@ int main(int argc, char** argv) {
     if (const char* tv = std::getenv("ATB_TEAM"); tv && *tv)
         ruleset.teamSize = std::max(1, std::atoi(tv));
 
+    // ATB_BRAIN selects the AI both sides play (default: the beam search). An
+    // unknown name is fatal — don't silently report the wrong AI's balance.
+    const Brain* brain = &defaultBrain();
+    if (const char* bn = std::getenv("ATB_BRAIN"); bn && *bn) {
+        brain = brainByName(bn);
+        if (!brain) {
+            std::fprintf(stderr, "balance: unknown ATB_BRAIN='%s'; available:", bn);
+            for (std::string_view n : brainNames()) std::fprintf(stderr, " %.*s", (int)n.size(), n.data());
+            std::fprintf(stderr, "\n");
+            return 1;
+        }
+    }
+
     // Static map (if named): all matches share it.
     std::optional<Grid> staticArena;
     if (!ruleset.arena.map.empty()) {
@@ -314,7 +329,7 @@ int main(int argc, char** argv) {
             defsA.push_back(teamA.back().def);
             defsB.push_back(teamB.back().def);
         }
-        Outcome o = runMatch(ruleset, catalog, defsA, defsB, rng(), arenaPtr, creatures);
+        Outcome o = runMatch(ruleset, catalog, defsA, defsB, rng(), arenaPtr, creatures, *brain);
 
         lengths.push_back(o.length);
         totalLen += o.length;
@@ -416,6 +431,7 @@ int main(int argc, char** argv) {
     r << "  wall time          " << elapsed << " s  ("
       << (elapsed > 0 ? matches / elapsed : 0) << " matches/s)\n";
     r << "  ruleset            " << rulesetSource << "\n";
+    r << "  AI brain           " << brain->name() << "\n";
     r << "  format             " << teamSize << "v" << teamSize << "\n";
     if (staticArena)
         r << "  arena              static map '" << ruleset.arena.map << "'\n";

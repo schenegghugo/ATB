@@ -10,20 +10,34 @@
 #include "core/Spells.h"
 
 #include <cstdio>
+#include <cstdlib>
 
 using namespace tb;
 
 namespace {
 
-// Greedy controller mirroring the enemy AI, for whichever unit holds the turn.
-void runGreedyTurn(Battle& b) {
+// Drive whichever unit holds the turn with the selected Brain, one action at a
+// time (mirrors how the GUI paces the AI).
+void runTurn(Battle& b, const Brain& brain) {
     const EntityId self = b.activeUnit();
     const Entity& me = b.unit(self);
     const int cap = me.maxAp + me.maxMp + 4;
     for (int i = 0; i < cap; ++i) {
-        if (enemyTakeOneAction(b, self) == AIAction::Done) break;
+        if (enemyTakeOneAction(b, self, brain) == AIAction::Done) break;
     }
     if (b.phase() != Phase::Finished) b.endTurn();
+}
+
+// Resolve the AI from $ATB_BRAIN (default: the beam search). Unknown name →
+// nullptr after listing the choices, so the caller can fail loud.
+const Brain* selectBrain() {
+    const char* want = std::getenv("ATB_BRAIN");
+    if (!want || !*want) return &defaultBrain();
+    if (const Brain* b = brainByName(want)) return b;
+    std::fprintf(stderr, "headless: unknown ATB_BRAIN='%s'; available:", want);
+    for (std::string_view n : brainNames()) std::fprintf(stderr, " %.*s", (int)n.size(), n.data());
+    std::fprintf(stderr, "\n");
+    return nullptr;
 }
 
 void printAscii(const Battle& b) {
@@ -50,6 +64,9 @@ const Entity& team(const Battle& b, Faction t) {
 } // namespace
 
 int main() {
+    const Brain* brain = selectBrain();
+    if (!brain) return 1;
+
     SpellCatalog catalog = makeDefaultCatalog();
     BuildRules rules{};
 
@@ -73,13 +90,14 @@ int main() {
     roster.push_back(instantiate(bruiser, catalog, Faction::Enemy, cfg.enemySpawn, rules));
     Battle battle(std::move(grid), std::move(roster));
 
-    std::printf("Pyromancer (player) vs Bruiser (enemy) — classless point-buy builds.\n\n");
+    std::printf("Pyromancer (player) vs Bruiser (enemy) — classless point-buy builds.\n");
+    std::printf("AI brain: %.*s\n\n", (int)brain->name().size(), brain->name().data());
     printAscii(battle);
 
     int round = 0;
     while (battle.phase() != Phase::Finished && round < 100) {
         ++round;
-        runGreedyTurn(battle);
+        runTurn(battle, *brain);
         const Entity& p = team(battle, Faction::Player);
         const Entity& e = team(battle, Faction::Enemy);
         std::printf("Round %2d | %-10s HP %2d @ (%2d,%2d) | %-8s HP %2d @ (%2d,%2d)\n", round,

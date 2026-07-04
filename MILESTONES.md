@@ -672,12 +672,23 @@ passes and `tb_balance 400 7` is byte-identical to the pre-change AI apart from 
 wall-clock timing line (determinism intact). *(Registry / by-name selection + a toy
 Brain are 3.2.)*
 
-### 3.2 ☐ Registry / selection
-Let a match pick a `Brain` by name so community AIs drop in without forking
-`AI.cpp`. Keep `enemyTakeOneAction` / `runEnemyTurn` working as thin adapters.
+### 3.2 ☑ Registry / selection
+A match can now pick a `Brain` by name. `AI.h`/`AI.cpp` gained a small registry —
+`brainByName(name)`, `brainNames()`, `registerBrain(brain)` — seeded with two
+built-ins: **`beam`** (the default beam search, `defaultBrain()`) and a new
+**`greedy`** toy (a deliberately weaker 1-ply hill-climb reusing
+`enumerateActions`/`evalState`; deterministic, ~2× faster, and a worked template
+for community AIs). Registration is non-owning (Brains are static singletons) and
+selection stays **app-level** — `core/` reads no environment. `tb_headless` and
+`tb_balance` select via **`ATB_BRAIN=<name>`** (matching the `ATB_MAP`/`ATB_TEAM`
+convention; unknown name → lists the choices and exits 1); `scripts/balance.sh`
+exposes it as `-b/--brain` and the report header prints the AI used.
+`enemyTakeOneAction`/`runEnemyTurn` are unchanged thin adapters (the default
+overloads still call `defaultBrain()`). **No combat code touched.**
 
-**Acceptance:** a second toy `Brain` (e.g. greedy) can be selected and runs in
-`tb_headless` / `tb_balance` without touching combat code.
+**Acceptance:** ☑ `ATB_BRAIN=greedy` runs in both `tb_headless` and `tb_balance`
+(distinct balance numbers from `beam`, deterministic across reruns modulo the
+wall-clock line); the full headless suite + `tb_balance 200 1` stay green.
 
 ---
 
