@@ -769,9 +769,28 @@ Only start once Phase 1 (catalog loader + hash) is done. Build order and trust
 model are detailed in `ARCHITECTURE.md` §7. Each step is independently
 verifiable.
 
-### 4.1 ☐ Serialization + headless round-trip tests
-Intent (`move`/`cast`/`endTurn`), state snapshot, build payload (reuse
-`serializeBuild`). Prove deterministic offline — **no sockets yet**. Add to CI.
+### 4.1 ☑ Serialization + headless round-trip tests
+`data/Net.{h,cpp}` adds the three PvP wire payloads (§7), built on the existing
+`Json`/`JsonRead`/`SpellJson`/`SpellEnums` layers, `core/` untouched:
+- **`Intent`** — `move{dest}` / `cast{spellIdx,target}` / `endTurn`, with
+  `applyIntent(Battle&, actor, intent)` — a thin, **legality-checked** dispatch
+  over the public engine verbs (`moveToward`/`cast`/`endTurn`), exactly what the
+  authoritative runner (4.3) will call per inbound intent. Strict compact-JSON
+  (de)serialization, all-errors-with-context.
+- **`Snapshot`** — the near-full renderable match state (phase / winner / active /
+  round / ring + per-unit public state + ground effects), addressed by stable
+  `EntityId`. `snapshotOf(const Battle&)` reads public accessors only.
+  Deliberately omits each unit's full spell list (loadout is known from match
+  setup) — a lean state delta, not a rebuildable Battle (spectator spells later).
+- **Build payload** — reuses `serializeBuild`/`deserializeBuild` verbatim.
+
+`tb_net_demo` (29 checks, in CI): byte-identical round-trips for all three;
+malformed-input rejection (intent + snapshot); and a **determinism** proof —
+driving a whole match purely by Intents is reproducible *and* byte-identical to
+playing it through the engine verbs (`runEnemyTurn`). No sockets.
+
+**Acceptance:** ☑ intents/snapshots/builds round-trip deterministically offline,
+wired into CI; `core/` untouched.
 
 ### 4.2 ☐ `MatchSource` refactor (local only)
 Abstract `main.cpp`'s in-process `Battle` driving behind an interface; ship the
