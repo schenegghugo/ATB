@@ -168,7 +168,7 @@ when a Wall blocks it. Pink ticks above a unit are active status effects.
 `tb_balance [matches] [seed] [outfile]` runs thousands of AI-vs-AI matches
 between randomly generated point-buy builds — the loop for tuning costs and the
 stat economy. Each run writes three siblings from `<outfile>` (default
-`balance_report.txt`): the **text report** (also echoed to stdout), a
+`output/balance_report.txt`): the **text report** (also echoed to stdout), a
 self-contained **`.html`** with charts (inline SVG, no dependencies), and
 machine-readable **`.csv`** tables (`.spells` / `.pairs` / `.length` /
 `.outcomes`) you can open in a spreadsheet. It uses the **same data the game

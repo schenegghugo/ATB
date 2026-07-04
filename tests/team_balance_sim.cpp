@@ -21,7 +21,7 @@
 //   <base>.roles.csv   <base>.comps.csv   <base>.matchups.csv (long format)
 //
 //   usage: tb_team_balance [matches] [seed] [outfile]
-//          defaults: 4000  12345  team_report.txt
+//          defaults: 4000  12345  output/team_report.txt
 //   env:   ATB_DATA_DIR, ATB_MAP, ATB_TEAM (team size; default from rules.json,
 //          but this tool is pointless at 1 — use >= 2)
 //
@@ -46,6 +46,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <map>
@@ -223,7 +224,11 @@ std::string f1(double v) { char b[32]; std::snprintf(b, sizeof b, "%.1f", v); re
 int main(int argc, char** argv) {
     const int matches = argc > 1 ? std::atoi(argv[1]) : 4000;
     const unsigned seed = argc > 2 ? static_cast<unsigned>(std::atoi(argv[2])) : 12345u;
-    const std::string outfile = argc > 3 ? argv[3] : "team_report.txt";
+    const std::string outfile = argc > 3 ? argv[3] : "output/team_report.txt";
+    // Make sure the report's directory exists (e.g. the default output/).
+    if (std::filesystem::path parent = std::filesystem::path(outfile).parent_path();
+        !parent.empty())
+        std::filesystem::create_directories(parent);
 
     std::string dataDir = "data";
     if (const char* dir = std::getenv("ATB_DATA_DIR"); dir && *dir) dataDir = dir;

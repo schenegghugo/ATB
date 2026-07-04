@@ -14,7 +14,7 @@ cd "$(dirname "$0")/.." # repo root (this script lives in scripts/)
 
 matches=4000
 seed=42
-out="team_report.txt"
+out="output/team_report.txt"
 team=2
 map=""
 map_set=0
@@ -26,7 +26,7 @@ Usage: scripts/team_balance.sh [options]
 
   -n, --matches N     number of matches            (default 4000)
   -s, --seed S        RNG seed (deterministic)      (default 42)
-  -o, --out FILE      report output file            (default team_report.txt)
+  -o, --out FILE      report output file            (default output/team_report.txt)
   -t, --team N        team size: 2 = 2v2, 3 = 3v3   (default 2)
   -m, --map KEY|FILE  battlefield: a map key under data/maps/ (e.g. 'duel'),
                       a path to a map .json, or '' to force a random arena

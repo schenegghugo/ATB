@@ -14,7 +14,7 @@
 //   <base>.length.csv    length histogram  <base>.outcomes.csv win/loss + how games end
 //
 //   usage: tb_balance [matches] [seed] [outfile]
-//          defaults: 4000  12345  balance_report.txt
+//          defaults: 4000  12345  output/balance_report.txt
 //
 // NOTE: the planner casts every spell except Portal (its step-on-entry teleport
 // needs deeper lookahead), so Portal's numbers reflect point opportunity-cost.
@@ -40,6 +40,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <random>
@@ -198,7 +199,11 @@ void foldSide(SideAgg& g, const Build& b, bool won) {
 int main(int argc, char** argv) {
     const int matches = argc > 1 ? std::atoi(argv[1]) : 4000;
     const unsigned seed = argc > 2 ? static_cast<unsigned>(std::atoi(argv[2])) : 12345u;
-    const std::string outfile = argc > 3 ? argv[3] : "balance_report.txt";
+    const std::string outfile = argc > 3 ? argv[3] : "output/balance_report.txt";
+    // Make sure the report's directory exists (e.g. the default output/).
+    if (std::filesystem::path parent = std::filesystem::path(outfile).parent_path();
+        !parent.empty())
+        std::filesystem::create_directories(parent);
 
     // Balance the *actual* content: load data/catalog.json (override the dir via
     // ATB_DATA_DIR) so data edits drive the report. Absent file → the compiled

@@ -10,7 +10,7 @@ cd "$(dirname "$0")/.." # repo root (this script lives in scripts/)
 
 matches=3000
 seed=42
-out="balance_report.txt"
+out="output/balance_report.txt"
 map=""
 map_set=0
 data=""
@@ -22,7 +22,7 @@ Usage: scripts/balance.sh [options]
 
   -n, --matches N     number of matches            (default 3000)
   -s, --seed S        RNG seed (deterministic)      (default 42)
-  -o, --out FILE      report output file            (default balance_report.txt)
+  -o, --out FILE      report output file            (default output/balance_report.txt)
   -m, --map KEY|FILE  battlefield: a map key under data/maps/ (e.g. 'duel'),
                       a path to a map .json, or '' to force a random arena
   -d, --data DIR      data directory holding catalog/creatures/rules (+ maps/)
