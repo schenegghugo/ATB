@@ -1079,11 +1079,28 @@ play. Abandonment falls back to a start-of-game ping + timeout → forfeit.
   `verify()` reproduces the **exact final state** of the live match (and again from
   the parsed string); wrong hash / illegal build / incomplete record are rejected.
   This one artifact is the replay, the scoresheet, and the shareable game.
-- **CR.3 ☐ Mailbox relay.** A tiny store-and-forward service (post/get move strings
-  by game id); both clients connect out (NAT-immune). Reuses the transport.
-- **CR.4 ☐ Submit-to-arbiter + MMR.** Two clients submit their notation; the arbiter
-  cross-checks + verifies + records the Elo result (reuses `AccountStore`). Add the
-  abandonment ping/timeout.
+- **CR.3 ☑ Mailbox relay.** `net/MailboxRelay.{h,cpp}`: a `Mailbox` (thread-safe,
+  per-game **append-only log of opaque strings** — no game logic), a `serveRelay`
+  TCP server (one thread per connection, post/poll requests), and a `RelayClient`
+  (`post(game, sender, msg)` / `poll(game, from) → {entries, next}`). Two players
+  post their move-strings and poll for the other's, so they **never open a direct
+  P2P socket** — both connect *out* to the relay → NAT-immune — and it's trivial to
+  self-host (the EliteDesk). `tb_mailbox_demo` (in CI): two clients relay moves over
+  a real socket, a 10-message correspondence exchange stays **ordered + consistent
+  across both clients**, and games are isolated. *(In-memory for now; a persistent
+  store for multi-day correspondence games is a follow-up.)*
+- **CR.4 ☑ Submit-to-arbiter + MMR.** `net/Arbiter.{h,cpp}`: each player submits
+  `{user, opponent, seat, notation}`; the arbiter pairs the two by a stable
+  `gameKey` (sorted users + catalog hash + seed), **requires the two scoresheets to
+  agree** (double attestation — a loser can't submit a different sheet), re-runs
+  `replay::verify()` for the authoritative winner, and records **Elo** via
+  `AccountStore`. Thread-safe; decided games are remembered so they can't be
+  re-ranked. **A single submission never changes a rating** (you can fabricate a
+  whole notation yourself — both sides must agree). `tb_arbiter_demo` (in CI):
+  agreeing double-submit ranks the game (winner +16/loser −16); disagreeing sheets,
+  inconsistent seat claims, illegal (over-budget) records, and lone submissions are
+  all rejected with no rating change. *(Auth of `user` is the network layer's job;
+  trustworthy forfeit-on-abandon needs per-move signing — noted, out of scope.)*
 - **CR.5 ☐ Perfect-info ranked ruleset.** An official `ranked.rules.json` (banning
   invisibility), pinned + hashed, optionally fetched from a URL (verified by hash).
 

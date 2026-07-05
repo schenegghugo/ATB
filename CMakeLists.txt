@@ -140,11 +140,19 @@ add_library(tb_transport STATIC
     src/net/GameClient.cpp
     src/net/MirrorSession.cpp
     src/net/AccountStore.cpp
+    src/net/Arbiter.cpp
+    src/net/MailboxRelay.cpp
 )
 target_link_libraries(tb_transport PUBLIC tb_core)
 
+add_executable(tb_mailbox_demo tests/mailbox_demo.cpp)
+target_link_libraries(tb_mailbox_demo PRIVATE tb_transport Threads::Threads)
+
 add_executable(tb_account_demo tests/account_demo.cpp)
 target_link_libraries(tb_account_demo PRIVATE tb_transport)
+
+add_executable(tb_arbiter_demo tests/arbiter_demo.cpp)
+target_link_libraries(tb_arbiter_demo PRIVATE tb_transport)
 
 add_executable(tb_server tools/server_main.cpp)
 target_link_libraries(tb_server PRIVATE tb_transport)
