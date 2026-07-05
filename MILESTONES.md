@@ -13,17 +13,20 @@ Off the critical path, a **Web/WASM build** (see *Parallel track* below) can be
 picked up anytime now that the GUI exists — it's frontend-only and independent of
 the content and PvP work.
 
-**Where we are:** Phases 0–2 (contributor-safe repo, catalog loader + hash,
-spell bar + sprite packs), the **Core split**, the **Match rulesets** milestone,
-and **pluggable AI** (3.1 `Brain` seam + 3.2 registry/selection) are all done. In
-Phase 4 (networked PvP), the offline foundation is in place: **4.1** serialization
-+ round-trip tests, **4.2** the client `MatchSource` seam, and **4.3** the
-authoritative in-process loopback runner. **Next: 4.4** — real transport + a 1v1
-custom match (the first socket).
+**Where we are:** Phases 0–2, the **Core split**, **Match rulesets**, and
+**pluggable AI** (3.1/3.2) are done. Phase 4 is essentially complete: **4.1–4.4**
+(wire formats → `MatchSource` seam → loopback runner → real TCP + GUI remote
+client) plus **4.5**'s server slices (multi-match daemon, accounts + PBKDF2,
+Elo/MMR, private lobbies, connect screen + main menu). The **correspondence-ranked
+arc (CR.1–CR.5) is built end-to-end**: cross-platform determinism, the game
+notation + verifier (= replays, §5.1), the mailbox relay, the double-submit
+arbiter, and the official perfect-information ranked ruleset. **Open threads:**
+GUI playtesting + async connect/waiting screen, SQLite behind the store seam,
+TLS before any public non-VPN launch, 4.6 chat, Phase 5.2 spectate, and the
+hidden-information ranked ideas (commit-reveal / decoys) parked under CR.6.
 
 **The one rule (satisfied):** no netcode before the catalog loader, content hash,
-and serialization round-trip tests exist (Phase 1 + 4.1) — all now done, so the
-transport work in 4.4+ rests on solid ground.
+and serialization round-trip tests exist (Phase 1 + 4.1) — all long since done.
 
 Status legend: ☐ todo ◐ in progress ☑ done
 
@@ -1000,7 +1003,7 @@ lobby and during the match.
 
 ---
 
-## Correspondence ranked — "verify, don't host" (design; target model for ranked at scale)
+## Correspondence ranked — "verify, don't host" (CR.1–CR.5 ☑ built; CR.6 ideas parked)
 
 The live authoritative server (4.4/4.5) **works and stays** — it's the right thing
 for custom lobbies, LAN, and as a low-latency relay. But for **ranked at scale**,
@@ -1101,8 +1104,121 @@ play. Abandonment falls back to a start-of-game ping + timeout → forfeit.
   inconsistent seat claims, illegal (over-budget) records, and lone submissions are
   all rejected with no rating change. *(Auth of `user` is the network layer's job;
   trustworthy forfeit-on-abandon needs per-move signing — noted, out of scope.)*
-- **CR.5 ☐ Perfect-info ranked ruleset.** An official `ranked.rules.json` (banning
-  invisibility), pinned + hashed, optionally fetched from a URL (verified by hash).
+- **CR.5 ☑ Perfect-info ranked ruleset.** Ships **`data/rules.ranked.json`** — the
+  canonical economy with `bannedSpells: ["invisible"]` (CI `--check`ed like the
+  other data files). `GameRecord` gained a **`rulesetHash`** (notation now `ATB1
+  <catalogHash> <rulesetHash> <seed> …`), with `replay::rulesetHash()`
+  **content-addressed** (a fixed version label, so a URL-fetched copy verifies by
+  hash regardless of origin/bytes) and `verify()` rejecting a hash mismatch — so a
+  scoresheet **pins which rules it was played under** and can't be cross-submitted
+  (the arbiter's `gameKey` includes it too). `tb_server` gained a `[rules-file]`
+  arg (`tb_server 5555 0.0.0.0 data/rules.ranked.json` hosts the official format;
+  a missing explicit file fails loud) + line-buffered logs for journald.
+  `tb_ranked_rules_demo` (in CI): ban loads + rejects invisibility builds (legal
+  casually, rejected ranked, and at `verify()`), content-addressing holds,
+  cross-ruleset submission is rejected, and a legal ranked game still ranks
+  end-to-end through the arbiter. *(Gotcha caught: the canonical `data/rules.json`
+  economy is stricter than the compiled fallback — ranked builds must budget
+  against the data file.)*
+
+**CR arc complete.** ✅ CR.1 determinism → CR.2 notation+verifier → CR.3 mailbox
+relay → CR.4 double-submit arbiter → CR.5 official ranked ruleset. Ranked is
+perfect-information v1: invisibility stays casual/custom until CR.6.
+
+### CR.6 ◐ Hidden information in trustless ranked
+
+**Slice 1 ☑ — the decoy mechanic (engine + content).** Option 1 below is now a
+`core/` mechanic. `Effect::Type::Decoy` spawns a **full, publicly identical twin**
+of the caster on a free tile and cloaks the pair (`CloakPair` in `Battle`): both
+members stay Champion-kind, both block movement, both are player-driven —
+**nothing in shared state says which is real**. While cloaked, damage to either
+member **defers** into a hidden per-member pool (no HP change, no death, the
+Damage event still narrates). **Casting from a member reveals it as the real one**
+— so the reveal choice rides in the ordinary intent stream (replays/verification
+need no format change); an unrevealed pair **expires to the original by rule**
+(deterministic, no secret needed). At reveal the decoy quietly fades (no victory-
+relevant death) and only the real member's pending damage lands (a lethal reveal
+fizzles the cast and ends the match properly). Ships as the **`decoy` spell**
+(id 20) — the ranked-legal stealth replacing the banned `invisible`. The beam AI
+offers decoy targets like summons. `tb_decoy_demo` (36 checks, in CI) covers
+spawn/indistinguishability, deferral, reveal-by-acting, the identity swap
+(acting from the twin — the original fades, control + victory carry over),
+expiry-defaults-to-original, and lethal reveals. Determinism KAT fingerprints
+unchanged; 2000-match sim runs clean with decoys in play.
+
+**Shipped alongside (new status-system powers + three spells, ids 17–19):**
+- **`blind`** — new `StatusEffect::Kind::RangeDebuff`: `effMax = maxRange −
+  (maxRange·pct)/100`, floored at `minRange` (pure integer math, stacks capped at
+  100%). Blind is −60% for two victim turns.
+- **`surge`** — new `StatusEffect.delay` (a status inert for N owner-turns, then
+  active — a generic *delayed payload* for modders): +2 AP for 2 turns, **then**
+  −6 AP for 1 turn (AP/MP resets now floor at 0).
+- **`flux`** — new `Effect.polarized` flag: the magnitude flips sign against the
+  caster's foes. One spell = +2 MP to an ally / −2 MP to an enemy (1 turn).
+All three are data-driven (JSON: `status.delay`, effect `polarized`, `decoy`
+type; strict validation; omitted-when-default so existing files are byte-stable).
+*(Follow-ups: the beam AI never casts Blind/Surge/Flux — like Portal — and plays
+Decoy naively, so all four sim "too weak"; Rewind on a cloaked member is an
+untested edge; hard fog of the pending pools is inherently client-side.)*
+
+**Slice 2 ☑ — the commitment layer (correspondence ranked).** The notation gained
+**`#commit:choice:nonce` tokens** (one per decoy cast, in cast order; `commit =
+sha256(choice ":" nonce)`, `choice` = `a` stay-original / `b` become-the-twin;
+`replay::makeCommitment()` is the shared formula). `verify()` now re-simulates
+while diffing the live `cloakPairs()` across intents: the Nth pair binds the Nth
+commitment; **a member that acts must be the committed one**, and a pair left to
+**expire reveals the original by rule — so a `b` commitment that expires FAILS**
+(that is precisely the dodge-the-damage cheat: commit to the twin, watch where the
+AoE lands, chicken out). Tampered hashes, missing commitments (ranked default:
+required) and surplus commitments all fail; pairs still cloaked at game end are
+choice-exempt (the secret never resolved) but must still hash-verify; casual
+replays may pass `requireCommitments=false`. Engine + intent stream untouched —
+the layer is entirely notation + verifier. **Timeliness** (that the commit was
+shown at cast, not invented post-hoc) is attested by **double-submit**: the
+opponent won't co-sign a scoresheet whose commitments they never saw in play.
+`tb_commit_demo` (23 checks, in CI): honest `a`, honest swap-`b`, and honest
+expiry all verify; the lie, the chicken-out, the bad hash, the missing and the
+surplus commitment are all rejected; notation round-trips byte-identically.
+*(Remaining for a full in-game flow: the client generating a commitment at cast +
+shipping it with the move over the relay — protocol UX, not trust machinery.)*
+
+#### Design options considered (for reference)
+
+An altered client can never be prevented from *seeing* state it must simulate; the
+options are to **remove** the secret (CR.5, done), make it **cryptographic**, or
+make it **symmetric**. Candidate designs, roughly cheapest-first:
+
+1. **Decoy invisibility (Scotland-Yard style) — likely the sweet spot.** Casting
+   spawns a **real and a decoy entity, both visible**; the caster commits
+   `hash(whichIsReal + nonce)` at cast time. Both are physical entities in the
+   engine (both block movement/collide identically), so **the opponent's legal
+   move-space needs no secret** — determinism and P2P simulation just work. Damage
+   to either is **deferred** (tracked per-entity, applied at reveal — the
+   "damage updates when invisibility ends" idea). Reveal = publish the nonce;
+   commitment makes retroactive swapping impossible. Epistemic stealth, zero
+   protocol change beyond one commitment token in the notation.
+2. **Commit-reveal movement (Diplomacy-style).** True hidden movement: while
+   invisible, broadcast `hash(move+nonce)` instead of the move; reveal at
+   stealth-end and retro-resolve (opponent AoE vs committed path). Requires the
+   hidden unit to **ghost** (not block/collide) while hidden — otherwise the
+   opponent can't compute their own legal moves — i.e. a real gameplay change, and
+   acting must break stealth.
+3. **ZK proofs (the Dark Forest precedent).** Each hidden move ships a
+   zero-knowledge proof of legality w.r.t. the secret position (zkSNARKs; the
+   Ethereum game *Dark Forest* does exactly this for fog-of-war). The "correct"
+   cryptographic answer; heavyweight dependency, real R&D.
+4. **Fog-oracle relay.** The mailbox relay (CR.3) holds *only* the hidden bits and
+   answers hit-queries — a minimal trusted component that can't decide outcomes
+   (everything is committed + audited at reveal), only leak. Pragmatic middle
+   ground on self-hosted infra.
+
+**Adjacent anti-cheat (protocol can't fix, detection can):** engine assistance —
+a client quietly consulting the beam search (chess's classic problem). We *have*
+the reference engine: compute per-move loss vs `defaultBrain()`/`evalState` over
+submitted scoresheets (chess.com-style accuracy screening), plus move-time stats
+from relay timestamps. The relay's append-only log also doubles as the **match
+clock + abandonment witness** (its attested log ranks a walkover). Collusion/
+boosting remains a social/graph-detection problem — no protocol fixes it.
 
 Relationship to what's built: 4.4/4.5's live server is retained (custom/LAN/relay);
 CR.2 *is* Phase 5.1; `MatchRunner` is the verifier; `AccountStore` records the

@@ -37,6 +37,10 @@ inline constexpr int Bomb = 13;    // lob an inert bomb that detonates after a f
 inline constexpr int Blocker = 14; // summon a tanky puller
 inline constexpr int Healer = 15;  // summon a healer
 inline constexpr int Brute = 16;   // summon a bruiser-lite
+inline constexpr int Blind = 17;   // range debuff: -60% max cast range
+inline constexpr int Surge = 18;   // +2 AP for 2 turns, then -6 AP for 1 turn
+inline constexpr int Flux = 19;    // polarized: +2 MP to an ally, -2 MP to a foe
+inline constexpr int Decoy = 20;   // cloaked twin — damage defers until reveal
 } // namespace spellid
 
 struct SpellDef {

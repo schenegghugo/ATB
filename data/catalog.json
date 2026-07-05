@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "1.0.1",
+  "version": "1.1.0",
   "spells": [
     {
       "id": 1,
@@ -416,6 +416,124 @@
         {
           "type": "summon",
           "creature": "brute"
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "key": "blind",
+      "buildCost": 2,
+      "tags": [
+        "debuff",
+        "ranged",
+        "single"
+      ],
+      "name": "Blind",
+      "apCost": 2,
+      "minRange": 1,
+      "maxRange": 6,
+      "needsLineOfSight": true,
+      "shape": "single",
+      "radius": 0,
+      "cooldown": 3,
+      "effects": [
+        {
+          "type": "applyStatus",
+          "status": {
+            "kind": "rangeDebuff",
+            "magnitude": 60,
+            "turns": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "key": "surge",
+      "buildCost": 2,
+      "tags": [
+        "support",
+        "buff",
+        "single"
+      ],
+      "name": "Surge",
+      "apCost": 2,
+      "minRange": 0,
+      "maxRange": 3,
+      "needsLineOfSight": false,
+      "shape": "single",
+      "radius": 0,
+      "cooldown": 5,
+      "effects": [
+        {
+          "type": "applyStatus",
+          "status": {
+            "kind": "apBuff",
+            "magnitude": 2,
+            "turns": 2
+          }
+        },
+        {
+          "type": "applyStatus",
+          "status": {
+            "kind": "apBuff",
+            "magnitude": -6,
+            "turns": 1,
+            "delay": 2
+          }
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "key": "flux",
+      "buildCost": 2,
+      "tags": [
+        "buff",
+        "debuff",
+        "single"
+      ],
+      "name": "Flux",
+      "apCost": 2,
+      "minRange": 1,
+      "maxRange": 5,
+      "needsLineOfSight": true,
+      "shape": "single",
+      "radius": 0,
+      "cooldown": 2,
+      "effects": [
+        {
+          "type": "applyStatus",
+          "status": {
+            "kind": "mpBuff",
+            "magnitude": 2,
+            "turns": 1
+          },
+          "polarized": true
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "key": "decoy",
+      "buildCost": 3,
+      "tags": [
+        "support",
+        "mobility",
+        "single"
+      ],
+      "name": "Decoy",
+      "apCost": 3,
+      "minRange": 1,
+      "maxRange": 3,
+      "needsLineOfSight": true,
+      "shape": "single",
+      "radius": 0,
+      "cooldown": 5,
+      "effects": [
+        {
+          "type": "decoy",
+          "amount": 3
         }
       ]
     }

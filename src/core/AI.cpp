@@ -179,7 +179,8 @@ std::vector<PlannedAction> enumerateActions(const Battle& b, EntityId self) {
                                     hasStatusEffect(sp, StatusEffect::Kind::Shield);
             const bool selfBuff = hasStatusEffect(sp, StatusEffect::Kind::Invisible);
             const bool placement = has(sp, Effect::Type::Spawn);
-            const bool summon = has(sp, Effect::Type::Summon);
+            // Summons and decoys both want a free tile to spawn onto.
+            const bool summon = has(sp, Effect::Type::Summon) || has(sp, Effect::Type::Decoy);
 
             std::vector<Vec2i> targets;
             if (offensive) targets.insert(targets.end(), foeTiles.begin(), foeTiles.end());

@@ -32,7 +32,8 @@ Arbiter::Result Arbiter::submit(const Submission& sub) {
 
     const replay::RecordParse pr = replay::parseRecord(sub.notation);
     if (!pr.ok) { r.error = "unparseable record: " + pr.error; return r; }
-    const std::string key = gameKey(sub.user, sub.opponent, pr.record.catalogHash, pr.record.seed);
+    const std::string key = gameKey(sub.user, sub.opponent,
+                                    pr.record.catalogHash + pr.record.rulesetHash, pr.record.seed);
 
     std::lock_guard<std::mutex> lock(mu_);
     if (resolved_.count(key)) { r.error = "game already recorded"; return r; }

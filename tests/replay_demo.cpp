@@ -52,6 +52,7 @@ replay::GameRecord record(const Ruleset& r, const SpellCatalog& cat, const std::
                           unsigned seed, std::string& finalSnap) {
     replay::GameRecord rec;
     rec.catalogHash = replay::catalogHash(cat);
+    rec.rulesetHash = replay::rulesetHash(r);
     rec.seed = seed;
     rec.player = pyro();
     rec.enemy = bruiser();
@@ -118,6 +119,11 @@ int main() {
         replay::GameRecord bad = rec;
         bad.catalogHash = "deadbeef";
         CHECK(!replay::verify(bad, ruleset, catalog, creatures).ok, "wrong catalog hash rejected");
+
+        replay::GameRecord wrongRules = rec;
+        wrongRules.rulesetHash = "deadbeef";
+        CHECK(!replay::verify(wrongRules, ruleset, catalog, creatures).ok,
+              "wrong ruleset hash rejected (a game under other rules can't be ranked here)");
 
         replay::GameRecord overBudget = rec;
         overBudget.player.stats.hpPurchases = 999; // blows the point budget

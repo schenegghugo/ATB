@@ -56,6 +56,9 @@ target_link_libraries(tb_build_demo PRIVATE tb_core)
 add_executable(tb_spells_demo tests/spells_demo.cpp)
 target_link_libraries(tb_spells_demo PRIVATE tb_core)
 
+add_executable(tb_decoy_demo tests/decoy_demo.cpp)
+target_link_libraries(tb_decoy_demo PRIVATE tb_core)
+
 add_executable(tb_ai_demo tests/ai_demo.cpp)
 target_link_libraries(tb_ai_demo PRIVATE tb_core)
 
@@ -91,6 +94,9 @@ target_link_libraries(tb_determinism_demo PRIVATE tb_core)
 
 add_executable(tb_replay_demo tests/replay_demo.cpp)
 target_link_libraries(tb_replay_demo PRIVATE tb_core)
+
+add_executable(tb_commit_demo tests/commit_demo.cpp)
+target_link_libraries(tb_commit_demo PRIVATE tb_core)
 
 add_executable(tb_password_demo tests/password_demo.cpp)
 target_link_libraries(tb_password_demo PRIVATE tb_core)
@@ -153,6 +159,9 @@ target_link_libraries(tb_account_demo PRIVATE tb_transport)
 
 add_executable(tb_arbiter_demo tests/arbiter_demo.cpp)
 target_link_libraries(tb_arbiter_demo PRIVATE tb_transport)
+
+add_executable(tb_ranked_rules_demo tests/ranked_rules_demo.cpp)
+target_link_libraries(tb_ranked_rules_demo PRIVATE tb_transport)
 
 add_executable(tb_server tools/server_main.cpp)
 target_link_libraries(tb_server PRIVATE tb_transport)

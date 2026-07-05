@@ -45,10 +45,15 @@ void parseGround(const json::Value& gv, const std::string& ctx, GroundSpec& out,
 } // namespace
 
 void parseStatus(const json::Value& sv, const std::string& ctx, StatusEffect& out, Errors& e) {
-    checkAllowed(sv, {"kind", "magnitude", "turns"}, ctx, e);
+    checkAllowed(sv, {"kind", "magnitude", "turns", "delay"}, ctx, e);
     enumField(sv, "kind", enums::kStatusKinds, ctx, true, out.kind, e);
     out.magnitude = optInt(sv, "magnitude", 0, ctx, e);
     out.remainingTurns = optInt(sv, "turns", 0, ctx, e);
+    out.delay = optInt(sv, "delay", 0, ctx, e); // inert for N owner turns, then active
+    if (out.delay < 0) e.push_back(ctx + ": \"delay\" must be >= 0");
+    if (out.kind == StatusEffect::Kind::RangeDebuff &&
+        (out.magnitude < 1 || out.magnitude > 100))
+        e.push_back(ctx + ": rangeDebuff magnitude is a percent (1..100)");
 }
 
 json::Value statusToJson(const StatusEffect& s) {
@@ -56,6 +61,7 @@ json::Value statusToJson(const StatusEffect& s) {
     v.set("kind", json::Value(std::string(enums::toString(enums::kStatusKinds, s.kind))));
     v.set("magnitude", json::Value(s.magnitude));
     v.set("turns", json::Value(s.remainingTurns));
+    if (s.delay != 0) v.set("delay", json::Value(s.delay)); // omitted when default
     return v;
 }
 
@@ -65,13 +71,14 @@ Effect parseEffect(const json::Value& ev, const std::string& ctx, Errors& e) {
         e.push_back(ctx + ": expected an object");
         return out;
     }
-    checkAllowed(ev, {"type", "amount", "status", "ground", "creature"}, ctx, e);
+    checkAllowed(ev, {"type", "amount", "status", "ground", "creature", "polarized"}, ctx, e);
 
     const std::size_t before = e.size();
     enumField(ev, "type", enums::kEffectTypes, ctx, true, out.type, e);
     if (e.size() != before) return out; // bad/missing type — can't validate payload
 
     const std::string typeName(enums::toString(enums::kEffectTypes, out.type));
+    if (out.type != Effect::Type::ApplyStatus) forbid(ev, "polarized", typeName, ctx, e);
     switch (out.type) {
         case Effect::Type::Damage:
         case Effect::Type::Heal:
@@ -88,6 +95,7 @@ Effect parseEffect(const json::Value& ev, const std::string& ctx, Errors& e) {
             forbid(ev, "amount", typeName, ctx, e);
             forbid(ev, "ground", typeName, ctx, e);
             forbid(ev, "creature", typeName, ctx, e);
+            out.polarized = jsonread::optBool(ev, "polarized", false, ctx, e);
             const json::Value* sv = ev.find("status");
             if (!sv || !sv->isObject())
                 e.push_back(ctx + ": \"applyStatus\" requires a \"status\" object");
@@ -117,6 +125,18 @@ Effect parseEffect(const json::Value& ev, const std::string& ctx, Errors& e) {
                 out.creature = cv->asString();
             break;
         }
+        case Effect::Type::Decoy: {
+            // amount = how many of the caster's turns the pair stays cloaked.
+            forbid(ev, "status", typeName, ctx, e);
+            forbid(ev, "ground", typeName, ctx, e);
+            forbid(ev, "creature", typeName, ctx, e);
+            int amount = 0;
+            if (wantInt(ev, "amount", ctx, amount, e)) {
+                if (amount < 1) e.push_back(ctx + ": \"decoy\" duration must be >= 1");
+                out.amount = amount;
+            }
+            break;
+        }
     }
     return out;
 }
@@ -130,14 +150,12 @@ json::Value effectToJson(const Effect& fx) {
         case Effect::Type::Heal:
         case Effect::Type::Push:
         case Effect::Type::Pull:
+        case Effect::Type::Decoy:
             e.set("amount", Value(fx.amount));
             break;
         case Effect::Type::ApplyStatus: {
-            Value st = Value::makeObject();
-            st.set("kind", Value(std::string(enums::toString(enums::kStatusKinds, fx.status.kind))));
-            st.set("magnitude", Value(fx.status.magnitude));
-            st.set("turns", Value(fx.status.remainingTurns));
-            e.set("status", std::move(st));
+            e.set("status", statusToJson(fx.status));
+            if (fx.polarized) e.set("polarized", Value(true)); // omitted when default
             break;
         }
         case Effect::Type::Spawn: {

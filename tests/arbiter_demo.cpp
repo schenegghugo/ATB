@@ -55,6 +55,7 @@ std::string makeNotation(const Ruleset& r, const SpellCatalog& cat, const std::v
                          unsigned seed) {
     replay::GameRecord rec;
     rec.catalogHash = replay::catalogHash(cat);
+    rec.rulesetHash = replay::rulesetHash(r);
     rec.seed = seed;
     rec.player = pyro();
     rec.enemy = bruiser();
@@ -149,6 +150,7 @@ int main() {
         // An agreed-upon but illegal record (over-budget build) fails verification.
         replay::GameRecord bad;
         bad.catalogHash = replay::catalogHash(catalog);
+        bad.rulesetHash = replay::rulesetHash(ruleset);
         bad.seed = 4001;
         bad.player = pyro();
         bad.player.stats.hpPurchases = 999; // blows the budget

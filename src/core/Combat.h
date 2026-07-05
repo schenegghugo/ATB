@@ -18,12 +18,19 @@ enum class DamageSource : std::uint8_t { Spell, Storm, Collision };
 
 // --- Status effects ---------------------------------------------------------
 // Carried per-entity, ticked at the owner's turn start. Buffs feed the AP/MP
-// reset; DamageOverTime applies on tick; Shield absorbs incoming damage.
+// reset; DamageOverTime applies on tick; Shield absorbs incoming damage;
+// RangeDebuff shortens the owner's spell reach (magnitude = percent off
+// maxRange, clamped to minRange — see Battle::canCast).
 struct StatusEffect {
-    enum class Kind : std::uint8_t { DamageOverTime, Shield, ApBuff, MpBuff, Invisible, Rewind };
+    enum class Kind : std::uint8_t {
+        DamageOverTime, Shield, ApBuff, MpBuff, Invisible, Rewind, RangeDebuff
+    };
     Kind kind = Kind::DamageOverTime;
-    int magnitude = 0;       // dmg/turn, absorb pool, or +AP/+MP (unused for Invisible/Rewind)
+    int magnitude = 0;       // dmg/turn, absorb pool, +AP/+MP, or % range reduction
     int remainingTurns = 0;  // decremented after each of the owner's turns
+    int delay = 0;           // >0: inert for that many of the owner's turns, THEN
+                             // activates with its full remainingTurns (delayed
+                             // payloads, e.g. a buff whose crash lands later)
 };
 
 // --- Ground effects (persistent battlefield features) -----------------------
@@ -40,12 +47,18 @@ struct GroundSpec {
 
 // --- Spell / effect data ----------------------------------------------------
 struct Effect {
-    enum class Type : std::uint8_t { Damage, Heal, Push, Pull, ApplyStatus, Spawn, Summon };
+    // Decoy: spawn an identical twin of the caster on the target tile and cloak
+    // the pair — damage to either member defers until the pair is revealed
+    // (casting from a member declares it the real one; expiry defaults to the
+    // original). See Battle's cloak-pair machinery.
+    enum class Type : std::uint8_t { Damage, Heal, Push, Pull, ApplyStatus, Spawn, Summon, Decoy };
     Type type = Type::Damage;
-    int amount = 0;            // damage / heal / forced-move distance
+    int amount = 0;            // damage / heal / forced-move distance / decoy duration
     StatusEffect status{};     // used when type == ApplyStatus
     GroundSpec ground{};       // used when type == Spawn
     std::string creature{};    // creature template key, used when type == Summon
+    bool polarized = false;    // ApplyStatus only: negate the magnitude vs foes
+                               // (one spell = buff on allies, debuff on enemies)
 };
 
 enum class TargetShape : std::uint8_t { Single, Line, Cross, Circle };

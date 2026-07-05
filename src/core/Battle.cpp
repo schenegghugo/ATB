@@ -160,17 +160,26 @@ void Battle::startTurnFor(EntityId id) {
 
     emit({EventType::TurnStart, id}); // before the start-of-turn ticks below fire
 
+    // Cloak expiry: the pair is ticked on the ORIGINAL member's turn start; when
+    // it runs out unrevealed, the original is real by rule (no secret needed —
+    // deterministic for replays). An early reveal happens by casting instead.
+    if (auto pi = pairIndexOf(id); pi && cloaks_[*pi].a == id && --cloaks_[*pi].turnsLeft <= 0)
+        revealPair(*pi, id);
+
     // (Hook 2) Effect tick: buffs are "active" for the turn they tick, so we
     // apply them to the AP/MP reset *before* decrementing/expiring durations.
+    // Delayed statuses (delay > 0) are inert until their delay has ticked out.
     int apBonus = 0, mpBonus = 0;
     for (const StatusEffect& s : e.statuses) {
+        if (s.delay > 0) continue;
         if (s.kind == StatusEffect::Kind::ApBuff) apBonus += s.magnitude;
         else if (s.kind == StatusEffect::Kind::MpBuff) mpBonus += s.magnitude;
     }
-    e.ap = e.maxAp + apBonus;
-    e.mp = e.maxMp + mpBonus;
+    e.ap = std::max(0, e.maxAp + apBonus); // debuffs can push below zero — floor it
+    e.mp = std::max(0, e.maxMp + mpBonus);
 
     for (const StatusEffect& s : e.statuses) {
+        if (s.delay > 0) continue;
         if (s.kind == StatusEffect::Kind::DamageOverTime) applyDamage(id, s.magnitude);
     }
 
@@ -182,13 +191,17 @@ void Battle::startTurnFor(EntityId id) {
     // ticked before — and excluded from — the generic status aging below.
     rewindTick(id);
 
-    // Age and expire statuses (Rewind markers are managed by rewindTick).
-    for (StatusEffect& s : e.statuses)
-        if (s.kind != StatusEffect::Kind::Rewind) --s.remainingTurns;
+    // Age and expire statuses (Rewind markers are managed by rewindTick). A
+    // delayed status burns its delay first; its own duration starts after.
+    for (StatusEffect& s : e.statuses) {
+        if (s.kind == StatusEffect::Kind::Rewind) continue;
+        if (s.delay > 0) --s.delay;
+        else --s.remainingTurns;
+    }
     e.statuses.erase(std::remove_if(e.statuses.begin(), e.statuses.end(),
                                     [](const StatusEffect& s) {
                                         return s.kind != StatusEffect::Kind::Rewind &&
-                                               s.remainingTurns <= 0;
+                                               s.delay <= 0 && s.remainingTurns <= 0;
                                     }),
                      e.statuses.end());
 
@@ -226,6 +239,18 @@ void Battle::endTurn() {
 void Battle::applyDamage(EntityId id, int amount, DamageSource src) {
     Entity& e = units_[id];
     if (amount <= 0 || !e.alive()) return;
+
+    // Cloaked pair member: the hit DEFERS — accumulate into the member's pending
+    // pool, no HP change, no death, no victory check. Only the real member's pool
+    // lands at reveal (shields interact then, against the summed amount). The
+    // Damage event still narrates (the attacker knows what they dealt; the HP
+    // just doesn't visibly move — that ambiguity is the mechanic).
+    if (auto pi = pairIndexOf(id)) {
+        CloakPair& p = cloaks_[*pi];
+        (id == p.a ? p.pendingA : p.pendingB) += amount;
+        emit({EventType::Damage, /*actor=*/id, /*target=*/id, amount, -1, src});
+        return;
+    }
 
     // (Hook 2) Shields absorb first.
     for (StatusEffect& s : e.statuses) {
@@ -319,8 +344,20 @@ bool Battle::canCast(EntityId caster, int spellIdx, Vec2i target) const {
     if (spellIdx < static_cast<int>(c.spellCooldowns.size()) && c.spellCooldowns[spellIdx] > 0)
         return false;
 
+    // RangeDebuff (e.g. Blind): shave a percentage off maxRange, floored at
+    // minRange — `effMax = maxRange - (maxRange * pct) / 100` in pure integer
+    // math (deterministic). Stacked debuffs add up, capped at 100%.
+    int rangePct = 0;
+    for (const StatusEffect& s : c.statuses)
+        if (s.kind == StatusEffect::Kind::RangeDebuff && s.delay <= 0) rangePct += s.magnitude;
+    int effMax = sp.maxRange;
+    if (rangePct > 0) {
+        effMax = sp.maxRange - (sp.maxRange * std::min(rangePct, 100)) / 100;
+        if (effMax < sp.minRange) effMax = sp.minRange;
+    }
+
     const int range = manhattan(c.pos, target);
-    if (range < sp.minRange || range > sp.maxRange) return false;
+    if (range < sp.minRange || range > effMax) return false;
     if (sp.needsLineOfSight && !clearLineOfSight(c.pos, target)) return false;
     return true;
 }
@@ -404,6 +441,16 @@ void Battle::spawnGround(const GroundSpec& spec, Faction owner, Vec2i casterPos,
 bool Battle::cast(EntityId caster, int spellIdx, Vec2i target) {
     if (!canCast(caster, spellIdx, target)) return false;
 
+    // Acting drops the guise: casting from a cloaked pair member declares THAT
+    // member the real one (the reveal choice rides in the ordinary intent
+    // stream). Deferred damage lands now — if it proves lethal, the reveal
+    // consumed the action and the cast fizzles (the intent was legal and DID
+    // mutate state, so this still returns true).
+    if (auto pi = pairIndexOf(caster)) {
+        revealPair(*pi, caster);
+        if (!units_[caster].alive()) return true;
+    }
+
     // Copy the spell: applying effects can move/kill units (incl. resizing
     // status vectors), so we must not hold a reference into a unit mid-resolve.
     const Spell sp = units_[caster].spells[spellIdx];
@@ -428,6 +475,11 @@ void Battle::applySpellEffects(const Spell& sp, Faction casterTeam, Vec2i caster
             spawnGround(fx.ground, casterTeam, casterPos, target, zone);
         else if (fx.type == Effect::Type::Summon)
             spawnCreature(fx.creature, casterTeam, target);
+        else if (fx.type == Effect::Type::Decoy) {
+            // The caster is whoever stands on casterPos (captured pre-resolve).
+            if (std::optional<EntityId> who = unitAt(casterPos))
+                spawnDecoy(*who, target, fx.amount);
+        }
     }
 
     // Unit effects resolve per affected unit (friendly fire included).
@@ -446,7 +498,13 @@ void Battle::applySpellEffects(const Spell& sp, Faction casterTeam, Vec2i caster
                         emit({EventType::Heal, victim, victim, v.hp - before});
                     break;
                 }
-                case Effect::Type::ApplyStatus:
+                case Effect::Type::ApplyStatus: {
+                    // Polarized: the same spell buffs allies and debuffs foes
+                    // (magnitude sign flips against the caster's opponents).
+                    Effect fxApplied = fx;
+                    if (fx.polarized && units_[victim].team != casterTeam)
+                        fxApplied.status.magnitude = -fxApplied.status.magnitude;
+                    const Effect& fx = fxApplied; // shadow for the code below
                     if (fx.status.kind == StatusEffect::Kind::Rewind) {
                         Entity& v = units_[victim];
                         // Recast refreshes: drop any prior pending rewind + marker.
@@ -471,6 +529,7 @@ void Battle::applySpellEffects(const Spell& sp, Faction casterTeam, Vec2i caster
                     emit({EventType::Status, victim, victim, fx.status.magnitude, -1,
                           DamageSource::Spell, fx.status.kind});
                     break;
+                }
                 case Effect::Type::Push:
                     applyForcedMove(victim, cardinalStep(casterPos, units_[victim].pos), fx.amount);
                     break;
@@ -479,6 +538,7 @@ void Battle::applySpellEffects(const Spell& sp, Faction casterTeam, Vec2i caster
                     break;
                 case Effect::Type::Spawn:
                 case Effect::Type::Summon:
+                case Effect::Type::Decoy:
                     break; // handled above, once
             }
         }
@@ -502,6 +562,47 @@ void Battle::spawnCreature(const std::string& key, Faction team, Vec2i at) {
         spawnEntity(std::move(e));
         return;
     }
+}
+
+// ---------------------------------------------------------------------------
+// Cloaked decoy pairs (see CloakPair in Battle.h)
+// ---------------------------------------------------------------------------
+std::optional<std::size_t> Battle::pairIndexOf(EntityId id) const {
+    for (std::size_t i = 0; i < cloaks_.size(); ++i)
+        if (cloaks_[i].a == id || cloaks_[i].b == id) return i;
+    return std::nullopt;
+}
+
+void Battle::spawnDecoy(EntityId caster, Vec2i at, int duration) {
+    if (!grid_.isWalkable(at) || unitAt(at).has_value()) return; // need a free tile
+    const Entity& src = units_[caster];
+    if (!src.alive() || duration <= 0) return;
+
+    // The twin is a FULL copy — name, team, kind, stats, statuses, cooldowns —
+    // so the two members are publicly indistinguishable. It joins the initiative
+    // like any roster entrant and is driven by the same controller as the caster.
+    Entity twin = src;
+    twin.pos = at;
+    const EntityId b = spawnEntity(std::move(twin));
+    cloaks_.push_back({caster, b, duration, 0, 0});
+}
+
+void Battle::revealPair(std::size_t pairIdx, EntityId realId) {
+    const CloakPair p = cloaks_[pairIdx]; // copy — applyDamage below may recurse
+    cloaks_.erase(cloaks_.begin() + static_cast<std::ptrdiff_t>(pairIdx));
+
+    const EntityId decoyId = realId == p.a ? p.b : p.a;
+    const int pending = realId == p.a ? p.pendingA : p.pendingB;
+
+    // The decoy vanishes quietly: HP to 0 directly — no onDeath, no death
+    // attribution, no victory scan (the real champion is alive, so the team
+    // stands either way). It stays on the append-only roster as a corpse.
+    units_[decoyId].hp = 0;
+    emit({EventType::Death, decoyId, decoyId, 0, -1, DamageSource::Spell});
+
+    // Only the real member's deferred damage lands (now that it's no longer a
+    // pair member, applyDamage runs the normal path: shields, death, victory).
+    if (pending > 0) applyDamage(realId, pending);
 }
 
 void Battle::onEnterTile(EntityId who) {

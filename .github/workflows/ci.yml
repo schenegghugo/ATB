@@ -29,6 +29,7 @@ jobs:
           ./build/tb_sha256_demo
           ./build/tb_determinism_demo
           ./build/tb_replay_demo
+          ./build/tb_commit_demo
           ./build/tb_password_demo
           ./build/tb_catalog_demo
           ./build/tb_creature_demo
@@ -37,6 +38,7 @@ jobs:
           ./build/tb_headless
           ./build/tb_build_demo
           ./build/tb_spells_demo
+          ./build/tb_decoy_demo
           ./build/tb_ai_demo
           ./build/tb_roster_demo
           ./build/tb_event_demo
@@ -52,6 +54,7 @@ jobs:
           ./build/tb_ranked_demo
           ./build/tb_lobby_demo
           ./build/tb_mailbox_demo
+          ./build/tb_ranked_rules_demo
 
       - name: Balance sanity (fixed seed, fast)
         run: ./build/tb_balance 200 1
@@ -61,6 +64,7 @@ jobs:
           ./build/tb_catalog_gen --check data/catalog.json
           ./build/tb_creature_gen --check data/creatures.json
           ./build/tb_ruleset_gen --check data/rules.json
+          ./build/tb_ruleset_gen --check data/rules.ranked.json
 
   gui-build:
     name: GUI compiles (Linux)

@@ -41,6 +41,7 @@ inline constexpr Row<Effect::Type> kEffectTypes[] = {
     {Effect::Type::ApplyStatus, "applyStatus"},
     {Effect::Type::Spawn, "spawn"},
     {Effect::Type::Summon, "summon"},
+    {Effect::Type::Decoy, "decoy"},
 };
 
 inline constexpr Row<StatusEffect::Kind> kStatusKinds[] = {
@@ -50,6 +51,7 @@ inline constexpr Row<StatusEffect::Kind> kStatusKinds[] = {
     {StatusEffect::Kind::MpBuff, "mpBuff"},
     {StatusEffect::Kind::Invisible, "invisible"},
     {StatusEffect::Kind::Rewind, "rewind"},
+    {StatusEffect::Kind::RangeDebuff, "rangeDebuff"},
 };
 
 inline constexpr Row<GroundKind> kGroundKinds[] = {
@@ -109,8 +111,8 @@ static_assert(tableConsistent(kEntityKinds), "kEntityKinds inconsistent");
 // core value is also caught in practice by the catalog round-trip test once the
 // default catalog uses it — serialization of an unmapped value is empty.)
 static_assert(std::size(kTargetShapes) == 4, "TargetShape changed — update kTargetShapes");
-static_assert(std::size(kEffectTypes) == 7, "Effect::Type changed — update kEffectTypes");
-static_assert(std::size(kStatusKinds) == 6, "StatusEffect::Kind changed — update kStatusKinds");
+static_assert(std::size(kEffectTypes) == 8, "Effect::Type changed — update kEffectTypes");
+static_assert(std::size(kStatusKinds) == 7, "StatusEffect::Kind changed — update kStatusKinds");
 static_assert(std::size(kGroundKinds) == 3, "GroundKind changed — update kGroundKinds");
 static_assert(std::size(kEntityKinds) == 3, "EntityKind changed — update kEntityKinds");
 

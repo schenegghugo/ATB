@@ -59,6 +59,26 @@ Effect summon(std::string creatureKey) {
     e.creature = std::move(creatureKey);
     return e;
 }
+Effect rangeDebuff(int percent, int turns) {
+    return Effect{Effect::Type::ApplyStatus, 0,
+                  StatusEffect{StatusEffect::Kind::RangeDebuff, percent, turns}, {}};
+}
+Effect apBuff(int amount, int turns, int delay = 0) {
+    return Effect{Effect::Type::ApplyStatus, 0,
+                  StatusEffect{StatusEffect::Kind::ApBuff, amount, turns, delay}, {}};
+}
+Effect mpFlux(int amount, int turns) { // polarized: +amount ally, -amount foe
+    Effect e{Effect::Type::ApplyStatus, 0,
+             StatusEffect{StatusEffect::Kind::MpBuff, amount, turns}, {}};
+    e.polarized = true;
+    return e;
+}
+Effect decoyFx(int duration) {
+    Effect e;
+    e.type = Effect::Type::Decoy;
+    e.amount = duration;
+    return e;
+}
 
 SpellDef def(int id, std::string key, int cost, Spell spell, std::vector<std::string> tags = {}) {
     spell.name = key;
@@ -154,6 +174,33 @@ SpellCatalog makeDefaultCatalog() {
     c.add(def(spellid::Brute, "brute", 4,
               Spell{"", 4, 1, 4, true, TargetShape::Single, 0, 6, {summon("brute")}},
               {"summon"}));
+
+    // Blind — cripple a caster's reach: -60% max cast range (never below the
+    // spell's minRange) while the debuff holds. Ages at the victim's turn start,
+    // so turns=3 restricts two of their full turns.
+    c.add(def(spellid::Blind, "blind", 2,
+              Spell{"", 2, 1, 6, true, TargetShape::Single, 0, 3, {rangeDebuff(60, 3)}},
+              {"debuff", "ranged", "single"}));
+
+    // Surge — overload an ally (or self): +2 AP for their next two turns, then
+    // the crash lands: -6 AP for one turn (AP floors at 0).
+    c.add(def(spellid::Surge, "surge", 2,
+              Spell{"", 2, 0, 3, false, TargetShape::Single, 0, 5,
+                    {apBuff(2, 2), apBuff(-6, 1, /*delay=*/2)}},
+              {"support", "buff", "single"}));
+
+    // Flux — polarized current: +2 MP to an ally, -2 MP to an enemy (one turn).
+    c.add(def(spellid::Flux, "flux", 2,
+              Spell{"", 2, 1, 5, true, TargetShape::Single, 0, 2, {mpFlux(2, 1)}},
+              {"buff", "debuff", "single"}));
+
+    // Decoy — conjure an identical twin on a nearby tile and cloak the pair:
+    // damage to either defers until the reveal (acting from a member declares it
+    // real; expiry defaults to the original). Perfect-information-safe stealth —
+    // the ranked-legal replacement for Invisible (see MILESTONES CR.6).
+    c.add(def(spellid::Decoy, "decoy", 3,
+              Spell{"", 3, 1, 3, true, TargetShape::Single, 0, 5, {decoyFx(3)}},
+              {"support", "mobility", "single"}));
 
     return c;
 }

@@ -5,12 +5,14 @@
 // hashes match), pins that hash, and runs a persistent matchmaking loop: it pairs
 // connecting players FIFO and runs each match concurrently (Phase 4.5, slice 1).
 //
-//   Usage: tb_server [port] [bind-addr]
+//   Usage: tb_server [port] [bind-addr] [rules-file]
 //     port       listen port                    (default 5555)
 //     bind-addr  interface to bind              (default 127.0.0.1)
 //                127.0.0.1 = local only (safe default); 0.0.0.0 = all interfaces
 //                (LAN/internet — only behind a firewall/VPN); or a specific IP
 //                (e.g. a Tailscale address) to expose it to just that network.
+//     rules-file ruleset to serve               (default data/rules.json;
+//                pass data/rules.ranked.json to host the official ranked format)
 //
 // Run from the repo root so ./data resolves. Ctrl-C (or a service stop) to quit.
 //
@@ -33,8 +35,12 @@ using namespace tb;
 using namespace tb::net;
 
 int main(int argc, char** argv) {
+    // Line-buffer stdout so "listening on ..." reaches logs/journald immediately
+    // (a killed daemon would otherwise take its unflushed startup lines with it).
+    std::setvbuf(stdout, nullptr, _IOLBF, 0);
     const uint16_t port = static_cast<uint16_t>(argc > 1 ? std::atoi(argv[1]) : 5555);
     const std::string bindAddr = argc > 2 ? argv[2] : "127.0.0.1";
+    const std::string rulesFile = argc > 3 ? argv[3] : "data/rules.json";
 
     MatchConfig cfg;
     cfg.catalog = makeDefaultCatalog();
@@ -53,10 +59,14 @@ int main(int argc, char** argv) {
         if (!l.ok) { std::fprintf(stderr, "tb_server: data/creatures.json invalid\n"); return 1; }
         cfg.creatures = std::move(l.creatures);
     }
-    if (std::ifstream("data/rules.json").good()) {
-        RulesetLoad l = loadRulesetFromFile("data/rules.json");
-        if (!l.ok) { std::fprintf(stderr, "tb_server: data/rules.json invalid\n"); return 1; }
+    if (std::ifstream(rulesFile).good()) {
+        RulesetLoad l = loadRulesetFromFile(rulesFile);
+        if (!l.ok) { std::fprintf(stderr, "tb_server: %s invalid\n", rulesFile.c_str()); return 1; }
         cfg.ruleset = std::move(l.ruleset);
+        std::printf("tb_server: serving ruleset '%s' (v%s)\n", rulesFile.c_str(), l.version.c_str());
+    } else if (argc > 3) {
+        std::fprintf(stderr, "tb_server: rules file '%s' not found\n", rulesFile.c_str());
+        return 1; // an explicitly requested ruleset must exist — don't silently serve defaults
     }
     cfg.contentHash = contentHashOf(cfg.catalog);
 

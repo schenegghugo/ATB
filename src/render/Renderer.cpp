@@ -143,6 +143,7 @@ const char* statusWord(StatusEffect::Kind k) {
         case StatusEffect::Kind::MpBuff: return "an MP buff";
         case StatusEffect::Kind::Invisible: return "Invisibility";
         case StatusEffect::Kind::Rewind: return "a Rewind marker";
+        case StatusEffect::Kind::RangeDebuff: return "a range debuff";
     }
     return "a status";
 }

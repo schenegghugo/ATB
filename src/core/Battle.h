@@ -32,6 +32,23 @@ struct PendingRewind {
     int turnsLeft = 0;
 };
 
+// A cloaked decoy pair (Effect::Type::Decoy): entity `a` (the original caster)
+// and `b` (its spawned twin) are publicly indistinguishable — nothing in shared
+// state says which is real. Damage to either member DEFERS into its pending pool
+// (HP doesn't move, nobody dies) until the pair reveals: casting from a member
+// declares THAT member real (the choice rides in the ordinary intent stream, so
+// replays/verification need no new format); if the duration expires unrevealed,
+// the original `a` is real by rule. At reveal the decoy quietly vanishes and only
+// the real member's pending damage lands — hits the opponent "wasted" on the
+// decoy evaporate.
+struct CloakPair {
+    EntityId a = 0;    // the original caster (real by default at expiry)
+    EntityId b = 0;    // the spawned twin
+    int turnsLeft = 0; // ticked at a's turn start; 0 = auto-reveal (real = a)
+    int pendingA = 0;  // deferred damage accumulated per member
+    int pendingB = 0;
+};
+
 // A live ground feature on the battlefield (see GroundKind).
 struct GroundEffect {
     GroundKind kind = GroundKind::Wall;
@@ -108,6 +125,10 @@ public:
     [[nodiscard]] std::optional<EntityId> nearestFoe(EntityId of) const;
     [[nodiscard]] std::vector<Vec2i> occupancy(std::optional<EntityId> exclude = std::nullopt) const;
 
+    // --- Cloaked decoy pairs (see CloakPair) ----------------------------------
+    [[nodiscard]] const std::vector<CloakPair>& cloakPairs() const { return cloaks_; }
+    [[nodiscard]] bool isCloaked(EntityId id) const { return pairIndexOf(id).has_value(); }
+
     // --- Ground effects ------------------------------------------------------
     [[nodiscard]] const std::vector<GroundEffect>& groundEffects() const { return ground_; }
     // Tiles that block movement (units + terrain are handled separately): the
@@ -158,6 +179,12 @@ private:
     // Spawn a registered creature prototype (by key) for `team` at `at`, if the
     // tile is free. No-op if the key is unknown.
     void spawnCreature(const std::string& key, Faction team, Vec2i at);
+    // Decoy machinery (see CloakPair). spawnDecoy twins `caster` onto `at` (must
+    // be free + walkable, else a silent no-op like Summon); revealPair resolves a
+    // pair, keeping `realId` (applies its pending damage) and vanishing the other.
+    void spawnDecoy(EntityId caster, Vec2i at, int duration);
+    void revealPair(std::size_t pairIdx, EntityId realId);
+    [[nodiscard]] std::optional<std::size_t> pairIndexOf(EntityId id) const;
     void tickGround();              // age ground effects, drop the expired
     // Fire any ground effect on the unit's current tile (repel / teleport).
     // Only voluntary steps trigger; the resulting forced move / teleport does
@@ -171,6 +198,7 @@ private:
     std::vector<Entity> units_;
     std::vector<EntityId> order_; // initiative order (indices into units_)
     std::vector<GroundEffect> ground_;
+    std::vector<CloakPair> cloaks_;
     std::vector<PendingRewind> rewinds_;
     std::vector<Entity> creatures_; // spawnable prototypes (keyed by name)
     std::vector<BattleEvent> events_;
