@@ -85,6 +85,9 @@ target_link_libraries(tb_map_demo PRIVATE tb_core)
 add_executable(tb_sha256_demo tests/sha256_demo.cpp)
 target_link_libraries(tb_sha256_demo PRIVATE tb_core)
 
+add_executable(tb_determinism_demo tests/determinism_demo.cpp)
+target_link_libraries(tb_determinism_demo PRIVATE tb_core)
+
 add_executable(tb_password_demo tests/password_demo.cpp)
 target_link_libraries(tb_password_demo PRIVATE tb_core)
 

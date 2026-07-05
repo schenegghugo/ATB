@@ -27,6 +27,7 @@ jobs:
           ./build/tb_json_demo
           ./build/tb_enums_demo
           ./build/tb_sha256_demo
+          ./build/tb_determinism_demo
           ./build/tb_password_demo
           ./build/tb_catalog_demo
           ./build/tb_creature_demo
@@ -47,6 +48,7 @@ jobs:
           ./build/tb_account_demo
           ./build/tb_server_demo
           ./build/tb_ranked_demo
+          ./build/tb_lobby_demo
 
       - name: Balance sanity (fixed seed, fast)
         run: ./build/tb_balance 200 1

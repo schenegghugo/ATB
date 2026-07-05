@@ -1055,11 +1055,17 @@ play. Abandonment falls back to a start-of-game ping + timeout → forfeit.
   authoritative server with per-client filtered snapshots could ever enforce it.)
 
 **Build order (each independently testable, headless):**
-- **CR.1 ☐ Determinism lock-down.** Replace `std::uniform_*` in `generateArena`
-  (and any other rules-affecting distribution) with a hand-rolled deterministic one;
-  add a cross-platform known-answer test (fixed seed → fixed arena + a fixed scripted
-  game → fixed final snapshot). Prerequisite for everything below *and* hardens the
-  existing mirror.
+- **CR.1 ☑ Determinism lock-down.** `generateArena` now draws from `std::mt19937`
+  (its uint32 sequence *is* standardised/portable) with **plain integer ops** —
+  the non-portable `std::uniform_real_distribution` is gone, and the two float
+  configs (coverage / obstacleRatio) become integer per-mille thresholds computed
+  once, so no float touches a per-tile draw. It was the only rules-affecting
+  distribution (engine resolution has no RNG). `tb_determinism_demo` (in CI) is a
+  **known-answer test**: it pins `(seed → arena)` and `(seed + builds + intents →
+  final snapshot)` to fixed sha256 fingerprints (captured x86-64/libstdc++) — a
+  different stdlib/platform that diverges now fails loudly. Arenas re-baselined
+  (no committed artifact depends on a specific one); full suite green + stable
+  across runs. Hardens today's live mirror too.
 - **CR.2 ☐ Game notation + verifier** (= **Phase 5.1**). A compact
   serialize/parse for `{rulesetHash, seed, builds, intents}` + `verify(notation)` =
   re-run `MatchRunner` and return `{legal, winner}`. This single file is the

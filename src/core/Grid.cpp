@@ -187,11 +187,19 @@ Grid generateArena(const ArenaConfig& cfg) {
         seed = static_cast<unsigned int>(
             std::chrono::steady_clock::now().time_since_epoch().count());
     }
+    // Portable, deterministic generation: mt19937's uint32 sequence is fully
+    // standardised (identical across compilers/stdlibs), and we draw from it with
+    // plain integer ops — NOT std::uniform_* distributions, whose algorithms are
+    // implementation-defined and so give a *different arena from the same seed* on
+    // a different standard library. Bit-exact (seed -> arena) is required for the
+    // correspondence-ranked arbiter to reproduce a game (MILESTONES CR.1).
     std::mt19937 rng(seed);
-    std::uniform_real_distribution<float> roll(0.0f, 1.0f);
-
+    // Float configs -> integer per-mille thresholds, converted ONCE (round-to-
+    // nearest), so no float touches the per-tile draw.
+    const unsigned coverPerMille = static_cast<unsigned>(cfg.coverage * 1000.0 + 0.5);
+    const unsigned obstaclePerMille = static_cast<unsigned>(cfg.obstacleRatio * 1000.0 + 0.5);
     const int totalTiles = cfg.width * cfg.height;
-    const int targetCovered = static_cast<int>(totalTiles * cfg.coverage);
+    const int targetCovered = static_cast<int>(static_cast<unsigned>(totalTiles) * coverPerMille / 1000u);
 
     // Keep a small clearance around each spawn so units never start boxed in.
     auto nearSpawn = [&](Vec2i p) {
@@ -203,13 +211,13 @@ Grid generateArena(const ArenaConfig& cfg) {
 
         int placed = 0;
         while (placed < targetCovered) {
-            Vec2i p{static_cast<int>(roll(rng) * cfg.width),
-                    static_cast<int>(roll(rng) * cfg.height)};
+            Vec2i p{static_cast<int>(rng() % static_cast<unsigned>(cfg.width)),
+                    static_cast<int>(rng() % static_cast<unsigned>(cfg.height))};
             if (!grid.inBounds(p)) continue;
             if (nearSpawn(p)) continue;
             if (grid.at(p) != TileType::Walkable) continue;
 
-            grid.set(p, roll(rng) < cfg.obstacleRatio ? TileType::Obstacle : TileType::Wall);
+            grid.set(p, (rng() % 1000u) < obstaclePerMille ? TileType::Obstacle : TileType::Wall);
             ++placed;
         }
 
