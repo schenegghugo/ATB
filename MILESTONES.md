@@ -929,10 +929,41 @@ CI + stress-run; the real `tb_server` recorded a live ranked result end-to-end.
 proxy) or a VPN before any public launch** (transport encryption is a separate
 task).
 
-**Remaining:** move the store to **SQLite** for scale (behind the same seam),
-match-history rows, a proper **queue** (rating bands that widen with wait time),
-and **custom lobbies with join codes**. A **GUI login screen** (vs env vars) is a
-small UI follow-up.
+**Slice 3 ☑ — private lobbies (join codes).** The `hello` handshake gained a
+`lobby` field: **empty → open matchmaking** (rated on a ranked server); a **shared
+code → a private match** with whoever else presents the same code (unrated, even on
+a ranked server). `serveMatches` keeps the open pool *and* a `code → waiting host`
+map; friends just agree on a code out-of-band (no server-issued code, no async), and
+the client passes it (`MirrorSession`/`playClient` `lobby` param; GUI `ATB_LOBBY`).
+`tb_lobby_demo` (in CI, stress-run 10×): code-sharers get a private match, and **two
+rooms in flight never cross-pair** — proven by tagging each room's champions and
+checking no foreign tag reaches a client's final snapshot.
+
+**Slice 4 ◐ — GUI networking screen.** `render/ConnectScreen.{h,cpp}` (an
+immediate-mode screen like the build editor): server `host:port`, optional ranked
+`username`/`password` (masked), and an optional `lobby` code, with click/Tab focus
+and live editing. The build editor gained a **"Play Online >"** button →
+`AppState::Connect`; `main.cpp` splits the match source into `newLocalMatch()` /
+`connectRemote(params)` and the fields are seeded from the `ATB_*` env vars (still
+work as defaults). Built + launches; **the screen's input/visuals need in-GUI
+playtesting** (can't be auto-tested). *Known gap:* `connectRemote` **blocks until
+the server pairs you** — a "waiting…" screen / async connect is a follow-up.
+
+**Main menu (mode-first).** `render/MainMenuScreen.{h,cpp}` is the landing screen
+— **Local Match / Play Online / Build Editor / Settings / Quit** — and the app now
+boots here (`AppState::Menu`). Local/Online carry an **intent** into the build
+editor (`BuildEditorScreen::Mode`): the editor's header + primary button reflect it
+(Fight vs Play Online), Edit mode is pure authoring, and a **"‹ Menu"** button
+returns. A minimal read-only **`SettingsScreen`** shows content/pack/server info
+(editable settings + a saved-defaults `config.json` are a follow-up). Shared UI
+widgets factored into `render/Ui.h`. GUI builds + boots into the menu; **the screen
+flow needs your in-GUI playtesting.**
+
+**Remaining:** async connect + a "waiting for opponent" screen; editable Settings +
+saved network defaults; move the store to **SQLite** for scale (behind the same
+seam) + match-history rows; a widening-band **queue**; and **transport encryption
+(TLS)** before any public, non-VPN ranked launch (passwords are currently in the
+clear).
 
 **Deployment & trust model (decided):** two tiers, one codebase.
 - **Ranked → server-authoritative, self-hosted.** A persistent instance (the HP
@@ -969,9 +1000,87 @@ lobby and during the match.
 
 ---
 
+## Correspondence ranked — "verify, don't host" (design; target model for ranked at scale)
+
+The live authoritative server (4.4/4.5) **works and stays** — it's the right thing
+for custom lobbies, LAN, and as a low-latency relay. But for **ranked at scale**,
+the deterministic core enables a lighter, "chess-like" model where the server
+**verifies finished games instead of hosting live ones**. This reframes ranked and
+makes replays (Phase 5) its shared foundation.
+
+**The core idea.** A whole match is fully described by a compact **game notation**:
+`ruleset hash + arena seed + both builds + the ordered intent list`. Because the
+core is deterministic, that string *is* the match — anyone can re-simulate it to the
+identical result. Unlike chess FEN we **don't encode the board**: the seed
+regenerates the arena, so the string stays tiny (~1–2 KB, one copy-pasteable blob).
+The same artifact is three things at once: a **scoresheet** (submit to rank), a
+**replay** (§5.1), and a **shareable game** (paste to rewatch).
+
+```
+ATB/1  <rulesetHash>  <seed>  <format>
+P: <playerBuild>
+E: <enemyBuild>
+1. P  m8,4  c1@10,6  .      # move; cast slot 1 @(10,6); end turn
+2. E  m3,7  c0@8,4   .
+...
+```
+
+**Why it dodges NAT.** A notation isn't a connectivity fix — it removes the need for
+a *live* connection. Turns are short strings exchanged **correspondence-style**
+through a **dumb "mailbox" relay** (POST a move to a game id, GET pending moves):
+both clients connect *outward*, so NAT never applies, and the relay is a key-value
+store of strings with **no game logic** — trivial to self-host (the EliteDesk), and
+far lighter than a live match host.
+
+**Trust = double-submit + re-simulation** (no crypto keys needed; fits the
+username+password identity). Both players independently submit their copy of the
+scoresheet, authenticated by login. The arbiter accepts a result only if the two
+submissions **match** and **re-simulate cleanly**: content hash == official, both
+builds legal (`validateBuild`), every intent legal (the re-sim refuses illegal
+ones), and the claimed winner == the replayed winner. Then it updates MMR. A loser
+can't fake a win (no matching second sheet); nobody can forge a game they didn't
+play. Abandonment falls back to a start-of-game ping + timeout → forfeit.
+
+**Two hard prerequisites:**
+- **Cross-platform bit-determinism** (the linchpin — the arbiter must reproduce the
+  players' result exactly). `mt19937` is portable but **`std::uniform_*_distribution`
+  is not**, so two players on different C++ stdlibs regenerate *different arenas from
+  the same seed*. Must hand-roll the arena RNG distribution (we hand-roll everything
+  else) and pin it with a known-answer test. This is also a **latent bug today** in
+  the live mirror model.
+- **Perfect-information ranked.** In P2P both clients hold the full state to
+  simulate, so a cheat client could reveal **invisible** units. Fix: the official
+  ranked ruleset **bans invisibility-granting spells** — then the model is airtight.
+  (We don't enforce hard fog today even server-side, so nothing is lost; only a live
+  authoritative server with per-client filtered snapshots could ever enforce it.)
+
+**Build order (each independently testable, headless):**
+- **CR.1 ☐ Determinism lock-down.** Replace `std::uniform_*` in `generateArena`
+  (and any other rules-affecting distribution) with a hand-rolled deterministic one;
+  add a cross-platform known-answer test (fixed seed → fixed arena + a fixed scripted
+  game → fixed final snapshot). Prerequisite for everything below *and* hardens the
+  existing mirror.
+- **CR.2 ☐ Game notation + verifier** (= **Phase 5.1**). A compact
+  serialize/parse for `{rulesetHash, seed, builds, intents}` + `verify(notation)` =
+  re-run `MatchRunner` and return `{legal, winner}`. This single file is the
+  scoresheet, the replay, and the shareable game.
+- **CR.3 ☐ Mailbox relay.** A tiny store-and-forward service (post/get move strings
+  by game id); both clients connect out (NAT-immune). Reuses the transport.
+- **CR.4 ☐ Submit-to-arbiter + MMR.** Two clients submit their notation; the arbiter
+  cross-checks + verifies + records the Elo result (reuses `AccountStore`). Add the
+  abandonment ping/timeout.
+- **CR.5 ☐ Perfect-info ranked ruleset.** An official `ranked.rules.json` (banning
+  invisibility), pinned + hashed, optionally fetched from a URL (verified by hash).
+
+Relationship to what's built: 4.4/4.5's live server is retained (custom/LAN/relay);
+CR.2 *is* Phase 5.1; `MatchRunner` is the verifier; `AccountStore` records the
+ranking. No `core/` rewrite — this is packaging + a determinism fix.
+
+---
+
 ## Phase 5 — Replays & spectate (mostly free)
 
-### 5.1 ☐ Persist `seed + intents`; re-simulate to play back (no frame recording).
+### 5.1 ☐ Persist `seed + intents`; re-simulate to play back (no frame recording). **This is the game notation / scoresheet of CR.2 — one format serves replay, ranked submission, and shareable games.**
 ### 5.2 ☐ Spectate = subscribe to the same snapshot stream.
 ### 5.3 ☐ Ongoing balance backlog (fireball radius, portal AI, synergy tuning via `tb_balance`).
 

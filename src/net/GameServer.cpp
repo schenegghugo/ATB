@@ -17,6 +17,7 @@
 #include <limits>
 #include <random>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 namespace tb::net {
@@ -30,7 +31,8 @@ namespace {
 struct Admit {
     bool ok = false;
     CharacterBuild build;
-    std::string user; // the authenticated username (empty in custom/unranked mode)
+    std::string user;  // the authenticated username (empty in custom/unranked mode)
+    std::string lobby; // private room code (empty = open matchmaking)
     int rating = kDefaultRating;
     std::string error;
 };
@@ -65,6 +67,7 @@ Admit handshake(Connection& c, const MatchConfig& cfg) {
 
     a.ok = true;
     a.build = *build;
+    a.lobby = m->field("lobby");
     return a;
 }
 
@@ -149,39 +152,18 @@ int serveMatches(Listener& listener, const MatchConfig& cfg, int maxMatches, int
         int rating = kDefaultRating;
     };
 
-    std::vector<std::thread> matches; // joined at the end only in bounded mode
-    std::vector<Waiter> pool;         // admitted players awaiting a pairing
+    std::vector<std::thread> matches;                  // joined at the end only in bounded mode
+    std::vector<Waiter> pool;                          // open matchmaking (empty lobby)
+    std::unordered_map<std::string, Waiter> rooms;     // private lobby code -> waiting host
     int started = 0;
 
-    while (maxMatches < 0 || started < maxMatches) {
-        std::optional<Connection> conn = listener.accept();
-        if (!conn) break; // listener closed
-        conn->setReadTimeout(readTimeoutSec);
-        Admit a = handshake(*conn, cfg);
-        if (!a.ok) { conn->send(proto::error(a.error)); continue; } // rejected — drop
-
-        if (pool.empty()) {
-            pool.push_back({std::move(*conn), std::move(a.build), std::move(a.user), a.rating});
-            continue;
-        }
-
-        // Matchmaking: pair with the closest-rated waiter (ranked); with no store
-        // everyone is kDefaultRating, so this degrades to FIFO.
-        std::size_t best = 0;
-        int bestDiff = std::numeric_limits<int>::max();
-        for (std::size_t i = 0; i < pool.size(); ++i) {
-            const int d = std::abs(pool[i].rating - a.rating);
-            if (d < bestDiff) { bestDiff = d; best = i; }
-        }
-        Waiter opp = std::move(pool[best]);
-        pool.erase(pool.begin() + static_cast<std::ptrdiff_t>(best));
-
-        // Run the match on its own thread; on a ranked, decisive result, update Elo.
-        std::thread t([&cfg, c0 = std::move(opp.conn), b0 = std::move(opp.build),
-                       u0 = std::move(opp.user), c1 = std::move(*conn), b1 = std::move(a.build),
-                       u1 = std::move(a.user)]() mutable {
+    // Start a match on its own thread; a `rated` open-matchmaking result updates Elo.
+    auto startMatch = [&](Waiter x, Waiter y, bool rated) {
+        std::thread t([&cfg, c0 = std::move(x.conn), b0 = std::move(x.build), u0 = std::move(x.user),
+                       c1 = std::move(y.conn), b1 = std::move(y.build), u1 = std::move(y.user),
+                       rated]() mutable {
             const ServeResult r = runAdmittedMatch(std::move(c0), std::move(c1), b0, b1, cfg);
-            if (cfg.accounts && r.ok && r.winner) {
+            if (rated && cfg.accounts && r.ok && r.winner) {
                 const bool playerWon = *r.winner == Faction::Player;
                 cfg.accounts->recordResult(playerWon ? u0 : u1, playerWon ? u1 : u0);
             }
@@ -189,6 +171,39 @@ int serveMatches(Listener& listener, const MatchConfig& cfg, int maxMatches, int
         if (maxMatches < 0) t.detach(); // daemon: fire-and-forget (cfg outlives the process)
         else matches.push_back(std::move(t));
         ++started;
+    };
+
+    while (maxMatches < 0 || started < maxMatches) {
+        std::optional<Connection> conn = listener.accept();
+        if (!conn) break; // listener closed
+        conn->setReadTimeout(readTimeoutSec);
+        Admit a = handshake(*conn, cfg);
+        if (!a.ok) { conn->send(proto::error(a.error)); continue; } // rejected — drop
+        Waiter w{std::move(*conn), std::move(a.build), std::move(a.user), a.rating};
+
+        if (!a.lobby.empty()) {
+            // Private lobby: pair with whoever else presents the same code (unrated),
+            // else hold this player as the room's host.
+            auto it = rooms.find(a.lobby);
+            if (it == rooms.end()) { rooms.emplace(a.lobby, std::move(w)); continue; }
+            Waiter host = std::move(it->second);
+            rooms.erase(it);
+            startMatch(std::move(host), std::move(w), /*rated=*/false);
+            continue;
+        }
+
+        // Open matchmaking: pair with the closest-rated waiter (ranked); unranked
+        // everyone is kDefaultRating, so this degrades to FIFO.
+        if (pool.empty()) { pool.push_back(std::move(w)); continue; }
+        std::size_t best = 0;
+        int bestDiff = std::numeric_limits<int>::max();
+        for (std::size_t i = 0; i < pool.size(); ++i) {
+            const int d = std::abs(pool[i].rating - w.rating);
+            if (d < bestDiff) { bestDiff = d; best = i; }
+        }
+        Waiter opp = std::move(pool[best]);
+        pool.erase(pool.begin() + static_cast<std::ptrdiff_t>(best));
+        startMatch(std::move(opp), std::move(w), /*rated=*/cfg.accounts != nullptr);
     }
 
     for (std::thread& t : matches)

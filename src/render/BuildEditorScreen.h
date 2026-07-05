@@ -21,14 +21,20 @@ namespace tb::render {
 
 class BuildEditorScreen {
 public:
-    enum class Result { None, Fight };
+    enum class Result { None, Fight, PlayOnline, Menu };
+
+    // How the editor was entered (from the mode-first menu): its primary action
+    // reflects the mode — Local shows "Fight", Online shows "Play Online", Edit is
+    // pure authoring (Save + Menu, no launch button).
+    enum class Mode { Local, Online, Edit };
 
     // `ruleset` supplies the economy (validation/budget) and teamSize (how many
     // builds per side the editor authors).
     BuildEditorScreen(const SpellCatalog& catalog, BuildRepository& repo, Ruleset ruleset);
 
-    // One frame of input + drawing. Returns Fight when the user launches a match.
-    Result runFrame(int screenW, int screenH);
+    // One frame of input + drawing. Returns Fight / PlayOnline when the user
+    // launches, or Menu when they go back.
+    Result runFrame(int screenW, int screenH, Mode mode = Mode::Edit);
 
     // The authored player team and the picked enemy team (each sized to teamSize).
     [[nodiscard]] const std::vector<CharacterBuild>& playerTeam() const { return playerTeam_; }

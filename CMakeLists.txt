@@ -151,6 +151,9 @@ target_link_libraries(tb_server_demo PRIVATE tb_transport Threads::Threads)
 add_executable(tb_ranked_demo tests/ranked_demo.cpp)
 target_link_libraries(tb_ranked_demo PRIVATE tb_transport Threads::Threads)
 
+add_executable(tb_lobby_demo tests/lobby_demo.cpp)
+target_link_libraries(tb_lobby_demo PRIVATE tb_transport Threads::Threads)
+
 # The GUI's RemoteMatchSource is header-only + raylib-free, so its exact code path
 # is exercised headless here against the real server.
 add_executable(tb_remote_demo tests/remote_demo.cpp)
@@ -199,9 +202,12 @@ add_executable(tactical_battler
     src/main.cpp
     src/render/Renderer.cpp
     src/render/BuildEditorScreen.cpp
+    src/render/ConnectScreen.cpp
     src/render/ContentPaths.cpp
+    src/render/MainMenuScreen.cpp
     src/render/MatchSource.cpp
     src/render/PackManifest.cpp
+    src/render/SettingsScreen.cpp
     src/render/SpritePack.cpp
 )
 target_link_libraries(tactical_battler PRIVATE tb_core tb_transport raylib)

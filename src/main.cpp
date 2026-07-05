@@ -34,10 +34,13 @@
 #include "net/MirrorSession.h"
 #include "render/Animator.h"
 #include "render/BuildEditorScreen.h"
+#include "render/ConnectScreen.h"
 #include "render/ContentPaths.h"
+#include "render/MainMenuScreen.h"
 #include "render/MatchSource.h"
 #include "render/RemoteMatchSource.h"
 #include "render/Renderer.h"
+#include "render/SettingsScreen.h"
 #include "render/SpritePack.h"
 
 #include "raylib.h"
@@ -53,7 +56,7 @@ using namespace tb;
 
 namespace {
 
-enum class AppState { Editor, Battle };
+enum class AppState { Menu, Editor, Connect, Battle, Settings };
 
 struct Session {
     SpellCatalog catalog = makeDefaultCatalog();
@@ -211,8 +214,13 @@ int main() {
     }
 
     render::BuildEditorScreen editor(session.catalog, *session.repo, session.ruleset);
+    render::MainMenuScreen menu;
+    render::SettingsScreen settings;
 
-    AppState state = AppState::Editor;
+    AppState state = AppState::Menu;
+    // Which action the build editor was entered for (set by the mode-first menu).
+    render::BuildEditorScreen::Mode editorMode = render::BuildEditorScreen::Mode::Edit;
+    bool quit = false;
     // The source of match truth behind a seam: LocalMatchSource drives the Battle
     // in-process (a future RemoteMatchSource would mirror a server). The UI feeds
     // it player Intents and reads source->battle() to render (Phase 4.2).
@@ -222,42 +230,45 @@ int main() {
     int selectedSpell = 0;
     int logScroll = 0; // combat-log scrollback (0 = pinned to newest)
 
-    // Build the match source. With ATB_CONNECT=host[:port] set, join a networked
-    // match on that server (RemoteMatchSource — same render path, authoritative
-    // server); otherwise drive an in-process Battle (LocalMatchSource). A failed
-    // connect logs and falls back to local so the game is still playable.
-    auto newMatch = [&]() -> std::unique_ptr<render::MatchSource> {
-        if (const char* conn = std::getenv("ATB_CONNECT"); conn && *conn) {
-            std::string hp = conn;
-            const auto colon = hp.find(':');
-            const std::string host = colon == std::string::npos ? hp : hp.substr(0, colon);
-            const uint16_t port = static_cast<uint16_t>(
-                colon == std::string::npos ? 5555 : std::atoi(hp.substr(colon + 1).c_str()));
-            // Ranked login (optional): ATB_USER / ATB_PASS. A custom/unranked
-            // server ignores them; a ranked server requires them.
-            const char* user = std::getenv("ATB_USER");
-            const char* pass = std::getenv("ATB_PASS");
-            std::string err;
-            std::unique_ptr<net::MirrorSession> ms = net::MirrorSession::connect(
-                host, port, net::contentHashOf(session.catalog), editor.playerTeam().front(),
-                session.ruleset, session.catalog, session.creatures, &err, /*readTimeoutSec=*/15,
-                user ? user : "", pass ? pass : "");
-            if (ms) {
-                TraceLog(LOG_INFO, "Connected to %s — playing as %s.", conn,
-                         ms->seat() == Faction::Player ? "player" : "enemy");
-                return std::make_unique<render::RemoteMatchSource>(std::move(ms));
-            }
-            TraceLog(LOG_ERROR, "Remote connect to %s failed: %s — using a local match.", conn,
-                     err.c_str());
-        }
+    // The networking screen is seeded from the ATB_* env vars (so they still work
+    // as defaults), then edited live in the GUI.
+    render::ConnectScreen::Params netDefaults;
+    if (const char* c = std::getenv("ATB_CONNECT"); c && *c) netDefaults.host = c;
+    if (const char* u = std::getenv("ATB_USER"); u) netDefaults.user = u;
+    if (const char* p = std::getenv("ATB_PASS"); p) netDefaults.pass = p;
+    if (const char* l = std::getenv("ATB_LOBBY"); l) netDefaults.lobby = l;
+    render::ConnectScreen connect(netDefaults);
+
+    // A local, in-process match (LocalMatchSource drives the Battle directly).
+    auto newLocalMatch = [&]() -> std::unique_ptr<render::MatchSource> {
         return std::make_unique<render::LocalMatchSource>(
             buildMatch(session.ruleset, editor.playerTeam(), editor.enemyTeam(), session.catalog,
                        /*seed=*/0, session.creatures,
                        session.staticArena ? &*session.staticArena : nullptr));
     };
 
-    auto enterBattle = [&]() {
-        source = newMatch();
+    // Join a networked match (RemoteMatchSource mirrors the authoritative server —
+    // same render path). Returns nullptr with `err` set on failure. NOTE: this
+    // blocks until the server pairs us with an opponent (a "waiting…" screen /
+    // async connect is a follow-up).
+    auto connectRemote = [&](const render::ConnectScreen::Params& pr,
+                             std::string& err) -> std::unique_ptr<render::MatchSource> {
+        const auto colon = pr.host.find(':');
+        const std::string host = colon == std::string::npos ? pr.host : pr.host.substr(0, colon);
+        const uint16_t port = static_cast<uint16_t>(
+            colon == std::string::npos ? 5555 : std::atoi(pr.host.substr(colon + 1).c_str()));
+        std::unique_ptr<net::MirrorSession> ms = net::MirrorSession::connect(
+            host, port, net::contentHashOf(session.catalog), editor.playerTeam().front(),
+            session.ruleset, session.catalog, session.creatures, &err, /*readTimeoutSec=*/15,
+            pr.user, pr.pass, pr.lobby);
+        if (!ms) return nullptr;
+        TraceLog(LOG_INFO, "Connected to %s — playing as %s.", pr.host.c_str(),
+                 ms->seat() == Faction::Player ? "player" : "enemy");
+        return std::make_unique<render::RemoteMatchSource>(std::move(ms));
+    };
+
+    auto enterBattleWith = [&](std::unique_ptr<render::MatchSource> src) {
+        source = std::move(src);
         animator.reset();
         selectedSpell = 0;
         logScroll = 0;
@@ -265,16 +276,62 @@ int main() {
         state = AppState::Battle;
     };
 
-    while (!WindowShouldClose()) {
+    using EMode = render::BuildEditorScreen::Mode;
+
+    while (!WindowShouldClose() && !quit) {
         const float dt = GetFrameTime();
+
+        if (state == AppState::Menu) {
+            BeginDrawing();
+            const auto r = menu.runFrame(GetScreenWidth(), GetScreenHeight());
+            EndDrawing();
+            switch (r) {
+                case render::MainMenuScreen::Result::LocalMatch:  editorMode = EMode::Local;  state = AppState::Editor; break;
+                case render::MainMenuScreen::Result::PlayOnline:  editorMode = EMode::Online; state = AppState::Editor; break;
+                case render::MainMenuScreen::Result::BuildEditor: editorMode = EMode::Edit;   state = AppState::Editor; break;
+                case render::MainMenuScreen::Result::Settings:    state = AppState::Settings; break;
+                case render::MainMenuScreen::Result::Quit:        quit = true; break;
+                case render::MainMenuScreen::Result::None: break;
+            }
+            continue;
+        }
+
+        if (state == AppState::Settings) {
+            std::vector<std::pair<std::string, std::string>> rows = {
+                {"Content dir", session.staticArena ? "data/ (static map)" : "data/"},
+                {"Ruleset", TextFormat("teamSize %d, budget %d pts", session.ruleset.teamSize,
+                                       session.ruleset.economy.pointBudget)},
+                {"Sprite pack", pack ? pack->name() : std::string("(built-in primitives)")},
+                {"Default server", connect.params().host},
+            };
+            BeginDrawing();
+            const auto r = settings.runFrame(GetScreenWidth(), GetScreenHeight(), rows);
+            EndDrawing();
+            if (r == render::SettingsScreen::Result::Back) state = AppState::Menu;
+            continue;
+        }
 
         if (state == AppState::Editor) {
             BeginDrawing();
-            if (editor.runFrame(GetScreenWidth(), GetScreenHeight()) ==
-                render::BuildEditorScreen::Result::Fight) {
-                enterBattle();
-            }
+            const auto r = editor.runFrame(GetScreenWidth(), GetScreenHeight(), editorMode);
             EndDrawing();
+            if (r == render::BuildEditorScreen::Result::Fight) enterBattleWith(newLocalMatch());
+            else if (r == render::BuildEditorScreen::Result::PlayOnline) state = AppState::Connect;
+            else if (r == render::BuildEditorScreen::Result::Menu) state = AppState::Menu;
+            continue;
+        }
+
+        if (state == AppState::Connect) {
+            BeginDrawing();
+            const auto r = connect.runFrame(GetScreenWidth(), GetScreenHeight());
+            EndDrawing();
+            if (r == render::ConnectScreen::Result::Back) {
+                state = AppState::Editor;
+            } else if (r == render::ConnectScreen::Result::Connect) {
+                std::string err;
+                if (auto src = connectRemote(connect.params(), err)) enterBattleWith(std::move(src));
+                else connect.setStatus("Connect failed: " + err);
+            }
             continue;
         }
 
@@ -286,8 +343,10 @@ int main() {
         logScroll = std::max(0, logScroll + static_cast<int>(GetMouseWheelMove()));
 
         if (IsKeyPressed(KEY_TAB)) { state = AppState::Editor; continue; }
+        // R starts a fresh LOCAL arena. (In a networked match the server owns the
+        // arena, so this just drops you into a local rematch — Tab returns to editor.)
         if (IsKeyPressed(KEY_R)) {
-            source = newMatch();
+            source = newLocalMatch();
             animator.reset();
             selectedSpell = 0;
             logScroll = 0;

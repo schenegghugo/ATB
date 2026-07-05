@@ -52,8 +52,8 @@
           "maxRange": 0,
           "needsLineOfSight": false,
           "shape": "cross",
-          "radius": 4,
-          "cooldown": 1,
+          "radius": 3,
+          "cooldown": 2,
           "effects": [
             {
               "type": "pull",

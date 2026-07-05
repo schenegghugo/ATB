@@ -38,7 +38,7 @@ ClientResult playClient(const std::string& host, uint16_t port, const std::strin
                         const CharacterBuild& build, const Ruleset& ruleset,
                         const SpellCatalog& catalog, const std::vector<Entity>& creatures,
                         const Policy& policy, int readTimeoutSec = 15, const std::string& user = "",
-                        const std::string& pass = "");
+                        const std::string& pass = "", const std::string& lobby = "");
 
 // A deterministic default policy computable from a Snapshot alone: attack spell
 // slot 0 at the nearest living foe, step toward it, then end the turn.

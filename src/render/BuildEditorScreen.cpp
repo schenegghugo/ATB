@@ -127,7 +127,7 @@ bool BuildEditorScreen::matchesFilter(const SpellDef& d) const {
     }
 }
 
-BuildEditorScreen::Result BuildEditorScreen::runFrame(int screenW, int screenH) {
+BuildEditorScreen::Result BuildEditorScreen::runFrame(int screenW, int screenH, Mode mode) {
     const Vector2 m = GetMousePosition();
     Result result = Result::None;
     ClearBackground(kBg);
@@ -138,7 +138,10 @@ BuildEditorScreen::Result BuildEditorScreen::runFrame(int screenW, int screenH) 
     const float rightW = 300.0f;            // fixed right column (stats + budget)
     const float rightX = W - rightW - pad;  // everything left of this is the grid
 
-    DrawText("BUILD EDITOR", 16, 10, 22, kText);
+    const char* header = mode == Mode::Local    ? "LOCAL MATCH — your team"
+                         : mode == Mode::Online ? "PLAY ONLINE — your team"
+                                                : "BUILD EDITOR";
+    DrawText(header, 16, 10, 22, kText);
 
     const BuildValidation val = validateBuild(cur(), catalog_, ruleset_.economy, ruleset_.bannedSpells);
     auto isBanned = [&](const std::string& key) {
@@ -293,14 +296,22 @@ BuildEditorScreen::Result BuildEditorScreen::runFrame(int screenW, int screenH) 
 
     const float by = H - 44;
     Rectangle saveBtn{16, by, 130, 32};
-    Rectangle fightBtn{W - 156, by, 140, 32};
+    Rectangle menuBtn{154, by, 110, 32};
 
     if (button(saveBtn, "Save Slot", m, kPanel, val.ok)) {
         repo_.save(cur());
         refreshSaved();
         statusMsg_ = "Saved '" + cur().name + "'.";
     }
-    if (button(fightBtn, "Fight >", m, kAccent, teamValid)) result = Result::Fight;
+    if (button(menuBtn, "< Menu", m, kPanel)) result = Result::Menu;
+
+    // The launch button reflects the entered mode; Edit mode has none.
+    if (mode == Mode::Local) {
+        if (button({W - 156, by, 140, 32}, "Fight >", m, kAccent, teamValid)) result = Result::Fight;
+    } else if (mode == Mode::Online) {
+        if (button({W - 176, by, 160, 32}, "Play Online >", m, kAccent, teamValid))
+            result = Result::PlayOnline;
+    }
 
     if (!statusMsg_.empty())
         DrawText(statusMsg_.c_str(), 160, static_cast<int>(by) + 8, 14, kMuted);

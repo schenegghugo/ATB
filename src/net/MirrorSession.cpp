@@ -15,7 +15,7 @@ MirrorSession::connect(const std::string& host, uint16_t port, const std::string
                        const CharacterBuild& build, const Ruleset& ruleset,
                        const SpellCatalog& catalog, const std::vector<Entity>& creatures,
                        std::string* error, int readTimeoutSec, const std::string& user,
-                       const std::string& pass) {
+                       const std::string& pass, const std::string& lobby) {
     auto fail = [&](const std::string& e) -> std::unique_ptr<MirrorSession> {
         if (error) *error = e;
         return nullptr;
@@ -24,7 +24,7 @@ MirrorSession::connect(const std::string& host, uint16_t port, const std::string
     std::optional<Connection> conn = Connection::connect(host, port);
     if (!conn) return fail("connect failed");
     conn->setReadTimeout(readTimeoutSec);
-    if (!conn->send(proto::hello(contentHash, serializeBuild(build), user, pass)))
+    if (!conn->send(proto::hello(contentHash, serializeBuild(build), user, pass, lobby)))
         return fail("sending hello failed");
 
     const std::optional<std::string> first = conn->recv();

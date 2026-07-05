@@ -32,12 +32,13 @@ public:
     // setup) with *error populated. `ruleset`/`catalog`/`creatures` are the
     // client's pinned content (they must match the server's, or the mirror
     // diverges — the handshake hash guards exactly this).
-    // `user`/`pass` are the ranked login (empty for custom/unranked servers).
+    // `user`/`pass` are the ranked login (empty for custom/unranked servers). `lobby`
+    // is a private room code shared with a friend (empty = open matchmaking).
     [[nodiscard]] static std::unique_ptr<MirrorSession>
     connect(const std::string& host, uint16_t port, const std::string& contentHash,
             const CharacterBuild& build, const Ruleset& ruleset, const SpellCatalog& catalog,
             const std::vector<Entity>& creatures, std::string* error, int readTimeoutSec = 15,
-            const std::string& user = "", const std::string& pass = "");
+            const std::string& user = "", const std::string& pass = "", const std::string& lobby = "");
 
     [[nodiscard]] Faction seat() const { return seat_; }
     [[nodiscard]] const Battle& battle() const { return runner_.battle(); }
