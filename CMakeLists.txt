@@ -37,6 +37,7 @@ add_library(tb_core STATIC
     src/data/Sha256.cpp
     src/data/Password.cpp
     src/net/MatchRunner.cpp
+    src/net/Replay.cpp
 )
 target_include_directories(tb_core PUBLIC src)
 target_compile_options(tb_core PRIVATE
@@ -87,6 +88,9 @@ target_link_libraries(tb_sha256_demo PRIVATE tb_core)
 
 add_executable(tb_determinism_demo tests/determinism_demo.cpp)
 target_link_libraries(tb_determinism_demo PRIVATE tb_core)
+
+add_executable(tb_replay_demo tests/replay_demo.cpp)
+target_link_libraries(tb_replay_demo PRIVATE tb_core)
 
 add_executable(tb_password_demo tests/password_demo.cpp)
 target_link_libraries(tb_password_demo PRIVATE tb_core)

@@ -1066,10 +1066,19 @@ play. Abandonment falls back to a start-of-game ping + timeout → forfeit.
   different stdlib/platform that diverges now fails loudly. Arenas re-baselined
   (no committed artifact depends on a specific one); full suite green + stable
   across runs. Hardens today's live mirror too.
-- **CR.2 ☐ Game notation + verifier** (= **Phase 5.1**). A compact
-  serialize/parse for `{rulesetHash, seed, builds, intents}` + `verify(notation)` =
-  re-run `MatchRunner` and return `{legal, winner}`. This single file is the
-  scoresheet, the replay, and the shareable game.
+- **CR.2 ☑ Game notation + verifier** (= **Phase 5.1**). `net/Replay.{h,cpp}`:
+  a `GameRecord` = `{catalogHash, seed, player build, enemy build, ordered
+  intents}` with a **compact single-line notation** — `ATB1 <hash> <seed>
+  <playerB64> <enemyB64> m18,7 . c2@13,11 …` (moves human-readable PGN-style, builds
+  base64 via `data/Base64.h`; the seat of each intent is **implicit** — the runner
+  knows whose turn it is). `serializeRecord`/`parseRecord` round-trip byte-for-byte;
+  `verify(rec, ruleset, catalog, creatures)` checks the content hash + build
+  legality, then **re-runs `MatchRunner`** and returns `{ok, winner, finalSnapshot}`
+  — illegal intents are refused by the engine, so they can't forge a result.
+  `tb_replay_demo` (in CI): a recorded 20-intent match is a **303-char string**;
+  `verify()` reproduces the **exact final state** of the live match (and again from
+  the parsed string); wrong hash / illegal build / incomplete record are rejected.
+  This one artifact is the replay, the scoresheet, and the shareable game.
 - **CR.3 ☐ Mailbox relay.** A tiny store-and-forward service (post/get move strings
   by game id); both clients connect out (NAT-immune). Reuses the transport.
 - **CR.4 ☐ Submit-to-arbiter + MMR.** Two clients submit their notation; the arbiter
@@ -1086,7 +1095,7 @@ ranking. No `core/` rewrite — this is packaging + a determinism fix.
 
 ## Phase 5 — Replays & spectate (mostly free)
 
-### 5.1 ☐ Persist `seed + intents`; re-simulate to play back (no frame recording). **This is the game notation / scoresheet of CR.2 — one format serves replay, ranked submission, and shareable games.**
+### 5.1 ☑ Persist `seed + intents`; re-simulate to play back (no frame recording). **Done as CR.2 (`net/Replay.{h,cpp}`, `tb_replay_demo`) — one notation serves replay, ranked submission, and shareable games.** *(Remaining for a GUI replay viewer: step the re-sim through the renderer.)*
 ### 5.2 ☐ Spectate = subscribe to the same snapshot stream.
 ### 5.3 ☐ Ongoing balance backlog (fireball radius, portal AI, synergy tuning via `tb_balance`).
 
