@@ -26,7 +26,7 @@ constexpr std::uint32_t K[64] = {
 
 } // namespace
 
-std::string sha256Hex(const std::string& msg) {
+std::string sha256Raw(const std::string& msg) {
     std::uint32_t h[8] = {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
                           0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
 
@@ -79,11 +79,22 @@ std::string sha256Hex(const std::string& msg) {
         h[7] += hh;
     }
 
+    std::string out;
+    out.reserve(32);
+    for (int i = 0; i < 8; ++i)
+        for (int j = 3; j >= 0; --j) out.push_back(static_cast<char>((h[i] >> (j * 8)) & 0xff));
+    return out;
+}
+
+std::string sha256Hex(const std::string& msg) {
     static const char* kHex = "0123456789abcdef";
+    const std::string raw = sha256Raw(msg);
     std::string out;
     out.reserve(64);
-    for (int i = 0; i < 8; ++i)
-        for (int j = 7; j >= 0; --j) out.push_back(kHex[(h[i] >> (j * 4)) & 0xf]);
+    for (unsigned char b : raw) {
+        out.push_back(kHex[b >> 4]);
+        out.push_back(kHex[b & 0xf]);
+    }
     return out;
 }
 

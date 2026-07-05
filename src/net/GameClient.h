@@ -32,11 +32,13 @@ struct ClientResult {
 };
 
 // Connect + play a full match, submitting policy()'s Intents on our turns. The
-// pinned content (ruleset/catalog/creatures) must match the server's.
+// pinned content (ruleset/catalog/creatures) must match the server's. `user`/
+// `pass` are the ranked login (empty for custom/unranked servers).
 ClientResult playClient(const std::string& host, uint16_t port, const std::string& contentHash,
                         const CharacterBuild& build, const Ruleset& ruleset,
                         const SpellCatalog& catalog, const std::vector<Entity>& creatures,
-                        const Policy& policy, int readTimeoutSec = 15);
+                        const Policy& policy, int readTimeoutSec = 15, const std::string& user = "",
+                        const std::string& pass = "");
 
 // A deterministic default policy computable from a Snapshot alone: attack spell
 // slot 0 at the nearest living foe, step toward it, then end the turn.

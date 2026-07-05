@@ -36,11 +36,14 @@ inline std::optional<Faction> factionParse(const std::string& s) {
 }
 
 // --- builders (return a framed-ready JSON string) ---------------------------
-inline std::string hello(const std::string& contentHash, const std::string& buildText) {
+inline std::string hello(const std::string& contentHash, const std::string& buildText,
+                         const std::string& user = "", const std::string& pass = "") {
     json::Value o = json::Value::makeObject();
     o.set("type", "hello");
     o.set("content", contentHash);
     o.set("build", buildText);
+    o.set("user", user); // empty for unranked/custom; the server authenticates only if ranked
+    o.set("pass", pass);
     return json::dump(o, false);
 }
 inline std::string welcome(Faction seat, int seed, const std::string& playerBuild,

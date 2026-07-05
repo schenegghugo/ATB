@@ -62,7 +62,12 @@ public:
     Listener(const Listener&) = delete;
     Listener& operator=(const Listener&) = delete;
 
-    [[nodiscard]] static std::optional<Listener> bind(uint16_t port);
+    // Bind + listen. `host` is the interface to bind (dotted IPv4): "127.0.0.1"
+    // (default) accepts only local connections — safe for tests; "0.0.0.0" accepts
+    // from any interface (LAN/internet — only do this behind a firewall/VPN); or a
+    // specific address (e.g. a Tailscale IP) to expose it to just that network.
+    [[nodiscard]] static std::optional<Listener> bind(uint16_t port,
+                                                      const std::string& host = "127.0.0.1");
     [[nodiscard]] uint16_t port() const { return port_; } // actual bound port
     [[nodiscard]] std::optional<Connection> accept();
     void close();

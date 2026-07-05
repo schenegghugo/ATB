@@ -11,6 +11,9 @@
 
 namespace tb {
 
+// Raw SHA-256 digest: exactly 32 bytes. (Used by HMAC-SHA256 / PBKDF2.)
+[[nodiscard]] std::string sha256Raw(const std::string& bytes);
+
 // Lowercase hex SHA-256 (64 chars) of the given bytes.
 [[nodiscard]] std::string sha256Hex(const std::string& bytes);
 

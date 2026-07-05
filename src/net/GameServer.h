@@ -19,11 +19,14 @@
 
 namespace tb::net {
 
+class AccountStore; // forward decl — ranked mode only
+
 struct MatchConfig {
     Ruleset ruleset;
     SpellCatalog catalog;
     std::vector<Entity> creatures;
-    std::string contentHash; // the pinned catalog hash clients must match (see contentHashOf)
+    std::string contentHash;         // the pinned catalog hash clients must match (see contentHashOf)
+    AccountStore* accounts = nullptr; // non-null ⇒ RANKED: require login + record Elo. null ⇒ custom.
 };
 
 // The handshake anchor: sha256 of the catalog's canonical serialization, computed
@@ -44,5 +47,16 @@ struct ServeResult {
 // and run the authoritative loop over the socket until the match finishes.
 // `readTimeoutSec` turns a wedged client into a clean abort instead of a hang.
 ServeResult serveOneMatch(Listener& listener, const MatchConfig& cfg, int readTimeoutSec = 15);
+
+// Persistent matchmaking server (Phase 4.5): accept players, admit each, and pair
+// them FIFO — every two admitted players start a match that runs in its own
+// thread, so many matches play concurrently. Runs until `maxMatches` have started
+// (< 0 = forever, the daemon mode; joins nothing — match threads are detached);
+// with a finite cap it joins every match thread before returning (for tests).
+// Returns the number of matches started. Independent Battles share no mutable
+// state, so concurrent matches are safe. (v1 admits sequentially — a slow client
+// briefly stalls the queue; a real server would handshake off-thread.)
+int serveMatches(Listener& listener, const MatchConfig& cfg, int maxMatches = -1,
+                 int readTimeoutSec = 15);
 
 } // namespace tb::net

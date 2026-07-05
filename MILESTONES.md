@@ -878,13 +878,83 @@ fixed en route: a silent `SIGPIPE` on half-open writes → `MSG_NOSIGNAL`; and
 picks one concrete seed and ships it, so all mirrors match. Transport: TCP, zero-dep;
 WebSocket can layer on later for the browser build.)*
 
+**Configuring the address (today):** the client reads **`ATB_CONNECT=host[:port]`**
+(default port 5555) — e.g. `ATB_CONNECT=192.168.1.50:5555 ./tactical_battler`;
+unset ⇒ a local match. The server is **`tb_server [port]`** (serves one match, then
+exits). ⚠️ *Current limitation:* `Listener::bind` binds `INADDR_LOOPBACK`
+(127.0.0.1) — LAN/internet hosting needs it on `INADDR_ANY` (0.0.0.0) + a firewall
+rule / port-forward. A one-line change, gated so tests stay loopback-only.
+*(Follow-up: a small `[server] host/port` in a config file or an in-editor connect
+field, once the lobby lands.)*
+
 **Follow-ups (not blockers):** optimistic client-side prediction (today the mirror
 waits for the server echo — imperceptible on localhost, matters under real latency);
 a connect/join-code lobby UI (Phase 4.5 territory); teams >1 over the wire.
 
-### 4.5 ☐ Lobby, matchmaking, accounts, ranked MMR
-SQLite (the `BuildRepository` / `schema.sql` seam) for accounts, results,
-ratings. Custom lobbies pin a host catalog by hash.
+### 4.5 ◐ Lobby, matchmaking, accounts, ranked MMR
+SQLite (the `BuildRepository` / `schema.sql` seam) for accounts, results, ratings.
+
+**Slice 1 ☑ — persistent multi-match server + configurable bind.** `tb_server` is
+now a **daemon**, not a one-shot: `net::serveMatches()` accepts players, admits
+each (handshake + `validateBuild`), and pairs them **FIFO** — every two admitted
+players start a match that runs on its own thread, so many matches play
+concurrently (independent Battles share no mutable state). `serveOneMatch` was
+refactored to share the same `runAdmittedMatch` core. **Bind is configurable**
+(`Listener::bind(port, host)`; `tb_server [port] [bind]`) — default `127.0.0.1`
+(safe/local, and tests stay loopback), `0.0.0.0` for all interfaces, or a specific
+IP (e.g. a Tailscale address) — so it can be hosted on the EliteDesk. A generous
+per-move read timeout doubles as a **turn clock** (idle past it → forfeit).
+`tb_server_demo` (in CI, stress-run 15×): four clients are matched into **two
+concurrent matches** that both finish, and a bad-hash player is dropped without
+wedging the queue. Verified: the real `tb_server` serves back-to-back matches and
+stays up. *(v1 admits sequentially — a slow handshaker briefly stalls the queue;
+a real server would handshake off-thread. Daemon match threads are detached.)*
+
+**Slice 2 ☑ — accounts (username + password) + ranked MMR.** Identity model
+decided: **username + password, no email** (zero PII → sidesteps most GDPR),
+hashed with **PBKDF2-HMAC-SHA256** built on the existing hand-rolled SHA-256
+(`data/Password.{h,cpp}`; `sha256Raw` exposed for HMAC) — a standard KDF, no crypto
+dependency; validated against **published RFC vectors** (`tb_password_demo`).
+`net/AccountStore.{h,cpp}` is a **thread-safe, JSON-file-backed** store (username →
+salted hash + Elo rating + W/L); the seam is a drop-in for SQLite later.
+`MatchConfig.accounts` makes a server **ranked** (login required, auto-register on
+first use, **Elo K=32 zero-sum** recorded on a decisive result) vs **custom** (no
+store → no login), so the 4.4/custom paths are untouched. Matchmaking now pairs the
+**closest-rated** waiter (degrades to FIFO unranked). Login flows through the
+`hello` handshake (`user`/`pass`); the GUI reads `ATB_USER`/`ATB_PASS`; `tb_server`
+persists `accounts.json`. Covered by `tb_account_demo` (auth + Elo + persistence),
+`tb_ranked_demo` (auth + Elo over a real socket + wrong-password rejection), both in
+CI + stress-run; the real `tb_server` recorded a live ranked result end-to-end.
+⚠️ **Passwords cross the wire in the clear — put the server behind TLS (reverse
+proxy) or a VPN before any public launch** (transport encryption is a separate
+task).
+
+**Remaining:** move the store to **SQLite** for scale (behind the same seam),
+match-history rows, a proper **queue** (rating bands that widen with wait time),
+and **custom lobbies with join codes**. A **GUI login screen** (vs env vars) is a
+small UI follow-up.
+
+**Deployment & trust model (decided):** two tiers, one codebase.
+- **Ranked → server-authoritative, self-hosted.** A persistent instance (the HP
+  EliteDesk G3) is the *single source of truth*: it owns the `MatchRunner`, pins
+  the **official** catalog/creatures/ruleset by hash, validates builds + every
+  intent, records results/MMR, and arbitrates disputes/disconnects. Ranked *cannot*
+  be P2P — self-reported results can't be trusted for rating, and an authority is
+  needed to hide information (e.g. invisible units) and enforce official content.
+  This extends `tb_server` into a **multi-match** daemon (accept loop → a runner +
+  a DB row per match) + a queue/MMR pairing service.
+- **Custom → P2P, no dedicated server needed.** Because the core is deterministic
+  and the wire carries **intents, never outcomes**, each peer can run its own
+  `MatchRunner` and *independently validate the other's intents* (ownership +
+  `canCast`/range/AP/LOS) — neither side can force an illegal move, and both stay in
+  lockstep. Worst case for a cheater is a desync/rage-quit or exploiting shared
+  hidden info — acceptable when nothing is at stake (you're playing a friend).
+  *Simplest first step:* **host-authoritative** ("listen server") — one player's
+  client runs `serveOneMatch` in-process (loopback for itself + one remote peer),
+  reusing today's code as-is; the host is trusted. *Symmetric mutual-validation*
+  (both run a runner, each rejects the peer's illegal intents) is the natural
+  hardening and a small delta on the existing `MatchRunner`/mirror. Custom lobbies
+  pin an agreed `rules.json` by hash so both peers simulate identically.
 
 ### 4.6 ☐ Lobby & in-match chat
 Text chat over the existing transport (4.4): lobby chat + in-match chat. The

@@ -35,6 +35,7 @@ add_library(tb_core STATIC
     src/data/MapJson.cpp
     src/data/Net.cpp
     src/data/Sha256.cpp
+    src/data/Password.cpp
     src/net/MatchRunner.cpp
 )
 target_include_directories(tb_core PUBLIC src)
@@ -84,6 +85,9 @@ target_link_libraries(tb_map_demo PRIVATE tb_core)
 add_executable(tb_sha256_demo tests/sha256_demo.cpp)
 target_link_libraries(tb_sha256_demo PRIVATE tb_core)
 
+add_executable(tb_password_demo tests/password_demo.cpp)
+target_link_libraries(tb_password_demo PRIVATE tb_core)
+
 add_executable(tb_net_demo tests/net_demo.cpp)
 target_link_libraries(tb_net_demo PRIVATE tb_core)
 
@@ -128,14 +132,24 @@ add_library(tb_transport STATIC
     src/net/GameServer.cpp
     src/net/GameClient.cpp
     src/net/MirrorSession.cpp
+    src/net/AccountStore.cpp
 )
 target_link_libraries(tb_transport PUBLIC tb_core)
+
+add_executable(tb_account_demo tests/account_demo.cpp)
+target_link_libraries(tb_account_demo PRIVATE tb_transport)
 
 add_executable(tb_server tools/server_main.cpp)
 target_link_libraries(tb_server PRIVATE tb_transport)
 
 add_executable(tb_net_transport_demo tests/net_transport_demo.cpp)
 target_link_libraries(tb_net_transport_demo PRIVATE tb_transport Threads::Threads)
+
+add_executable(tb_server_demo tests/server_demo.cpp)
+target_link_libraries(tb_server_demo PRIVATE tb_transport Threads::Threads)
+
+add_executable(tb_ranked_demo tests/ranked_demo.cpp)
+target_link_libraries(tb_ranked_demo PRIVATE tb_transport Threads::Threads)
 
 # The GUI's RemoteMatchSource is header-only + raylib-free, so its exact code path
 # is exercised headless here against the real server.

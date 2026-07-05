@@ -5,3 +5,7 @@
 tb_headless
 tactical_battler
 /output/
+# Server-generated account data + test scratch DBs
+accounts.json
+tb_account_test.json
+tb_ranked_test.json

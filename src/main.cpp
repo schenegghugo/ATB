@@ -233,10 +233,15 @@ int main() {
             const std::string host = colon == std::string::npos ? hp : hp.substr(0, colon);
             const uint16_t port = static_cast<uint16_t>(
                 colon == std::string::npos ? 5555 : std::atoi(hp.substr(colon + 1).c_str()));
+            // Ranked login (optional): ATB_USER / ATB_PASS. A custom/unranked
+            // server ignores them; a ranked server requires them.
+            const char* user = std::getenv("ATB_USER");
+            const char* pass = std::getenv("ATB_PASS");
             std::string err;
             std::unique_ptr<net::MirrorSession> ms = net::MirrorSession::connect(
                 host, port, net::contentHashOf(session.catalog), editor.playerTeam().front(),
-                session.ruleset, session.catalog, session.creatures, &err);
+                session.ruleset, session.catalog, session.creatures, &err, /*readTimeoutSec=*/15,
+                user ? user : "", pass ? pass : "");
             if (ms) {
                 TraceLog(LOG_INFO, "Connected to %s — playing as %s.", conn,
                          ms->seat() == Faction::Player ? "player" : "enemy");

@@ -148,7 +148,7 @@ void Listener::close() {
     }
 }
 
-std::optional<Listener> Listener::bind(uint16_t port) {
+std::optional<Listener> Listener::bind(uint16_t port, const std::string& host) {
     const int fd = ::socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) return std::nullopt;
     int one = 1;
@@ -156,7 +156,10 @@ std::optional<Listener> Listener::bind(uint16_t port) {
 
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK); // localhost-only for now
+    if (::inet_pton(AF_INET, host.c_str(), &addr.sin_addr) != 1) { // "0.0.0.0" => any
+        ::close(fd);
+        return std::nullopt;
+    }
     addr.sin_port = htons(port);
     if (::bind(fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0) {
         ::close(fd);

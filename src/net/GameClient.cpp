@@ -30,11 +30,12 @@ std::vector<Intent> chasePolicy(Faction seat, const Snapshot& s) {
 ClientResult playClient(const std::string& host, uint16_t port, const std::string& contentHash,
                         const CharacterBuild& build, const Ruleset& ruleset,
                         const SpellCatalog& catalog, const std::vector<Entity>& creatures,
-                        const Policy& policy, int readTimeoutSec) {
+                        const Policy& policy, int readTimeoutSec, const std::string& user,
+                        const std::string& pass) {
     ClientResult r;
     std::string err;
     std::unique_ptr<MirrorSession> ms = MirrorSession::connect(
-        host, port, contentHash, build, ruleset, catalog, creatures, &err, readTimeoutSec);
+        host, port, contentHash, build, ruleset, catalog, creatures, &err, readTimeoutSec, user, pass);
     if (!ms) { r.error = err; return r; }
     r.seat = ms->seat();
 

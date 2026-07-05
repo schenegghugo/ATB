@@ -3,6 +3,7 @@
 //
 #include "GameServer.h"
 
+#include "AccountStore.h"
 #include "MatchRunner.h"
 #include "Protocol.h"
 #include "core/Battle.h"
@@ -12,7 +13,11 @@
 #include "data/Net.h"
 #include "data/Sha256.h"
 
+#include <cstdlib>
+#include <limits>
 #include <random>
+#include <thread>
+#include <vector>
 
 namespace tb::net {
 
@@ -25,10 +30,12 @@ namespace {
 struct Admit {
     bool ok = false;
     CharacterBuild build;
+    std::string user; // the authenticated username (empty in custom/unranked mode)
+    int rating = kDefaultRating;
     std::string error;
 };
 
-// Read one client's hello and apply the two admission checkpoints.
+// Read one client's hello and apply the admission checkpoints.
 Admit handshake(Connection& c, const MatchConfig& cfg) {
     Admit a;
     const std::optional<std::string> raw = c.recv();
@@ -39,7 +46,16 @@ Admit handshake(Connection& c, const MatchConfig& cfg) {
     // Checkpoint 1 — content hash (catalog/creatures/ruleset must match, §4/§5).
     if (m->field("content") != cfg.contentHash) { a.error = "content hash mismatch"; return a; }
 
-    // Checkpoint 2 — build admission: parseable + valid vs the ruleset (budget,
+    // Checkpoint 2 — login (RANKED only): username + password against the store,
+    // auto-registering a new name. Custom/unranked servers (no store) skip this.
+    if (cfg.accounts) {
+        const AuthResult au = cfg.accounts->authenticate(m->field("user"), m->field("pass"));
+        if (!au.ok) { a.error = "login: " + au.error; return a; }
+        a.user = m->field("user");
+        a.rating = au.account.rating;
+    }
+
+    // Checkpoint 3 — build admission: parseable + valid vs the ruleset (budget,
     // bans) — the SAME validateBuild the editor runs live.
     const std::optional<CharacterBuild> build = deserializeBuild(m->field("build"));
     if (!build) { a.error = "malformed build payload"; return a; }
@@ -52,25 +68,10 @@ Admit handshake(Connection& c, const MatchConfig& cfg) {
     return a;
 }
 
-} // namespace
-
-ServeResult serveOneMatch(Listener& listener, const MatchConfig& cfg, int readTimeoutSec) {
+// Run one already-admitted match to completion over the two connections.
+ServeResult runAdmittedMatch(Connection c0, Connection c1, const CharacterBuild& b0,
+                             const CharacterBuild& b1, const MatchConfig& cfg) {
     ServeResult res;
-
-    std::optional<Connection> c0 = listener.accept();
-    std::optional<Connection> c1 = listener.accept();
-    if (!c0 || !c1) { res.error = "accept failed"; return res; }
-    c0->setReadTimeout(readTimeoutSec);
-    c1->setReadTimeout(readTimeoutSec);
-
-    const Admit a0 = handshake(*c0, cfg);
-    const Admit a1 = handshake(*c1, cfg);
-    if (!a0.ok) c0->send(proto::error(a0.error));
-    if (!a1.ok) c1->send(proto::error(a1.error));
-    if (!a0.ok || !a1.ok) {
-        res.error = !a0.ok ? ("player: " + a0.error) : ("enemy: " + a1.error);
-        return res;
-    }
 
     // A concrete NON-ZERO seed, chosen once and sent to both clients so the server
     // and both mirrors generate the *same* arena. (generateArena treats seed 0 as
@@ -80,16 +81,15 @@ ServeResult serveOneMatch(Listener& listener, const MatchConfig& cfg, int readTi
 
     // Seat by connection order, and hand each client the setup it needs to build
     // an identical deterministic mirror (both builds + the arena seed).
-    const std::string pBuild = serializeBuild(a0.build);
-    const std::string eBuild = serializeBuild(a1.build);
-    c0->send(proto::welcome(Faction::Player, static_cast<int>(seed), pBuild, eBuild));
-    c1->send(proto::welcome(Faction::Enemy, static_cast<int>(seed), pBuild, eBuild));
+    const std::string pBuild = serializeBuild(b0);
+    const std::string eBuild = serializeBuild(b1);
+    c0.send(proto::welcome(Faction::Player, static_cast<int>(seed), pBuild, eBuild));
+    c1.send(proto::welcome(Faction::Enemy, static_cast<int>(seed), pBuild, eBuild));
 
-    Battle battle =
-        buildMatch(cfg.ruleset, {a0.build}, {a1.build}, cfg.catalog, seed, cfg.creatures);
+    Battle battle = buildMatch(cfg.ruleset, {b0}, {b1}, cfg.catalog, seed, cfg.creatures);
     MatchRunner runner(std::move(battle), Seat::Human, Seat::Human);
 
-    auto connFor = [&](Faction f) -> Connection& { return f == Faction::Player ? *c0 : *c1; };
+    auto connFor = [&](Faction f) -> Connection& { return f == Faction::Player ? c0 : c1; };
 
     // Read the awaited seat's next intent, apply it authoritatively, and broadcast
     // it to BOTH mirrors. Clients reproduce everything else (AI/summon/inert turns)
@@ -110,16 +110,90 @@ ServeResult serveOneMatch(Listener& listener, const MatchConfig& cfg, int readTi
         // mirrors advance in lockstep with the authoritative Battle.
         runner.submit(*awaiting, in.value);
         const std::string msg = proto::applied(*awaiting, in.value);
-        if (!c0->send(msg) || !c1->send(msg)) { res.error = "broadcast failed (disconnect)"; return res; }
+        if (!c0.send(msg) || !c1.send(msg)) { res.error = "broadcast failed (disconnect)"; return res; }
     }
 
-    c0->send(proto::endMsg());
-    c1->send(proto::endMsg());
+    c0.send(proto::endMsg());
+    c1.send(proto::endMsg());
     res.ok = runner.finished();
     res.winner = runner.battle().winner();
     res.finalSnapshot = serializeSnapshot(runner.snapshot());
     if (!res.ok) res.error = "match did not finish within bound";
     return res;
+}
+
+} // namespace
+
+ServeResult serveOneMatch(Listener& listener, const MatchConfig& cfg, int readTimeoutSec) {
+    std::optional<Connection> c0 = listener.accept();
+    std::optional<Connection> c1 = listener.accept();
+    if (!c0 || !c1) return {false, std::nullopt, {}, "accept failed"};
+    c0->setReadTimeout(readTimeoutSec);
+    c1->setReadTimeout(readTimeoutSec);
+
+    const Admit a0 = handshake(*c0, cfg);
+    const Admit a1 = handshake(*c1, cfg);
+    if (!a0.ok) c0->send(proto::error(a0.error));
+    if (!a1.ok) c1->send(proto::error(a1.error));
+    if (!a0.ok || !a1.ok)
+        return {false, std::nullopt, {}, !a0.ok ? ("player: " + a0.error) : ("enemy: " + a1.error)};
+
+    return runAdmittedMatch(std::move(*c0), std::move(*c1), a0.build, a1.build, cfg);
+}
+
+int serveMatches(Listener& listener, const MatchConfig& cfg, int maxMatches, int readTimeoutSec) {
+    struct Waiter {
+        Connection conn;
+        CharacterBuild build;
+        std::string user;
+        int rating = kDefaultRating;
+    };
+
+    std::vector<std::thread> matches; // joined at the end only in bounded mode
+    std::vector<Waiter> pool;         // admitted players awaiting a pairing
+    int started = 0;
+
+    while (maxMatches < 0 || started < maxMatches) {
+        std::optional<Connection> conn = listener.accept();
+        if (!conn) break; // listener closed
+        conn->setReadTimeout(readTimeoutSec);
+        Admit a = handshake(*conn, cfg);
+        if (!a.ok) { conn->send(proto::error(a.error)); continue; } // rejected — drop
+
+        if (pool.empty()) {
+            pool.push_back({std::move(*conn), std::move(a.build), std::move(a.user), a.rating});
+            continue;
+        }
+
+        // Matchmaking: pair with the closest-rated waiter (ranked); with no store
+        // everyone is kDefaultRating, so this degrades to FIFO.
+        std::size_t best = 0;
+        int bestDiff = std::numeric_limits<int>::max();
+        for (std::size_t i = 0; i < pool.size(); ++i) {
+            const int d = std::abs(pool[i].rating - a.rating);
+            if (d < bestDiff) { bestDiff = d; best = i; }
+        }
+        Waiter opp = std::move(pool[best]);
+        pool.erase(pool.begin() + static_cast<std::ptrdiff_t>(best));
+
+        // Run the match on its own thread; on a ranked, decisive result, update Elo.
+        std::thread t([&cfg, c0 = std::move(opp.conn), b0 = std::move(opp.build),
+                       u0 = std::move(opp.user), c1 = std::move(*conn), b1 = std::move(a.build),
+                       u1 = std::move(a.user)]() mutable {
+            const ServeResult r = runAdmittedMatch(std::move(c0), std::move(c1), b0, b1, cfg);
+            if (cfg.accounts && r.ok && r.winner) {
+                const bool playerWon = *r.winner == Faction::Player;
+                cfg.accounts->recordResult(playerWon ? u0 : u1, playerWon ? u1 : u0);
+            }
+        });
+        if (maxMatches < 0) t.detach(); // daemon: fire-and-forget (cfg outlives the process)
+        else matches.push_back(std::move(t));
+        ++started;
+    }
+
+    for (std::thread& t : matches)
+        if (t.joinable()) t.join();
+    return started;
 }
 
 } // namespace tb::net
