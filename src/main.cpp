@@ -44,6 +44,8 @@
 #include "render/ReadyCheckScreen.h"
 #include "render/RemoteMatchSource.h"
 #include "render/Renderer.h"
+#include "render/ReplayMatchSource.h"
+#include "net/Replay.h"
 #include "render/SettingsScreen.h"
 #include "render/SpritePack.h"
 #include "render/Ui.h"
@@ -53,6 +55,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <fstream>
 #include <memory>
 #include <optional>
 #include <string>
@@ -260,6 +263,7 @@ int main() {
     EntityId lastActive = 0;       // detect turn changes to reset turnClock
     std::string chatDraft;         // in-match chat being typed
     bool chatFocused = false;      // chat input has keyboard focus
+    render::ReplayMatchSource* replay = nullptr; // non-null when `source` is a replay
 
     // The networking screen is seeded from the ATB_* env vars (so they still work
     // as defaults), then edited live in the GUI.
@@ -288,6 +292,7 @@ int main() {
 
     auto enterBattleWith = [&](std::unique_ptr<render::MatchSource> src) {
         source = std::move(src);
+        replay = nullptr; // cleared for live/local; the replay boot sets it after
         animator.reset();
         selectedSpell = 0;
         logScroll = 0;
@@ -321,6 +326,27 @@ int main() {
     };
 
     using EMode = render::BuildEditorScreen::Mode;
+
+    // A replay to watch? ATB_REPLAY=<file> holds a game notation (net/Replay); boot
+    // straight into read-only playback. Controls live in the Battle loop below.
+    if (const char* rp = std::getenv("ATB_REPLAY"); rp && *rp) {
+        std::ifstream f(rp);
+        const std::string text((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+        const replay::RecordParse pr = replay::parseRecord(text);
+        if (!pr.ok) {
+            TraceLog(LOG_ERROR, "ATB_REPLAY '%s' unparseable: %s", rp, pr.error.c_str());
+        } else {
+            const Ruleset& rs = replay::rulesetHash(session.ruleset) == pr.record.rulesetHash
+                                    ? session.ruleset
+                                    : (session.rankedRuleset ? *session.rankedRuleset : session.ruleset);
+            auto rsrc = std::make_unique<render::ReplayMatchSource>(pr.record, rs, session.catalog,
+                                                                    session.creatures);
+            render::ReplayMatchSource* raw = rsrc.get();
+            enterBattleWith(std::move(rsrc));
+            replay = raw;
+            TraceLog(LOG_INFO, "Replaying '%s' (%zu intents).", rp, replay->total());
+        }
+    }
 
     while (!WindowShouldClose() && !quit) {
         const float dt = GetFrameTime();
@@ -436,10 +462,24 @@ int main() {
         // Combat-log scrollback: wheel up = older, down = newer (clamped ≥ 0).
         logScroll = std::max(0, logScroll + static_cast<int>(GetMouseWheelMove()));
 
-        if (!chatFocused && IsKeyPressed(KEY_TAB)) { state = AppState::Editor; continue; }
+        // Replay playback controls (read-only viewer): Space pause, →/. step, ↑↓ speed.
+        if (replay) {
+            if (IsKeyPressed(KEY_TAB)) { source.reset(); replay = nullptr; state = AppState::Menu; continue; }
+            if (IsKeyPressed(KEY_SPACE)) replay->togglePause();
+            if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_PERIOD)) replay->step();
+            if (IsKeyPressed(KEY_UP)) replay->faster();
+            if (IsKeyPressed(KEY_DOWN)) replay->slower();
+            status = TextFormat("REPLAY %s  %zu/%zu   Space=pause  ->=step  up/down=speed  Tab=menu",
+                                replay->matchOver() ? "ended"
+                                : replay->paused()  ? "paused"
+                                                    : "playing",
+                                replay->cursor(), replay->total());
+        }
+
+        if (!replay && !chatFocused && IsKeyPressed(KEY_TAB)) { state = AppState::Editor; continue; }
         // R starts a fresh LOCAL arena. (In a networked match the server owns the
         // arena, so this just drops you into a local rematch — Tab returns to editor.)
-        if (!chatFocused && IsKeyPressed(KEY_R)) {
+        if (!replay && !chatFocused && IsKeyPressed(KEY_R)) {
             source = newLocalMatch();
             onlineMatch = false;
             animator.reset();
@@ -538,7 +578,7 @@ int main() {
             }
         }
 
-        if (finished) {
+        if (finished && !replay) {
             // update() (pumped above) let a correspondence source finalize + submit;
             // keep its result message, else show win/loss/draw from the local seat's
             // view (a remote player may be the Enemy seat; a forfeit sets the winner).

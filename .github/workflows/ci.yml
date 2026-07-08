@@ -29,6 +29,7 @@ jobs:
           ./build/tb_sha256_demo
           ./build/tb_determinism_demo
           ./build/tb_replay_demo
+          ./build/tb_replay_source_demo
           ./build/tb_commit_demo
           ./build/tb_password_demo
           ./build/tb_catalog_demo

@@ -133,6 +133,10 @@ target_link_libraries(tb_pack_demo PRIVATE tb_core)
 add_executable(tb_matchsource_demo tests/matchsource_demo.cpp src/render/MatchSource.cpp)
 target_link_libraries(tb_matchsource_demo PRIVATE tb_core)
 
+# Replay playback source (render/ReplayMatchSource) — raylib-free, headless-tested.
+add_executable(tb_replay_source_demo tests/replay_source_demo.cpp)
+target_link_libraries(tb_replay_source_demo PRIVATE tb_core)
+
 # ---------------------------------------------------------------------------
 # Netcode transport (Phase 4.4) — POSIX TCP + the authoritative 1v1 match
 # server/client. Kept OUT of tb_core (which stays portable + socket-free);
