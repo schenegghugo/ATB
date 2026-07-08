@@ -16,18 +16,24 @@ the content and PvP work.
 **Where we are:** Phases 0–2, the **Core split**, **Match rulesets**, and
 **pluggable AI** (3.1/3.2) are done. Phase 4 is essentially complete: **4.1–4.4**
 (wire formats → `MatchSource` seam → loopback runner → real TCP + GUI remote
-client) plus **4.5**'s server slices (multi-match daemon, accounts + PBKDF2,
-Elo/MMR, private lobbies, connect screen + main menu). The **correspondence-ranked
-arc (CR.1–CR.5) is built end-to-end**: cross-platform determinism, the game
-notation + verifier (= replays, §5.1), the mailbox relay, the double-submit
-arbiter, and the official perfect-information ranked ruleset. **CR.6's hidden-info
-ranked** now has all three slices built — the decoy mechanic (engine + content),
-the commitment layer (notation + verifier), and the correspondence session that
-plays a decoy game over the relay and generates commitments at cast. **Open
-threads:** GUI playtesting + async connect/waiting screen, SQLite behind the store
-seam, TLS before any public non-VPN launch, 4.6 chat, Phase 5.2 spectate, wiring
-the decoy-choice prompt + a self-hosted arbiter endpoint into the GUI, and the
-heavier hidden-info options (commit-reveal movement / ZK) still parked under CR.6.
+client) and **4.5**, now including the full **Online Home**: a self-hosted lobby
+daemon (`tb_lobby`) with a **seek board + directed challenges**, a per-match **ready
+check** (pick/edit a build → READY, else cancel; all games), routing to either a
+**live** authoritative match or a **correspondence** game, an **idle-forfeit clock**
+(+ a visible two-clock HUD), and **in-match chat** — all wired into the GUI
+(menu → login → lobby → ready check → match, with an end screen) and playtest-
+confirmed. The **correspondence-ranked arc (CR.1–CR.5) is built end-to-end**:
+cross-platform determinism, the game notation + verifier (= replays, §5.1), the
+mailbox relay, the double-submit arbiter, and the official perfect-information
+ranked ruleset. **CR.6's hidden-info ranked** has all three slices built — the
+decoy mechanic (engine + content), the commitment layer (notation + verifier), and
+the correspondence session that plays a decoy game over the relay and generates
+commitments at cast. **Open threads:** lobby + correspondence-game **chat** (4.6),
+a true **chess time bank**, **persistence** of the lobby store/`Mailbox` +
+correspondence **cold-resume**, **SQLite** behind the account/store seam, **TLS**
+before any public non-VPN launch, Phase **5.2 spectate**, the GUI **decoy-choice
+prompt**, and the heavier hidden-info options (commit-reveal movement / ZK) parked
+under CR.6.
 
 **The one rule (satisfied):** no netcode before the catalog loader, content hash,
 and serialization round-trip tests exist (Phase 1 + 4.1) — all long since done.
@@ -946,15 +952,13 @@ the client passes it (`MirrorSession`/`playClient` `lobby` param; GUI `ATB_LOBBY
 rooms in flight never cross-pair** — proven by tagging each room's champions and
 checking no foreign tag reaches a client's final snapshot.
 
-**Slice 4 ◐ — GUI networking screen.** `render/ConnectScreen.{h,cpp}` (an
+**Slice 4 ☑ — GUI networking screen.** `render/ConnectScreen.{h,cpp}` (an
 immediate-mode screen like the build editor): server `host:port`, optional ranked
-`username`/`password` (masked), and an optional `lobby` code, with click/Tab focus
-and live editing. The build editor gained a **"Play Online >"** button →
-`AppState::Connect`; `main.cpp` splits the match source into `newLocalMatch()` /
-`connectRemote(params)` and the fields are seeded from the `ATB_*` env vars (still
-work as defaults). Built + launches; **the screen's input/visuals need in-GUI
-playtesting** (can't be auto-tested). *Known gap:* `connectRemote` **blocks until
-the server pairs you** — a "waiting…" screen / async connect is a follow-up.
+`username`/`password` (masked), with click/Tab focus and live editing, seeded from
+the `ATB_*` env vars. *(Superseded by **6.1**: the screen is now the **login** to
+the Online Home — menu → login → lobby — and the old direct `connectRemote` match
+path was replaced by the lobby flow. A "waiting…" screen / fully async connect is
+still a follow-up.)*
 
 **Main menu (mode-first).** `render/MainMenuScreen.{h,cpp}` is the landing screen
 — **Local Match / Play Online / Build Editor / Settings / Quit** — and the app now
@@ -1006,7 +1010,9 @@ reconnects**, the game finishes, both scoresheets agree, and the arbiter ranks i
 server restart; **cold resume** — rebuild the mirror by replaying the log, + client
 secret persistence for decoy games — is a follow-up, as is file persistence.)*
 
-**Slice 5c ◐ — GUI: the Online Home + correspondence play.** `render/LobbyScreen`
+**Slice 5c ☑ — GUI: the Online Home + correspondence play.** *(Playtest-confirmed;
+extended by Slice 6 — the entry flow, ready check, clock, end screen, and chat.)*
+`render/LobbyScreen`
 (immediate-mode like `ConnectScreen`) drives a live `LobbySession`: a **format bar**
 (rated toggle + clock presets — Unlimited / 30s·60s per-move / 5+5 · 10min), an
 **open-seeks** column (list + Accept + Create seek), a **challenge** form (username +
