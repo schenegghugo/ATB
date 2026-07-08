@@ -108,4 +108,19 @@ inline std::optional<Msg> parse(const std::string& text) {
     return m;
 }
 
+// Read a nested object member of a parsed Msg body (e.g. a "format" block). Returns
+// nullptr if absent / not an object.
+inline const json::Value* objField(const Msg& m, const char* key) {
+    const json::Value* v = m.body.find(key);
+    return (v && v->isObject()) ? v : nullptr;
+}
+inline int intOf(const json::Value& o, const char* key, int def = 0) {
+    const json::Value* v = o.find(key);
+    return (v && v->isNumber()) ? static_cast<int>(v->asNumber()) : def;
+}
+inline std::string strOf(const json::Value& o, const char* key) {
+    const json::Value* v = o.find(key);
+    return (v && v->isString()) ? v->asString() : std::string();
+}
+
 } // namespace tb::net::proto

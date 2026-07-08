@@ -149,6 +149,7 @@ add_library(tb_transport STATIC
     src/net/Arbiter.cpp
     src/net/MailboxRelay.cpp
     src/net/Correspondence.cpp
+    src/net/Lobby.cpp
 )
 target_link_libraries(tb_transport PUBLIC tb_core)
 
@@ -167,6 +168,10 @@ target_link_libraries(tb_ranked_rules_demo PRIVATE tb_transport)
 # CR.6 slice 3: correspondence play + in-game decoy commitments over the relay.
 add_executable(tb_correspondence_demo tests/correspondence_demo.cpp)
 target_link_libraries(tb_correspondence_demo PRIVATE tb_transport Threads::Threads)
+
+# Phase 4.5 slice 5: seek board + directed challenges → live match.
+add_executable(tb_lobby_challenge_demo tests/lobby_challenge_demo.cpp)
+target_link_libraries(tb_lobby_challenge_demo PRIVATE tb_transport Threads::Threads)
 
 add_executable(tb_server tools/server_main.cpp)
 target_link_libraries(tb_server PRIVATE tb_transport)

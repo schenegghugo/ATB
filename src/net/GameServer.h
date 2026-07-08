@@ -9,6 +9,7 @@
 // multi-match server (Phase 4.5) will drive many of these.
 //
 #include "Socket.h"
+#include "core/Build.h" // CharacterBuild
 #include "core/Entity.h"
 #include "core/Ruleset.h"
 #include "core/Spells.h" // SpellCatalog
@@ -47,6 +48,16 @@ struct ServeResult {
 // and run the authoritative loop over the socket until the match finishes.
 // `readTimeoutSec` turns a wedged client into a clean abort instead of a hang.
 ServeResult serveOneMatch(Listener& listener, const MatchConfig& cfg, int readTimeoutSec = 15);
+
+// Run one already-admitted match to completion over two connections (seats by
+// argument order: c0 = Player, c1 = Enemy). Sends each side the `welcome` setup,
+// then the authoritative intent → apply → broadcast loop until the match finishes.
+// The connections' read timeouts act as the per-move clock (a wedged client aborts
+// cleanly). Exposed so the lobby (Phase 4.5) can drive matches it has already paired
+// + admitted, reusing the exact same authoritative path. Does NOT record Elo — the
+// caller does that on the result (see serveMatches).
+ServeResult runAdmittedMatch(Connection c0, Connection c1, const CharacterBuild& b0,
+                             const CharacterBuild& b1, const MatchConfig& cfg);
 
 // Persistent matchmaking server (Phase 4.5): accept players, admit each, and pair
 // them FIFO — every two admitted players start a match that runs in its own

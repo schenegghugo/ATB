@@ -966,11 +966,34 @@ returns. A minimal read-only **`SettingsScreen`** shows content/pack/server info
 widgets factored into `render/Ui.h`. GUI builds + boots into the menu; **the screen
 flow needs your in-GUI playtesting.**
 
-**Remaining:** async connect + a "waiting for opponent" screen; editable Settings +
-saved network defaults; move the store to **SQLite** for scale (behind the same
-seam) + match-history rows; a widening-band **queue**; and **transport encryption
-(TLS)** before any public, non-VPN ranked launch (passwords are currently in the
-clear).
+**Slice 5 ◐ — the Online Home: seek board + directed challenges.** `net/Lobby.{h,cpp}`
+`serveLobby` is a daemon holding **authenticated sessions** (login over the existing
+`AccountStore`; guests allowed for casual/browsing) and the board: **open seeks**
+(post / list / accept — anyone may take one) *and* **directed challenges** (send to a
+named user / list incoming / accept / decline). Each carries a **`MatchFormat`** —
+`rated` (→ ranked ruleset + Elo) or casual, and a clock: `Unlimited` (→
+correspondence), `PerMove`, or `Chess` (main+increment). One connection per role
+(`Protocol.h` gains lobby message types): a **session** conn (request→reply; async
+pairings arrive via `poll`) and, on a `paired{token}`, a **match** conn that carries
+just the one-time token — the server already holds both builds, replies `welcome`,
+and drives the **existing authoritative loop** (`runAdmittedMatch`, now exposed;
+client via new `MirrorSession::joinToken`). Accepting a live (Per-move/Chess) format
+pairs both online players into a real match; **rated → Elo** recorded, zero-sum. The
+seek's poster/challenger becomes Player, the acceptor Enemy. `tb_lobby_challenge_demo`
+(in CI, stress-run 5×): over real sockets, a seek and a directed challenge are both
+accepted and **play a live rated match to a finish**, ratings move zero-sum, and the
+refusals hold (accept-your-own-seek, unknown id, decline, guest-barred-from-rated).
+*(v1: teamSize 1; **Unlimited routes to correspondence in slice 6** — rejected for
+now; a real chess **clock** — bank/increment/flag-loss + forfeit-notify — is a
+follow-up, today Per-move uses the per-move read timeout; the board is in-memory.)*
+
+**Remaining:** wire **Unlimited → correspondence** (the CR.6 `CorrespondenceSession`
++ a persisted `Mailbox` over the session conn) and a persistent lobby store; the
+**GUI lobby + correspondence screens**; async connect + a "waiting for opponent"
+screen; editable Settings + saved network defaults; move the store to **SQLite** for
+scale (behind the same seam) + match-history rows; a widening-band **queue**; and
+**transport encryption (TLS)** before any public, non-VPN ranked launch (passwords
+are currently in the clear).
 
 **Deployment & trust model (decided):** two tiers, one codebase.
 - **Ranked → server-authoritative, self-hosted.** A persistent instance (the HP

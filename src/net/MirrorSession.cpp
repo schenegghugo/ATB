@@ -11,23 +11,13 @@ namespace tb::net {
 std::string MirrorSession::proto_intent(const Intent& in) { return proto::intentMsg(in); }
 
 std::unique_ptr<MirrorSession>
-MirrorSession::connect(const std::string& host, uint16_t port, const std::string& contentHash,
-                       const CharacterBuild& build, const Ruleset& ruleset,
-                       const SpellCatalog& catalog, const std::vector<Entity>& creatures,
-                       std::string* error, int readTimeoutSec, const std::string& user,
-                       const std::string& pass, const std::string& lobby) {
+MirrorSession::fromWelcome(Connection conn, const Ruleset& ruleset, const SpellCatalog& catalog,
+                           const std::vector<Entity>& creatures, std::string* error) {
     auto fail = [&](const std::string& e) -> std::unique_ptr<MirrorSession> {
         if (error) *error = e;
         return nullptr;
     };
-
-    std::optional<Connection> conn = Connection::connect(host, port);
-    if (!conn) return fail("connect failed");
-    conn->setReadTimeout(readTimeoutSec);
-    if (!conn->send(proto::hello(contentHash, serializeBuild(build), user, pass, lobby)))
-        return fail("sending hello failed");
-
-    const std::optional<std::string> first = conn->recv();
+    const std::optional<std::string> first = conn.recv();
     if (!first) return fail("no server reply to handshake");
     const std::optional<proto::Msg> m = proto::parse(*first);
     if (!m) return fail("unparseable server reply");
@@ -46,7 +36,44 @@ MirrorSession::connect(const std::string& host, uint16_t port, const std::string
         buildMatch(ruleset, {*pB}, {*eB}, catalog, static_cast<unsigned>(seed), creatures);
     MatchRunner runner(std::move(battle), Seat::Human, Seat::Human);
     return std::unique_ptr<MirrorSession>(
-        new MirrorSession(std::move(*conn), std::move(runner), *seat));
+        new MirrorSession(std::move(conn), std::move(runner), *seat));
+}
+
+std::unique_ptr<MirrorSession>
+MirrorSession::connect(const std::string& host, uint16_t port, const std::string& contentHash,
+                       const CharacterBuild& build, const Ruleset& ruleset,
+                       const SpellCatalog& catalog, const std::vector<Entity>& creatures,
+                       std::string* error, int readTimeoutSec, const std::string& user,
+                       const std::string& pass, const std::string& lobby) {
+    auto fail = [&](const std::string& e) -> std::unique_ptr<MirrorSession> {
+        if (error) *error = e;
+        return nullptr;
+    };
+    std::optional<Connection> conn = Connection::connect(host, port);
+    if (!conn) return fail("connect failed");
+    conn->setReadTimeout(readTimeoutSec);
+    if (!conn->send(proto::hello(contentHash, serializeBuild(build), user, pass, lobby)))
+        return fail("sending hello failed");
+    return fromWelcome(std::move(*conn), ruleset, catalog, creatures, error);
+}
+
+std::unique_ptr<MirrorSession>
+MirrorSession::joinToken(const std::string& host, uint16_t port, const std::string& token,
+                         const Ruleset& ruleset, const SpellCatalog& catalog,
+                         const std::vector<Entity>& creatures, std::string* error,
+                         int readTimeoutSec) {
+    auto fail = [&](const std::string& e) -> std::unique_ptr<MirrorSession> {
+        if (error) *error = e;
+        return nullptr;
+    };
+    std::optional<Connection> conn = Connection::connect(host, port);
+    if (!conn) return fail("connect failed");
+    conn->setReadTimeout(readTimeoutSec);
+    json::Value o = json::Value::makeObject();
+    o.set("type", "joinMatch");
+    o.set("token", token);
+    if (!conn->send(json::dump(o, false))) return fail("sending join token failed");
+    return fromWelcome(std::move(*conn), ruleset, catalog, creatures, error);
 }
 
 bool MirrorSession::pump(int timeoutMs) {

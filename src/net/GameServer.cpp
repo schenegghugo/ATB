@@ -71,6 +71,8 @@ Admit handshake(Connection& c, const MatchConfig& cfg) {
     return a;
 }
 
+} // namespace
+
 // Run one already-admitted match to completion over the two connections.
 ServeResult runAdmittedMatch(Connection c0, Connection c1, const CharacterBuild& b0,
                              const CharacterBuild& b1, const MatchConfig& cfg) {
@@ -124,8 +126,6 @@ ServeResult runAdmittedMatch(Connection c0, Connection c1, const CharacterBuild&
     if (!res.ok) res.error = "match did not finish within bound";
     return res;
 }
-
-} // namespace
 
 ServeResult serveOneMatch(Listener& listener, const MatchConfig& cfg, int readTimeoutSec) {
     std::optional<Connection> c0 = listener.accept();

@@ -56,6 +56,7 @@ jobs:
           ./build/tb_mailbox_demo
           ./build/tb_ranked_rules_demo
           ./build/tb_correspondence_demo
+          ./build/tb_lobby_challenge_demo
 
       - name: Balance sanity (fixed seed, fast)
         run: ./build/tb_balance 200 1

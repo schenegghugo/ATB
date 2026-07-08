@@ -40,6 +40,15 @@ public:
             const std::vector<Entity>& creatures, std::string* error, int readTimeoutSec = 15,
             const std::string& user = "", const std::string& pass = "", const std::string& lobby = "");
 
+    // Join a match the lobby has already paired us into (Phase 4.5): open a fresh
+    // connection carrying only the one-time `token`, then build the mirror from the
+    // server's `welcome` (the server already holds both builds from the seek /
+    // challenge). Same setup path as connect(), minus the hello/build handshake.
+    [[nodiscard]] static std::unique_ptr<MirrorSession>
+    joinToken(const std::string& host, uint16_t port, const std::string& token,
+              const Ruleset& ruleset, const SpellCatalog& catalog,
+              const std::vector<Entity>& creatures, std::string* error, int readTimeoutSec = 60);
+
     [[nodiscard]] Faction seat() const { return seat_; }
     [[nodiscard]] const Battle& battle() const { return runner_.battle(); }
     [[nodiscard]] bool finished() const { return ended_ || runner_.finished(); }
@@ -58,6 +67,11 @@ private:
     MirrorSession(Connection conn, MatchRunner runner, Faction seat)
         : conn_(std::move(conn)), runner_(std::move(runner)), seat_(seat) {}
     static std::string proto_intent(const Intent& in); // avoids leaking Protocol.h here
+    // After our first frame is sent, read the server's `welcome` and build the
+    // mirror — shared by connect() (hello) and joinToken() (lobby pairing).
+    static std::unique_ptr<MirrorSession>
+    fromWelcome(Connection conn, const Ruleset& ruleset, const SpellCatalog& catalog,
+                const std::vector<Entity>& creatures, std::string* error);
 
     Connection conn_;
     MatchRunner runner_;
