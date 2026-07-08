@@ -104,7 +104,19 @@ ServeResult runAdmittedMatch(Connection c0, Connection c1, const CharacterBuild&
         if (!awaiting) { res.error = "no seat awaited but match not finished"; return res; }
 
         const std::optional<std::string> raw = connFor(*awaiting).recv();
-        if (!raw) { res.error = "client disconnected mid-turn"; return res; }
+        if (!raw) {
+            // The active player ran out their move clock (the conn read timeout) or
+            // dropped → they FORFEIT; the opponent wins. Both are told the winner
+            // (no death to infer it from). Elo is recorded by the caller on r.winner.
+            const Faction winner = opposing(*awaiting);
+            res.winner = winner;
+            res.ok = true;
+            res.error = "forfeit (idle clock / disconnect)";
+            c0.send(proto::endMsg(winner, /*forfeit=*/true));
+            c1.send(proto::endMsg(winner, /*forfeit=*/true));
+            res.finalSnapshot = serializeSnapshot(runner.snapshot());
+            return res;
+        }
         const std::optional<proto::Msg> m = proto::parse(*raw);
         if (!m || m->type != "intent") continue; // ignore noise
         const Parse<Intent> in = parseIntent(m->field("intent"));

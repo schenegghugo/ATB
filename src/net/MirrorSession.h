@@ -52,6 +52,10 @@ public:
     [[nodiscard]] Faction seat() const { return seat_; }
     [[nodiscard]] const Battle& battle() const { return runner_.battle(); }
     [[nodiscard]] bool finished() const { return ended_ || runner_.finished(); }
+    // The authoritative winner if the server ended the match by FORFEIT (idle clock /
+    // disconnect) — the mirror has no death to infer it from. nullopt otherwise (a
+    // normal end is read from battle().winner()).
+    [[nodiscard]] std::optional<Faction> forfeitWinner() const { return forfeitWinner_; }
     // The local seat holds the active unit (its input is live).
     [[nodiscard]] bool awaitingMe() const { return !finished() && runner_.awaitingSeat() == seat_; }
 
@@ -77,6 +81,7 @@ private:
     MatchRunner runner_;
     Faction seat_ = Faction::Player;
     bool ended_ = false;
+    std::optional<Faction> forfeitWinner_;
 };
 
 } // namespace tb::net

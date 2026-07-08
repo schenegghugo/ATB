@@ -41,6 +41,12 @@ public:
     }
 
     [[nodiscard]] bool finished() const { return session_->finished(); }
+    [[nodiscard]] bool matchOver() const override { return session_->finished(); }
+    [[nodiscard]] std::optional<Faction> winner() const override {
+        if (std::optional<Faction> w = session_->forfeitWinner()) return w;
+        return session_->battle().winner();
+    }
+    [[nodiscard]] Faction localSeat() const override { return session_->seat(); }
 
 private:
     std::unique_ptr<net::MirrorSession> session_;

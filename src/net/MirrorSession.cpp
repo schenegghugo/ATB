@@ -85,7 +85,12 @@ bool MirrorSession::pump(int timeoutMs) {
         if (!raw) { ended_ = true; return false; }
         const std::optional<proto::Msg> m = proto::parse(*raw);
         if (!m) continue;
-        if (m->type == "end") { ended_ = true; return false; }
+        if (m->type == "end") {
+            ended_ = true;
+            if (const json::Value* f = m->body.find("forfeit"); f && f->isBool() && f->asBool())
+                forfeitWinner_ = proto::factionParse(m->field("winner"));
+            return false;
+        }
         if (m->type == "applied") {
             const std::optional<Faction> seat = proto::factionParse(m->field("seat"));
             const Parse<Intent> in = parseIntent(m->field("intent"));

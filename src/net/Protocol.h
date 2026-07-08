@@ -71,9 +71,14 @@ inline std::string applied(Faction seat, const Intent& in) {
     o.set("intent", serializeIntent(in));
     return json::dump(o, false);
 }
-inline std::string endMsg() {
+// Match over. A normal end (someone died) carries no winner — the mirror derives it
+// from the battle. A FORFEIT (idle clock / disconnect) has no death to infer from,
+// so it carries the authoritative `winner` + a `forfeit` flag for the client.
+inline std::string endMsg(std::optional<Faction> winner = std::nullopt, bool forfeit = false) {
     json::Value o = json::Value::makeObject();
     o.set("type", "end");
+    if (winner) o.set("winner", factionName(*winner));
+    if (forfeit) o.set("forfeit", true);
     return json::dump(o, false);
 }
 inline std::string intentMsg(const Intent& in) {

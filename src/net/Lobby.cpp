@@ -487,7 +487,15 @@ void matchJoin(Connection conn, const proto::Msg& join, const LobbyConfig& cfg, 
     if (!runNow) return; // parked — the other side will drive the match
 
     const MatchConfig mc = makeMatchConfig(cfg, p->fmt);
-    const int clock = p->fmt.time == MatchFormat::Time::PerMove ? p->fmt.perMoveSec : p->fmt.mainSec;
+    // The per-move idle-forfeit window: a Per-move budget is itself the limit; for a
+    // Chess bank we forfeit a player who sits idle for 1/5 of their starting time
+    // (anti-sandbag / disconnect), per the design.
+    int clock = 300;
+    switch (p->fmt.time) {
+        case MatchFormat::Time::PerMove: clock = std::max(1, p->fmt.perMoveSec); break;
+        case MatchFormat::Time::Chess: clock = std::max(1, p->fmt.mainSec / 5); break;
+        case MatchFormat::Time::Unlimited: break; // not a live match
+    }
     p->connP.setReadTimeout(clock);
     p->connE.setReadTimeout(clock);
     const ServeResult r =

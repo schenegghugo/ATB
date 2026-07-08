@@ -43,6 +43,19 @@ public:
     // driver's own pacing. dt = seconds since the last frame. Returns a HUD
     // status when something notable happened this tick (else std::nullopt).
     virtual std::optional<std::string> update(float dt) = 0;
+
+    // Is the match over? Defaults to the battle phase; a networked source overrides
+    // to also cover a server FORFEIT (idle/disconnect), which leaves the mirror's
+    // phase unfinished (no death occurred).
+    [[nodiscard]] virtual bool matchOver() const { return battle().phase() == Phase::Finished; }
+
+    // The winner (nullopt = draw / still playing). A networked source folds in the
+    // forfeit winner the server declared.
+    [[nodiscard]] virtual std::optional<Faction> winner() const { return battle().winner(); }
+
+    // Which seat the local player controls — so the HUD can say victory vs defeat
+    // (a remote player may be the Enemy seat). Local/hotseat play is the Player.
+    [[nodiscard]] virtual Faction localSeat() const { return Faction::Player; }
 };
 
 // Drives the Battle directly, in-process — the single-player / hotseat path and

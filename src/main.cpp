@@ -426,7 +426,7 @@ int main() {
         // and otherwise paces one AI/inert action.
         if (auto s = source->update(dt)) status = *s;
 
-        const bool finished = source->battle().phase() == Phase::Finished;
+        const bool finished = source->matchOver();
         const EntityId active = finished ? 0 : source->battle().activeUnit();
         // The seam decides who drives: the local player inputs only for their own
         // Champions; summons (either team) are AI and objects (bombs) auto-pass —
@@ -472,11 +472,13 @@ int main() {
 
         if (finished) {
             // update() (pumped above) let a correspondence source finalize + submit;
-            // keep its result message, else show the win/loss.
-            auto w = source->battle().winner();
+            // keep its result message, else show win/loss/draw from the local seat's
+            // view (a remote player may be the Enemy seat; a forfeit sets the winner).
+            const std::optional<Faction> w = source->winner();
             if (status.rfind("Game over", 0) != 0)
-                status = (w && *w == Faction::Player) ? "Victory! Tab=editor, R=rematch."
-                                                      : "Defeat. Tab=editor, R=rematch.";
+                status = !w ? "Draw. Tab=editor, R=rematch."
+                        : (*w == source->localSeat()) ? "Victory! Tab=editor, R=rematch."
+                                                       : "Defeat. Tab=editor, R=rematch.";
         }
 
         render::ViewState view;

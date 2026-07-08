@@ -57,6 +57,8 @@ public:
     }
 
     [[nodiscard]] bool finished() const { return session_->finished(); }
+    [[nodiscard]] bool matchOver() const override { return session_->finished(); }
+    [[nodiscard]] Faction localSeat() const override { return seat_; }
 
 private:
     static std::string describe(const net::SubmitResult& r) {

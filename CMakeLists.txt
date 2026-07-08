@@ -178,6 +178,10 @@ target_link_libraries(tb_lobby_challenge_demo PRIVATE tb_transport Threads::Thre
 add_executable(tb_lobby_correspondence_demo tests/lobby_correspondence_demo.cpp)
 target_link_libraries(tb_lobby_correspondence_demo PRIVATE tb_transport Threads::Threads)
 
+# Phase 4.5 slice 6.3: idle-clock forfeit → opponent wins + Elo.
+add_executable(tb_lobby_forfeit_demo tests/lobby_forfeit_demo.cpp)
+target_link_libraries(tb_lobby_forfeit_demo PRIVATE tb_transport Threads::Threads)
+
 add_executable(tb_server tools/server_main.cpp)
 target_link_libraries(tb_server PRIVATE tb_transport)
 

@@ -1061,13 +1061,18 @@ Each is independently shippable.
   the format's ruleset, then issues the live token / correspondence handle; a
   no-show cancels. (Server-authoritative, so an illegal or absent build can't start
   a ranked game.)
-- **6.3 ☐ Visible in-game clock + enforcement.** There is no on-screen clock. Draw a
-  **per-player clock in the battle HUD** (both seats), and make the timed formats
-  *real*: Per-move (Ns/turn) and Chess (bank + increment) tick on the active
-  player's turn and **flag = loss**, enforced server-side with a forfeit that
-  notifies the opponent (today `runAdmittedMatch` aborts silently on a read timeout;
-  the clock state must be tracked + broadcast so the client can render it). Folds in
-  the "real chess clock" item above.
+- **6.3 ◐ Idle-clock forfeit ☑ / visible clock ☐.** *Enforcement done:* a live match
+  now **forfeits the active player who sits idle** past the per-move window (Per-move
+  → `perMoveSec`; Chess → `mainSec / 5`, the anti-sandbag/disconnect threshold you
+  specced) — `runAdmittedMatch` declares the opponent the winner, tells **both**
+  clients (`end{winner, forfeit}` — a forfeit has no death to infer from), and Elo is
+  recorded. The `MatchSource` seam gained `matchOver()` / `winner()` / `localSeat()`
+  so the GUI shows the right result (this also fixed victory/defeat display for a
+  remote **Enemy-seat** player). `tb_lobby_forfeit_demo` (in CI, stress-run 5×): an
+  idle seeker forfeits, the opponent wins + gains Elo zero-sum. *Remaining:* the
+  **visible on-screen countdown** (send the window in `welcome`; HUD counts down for
+  the active seat each turn) and a true **Chess bank** (accumulating time, not just a
+  per-move cap).
 - **6.4 ☐ In-match & lobby chat.** No chat surface yet — see **4.6** (text chat over
   the transport, HUD panel beside the combat log).
 - **6.5 ☑ BUG: no movement in an online match — fixed.** Real bug (not turn-order):
