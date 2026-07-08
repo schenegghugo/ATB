@@ -412,6 +412,14 @@ int main() {
             status = "New arena. Player turn.";
         }
 
+        // Pump the source EVERY frame — before reading whose turn it is. A remote /
+        // correspondence mirror advances only when this drains the server's echoes,
+        // *including the confirmation of our own move*; without an unconditional pump
+        // the mirror would stay stuck on our turn and the move would never appear. A
+        // LocalMatchSource no-ops here while it's our turn or the match is finished,
+        // and otherwise paces one AI/inert action.
+        if (auto s = source->update(dt)) status = *s;
+
         const bool finished = source->battle().phase() == Phase::Finished;
         const EntityId active = finished ? 0 : source->battle().activeUnit();
         // The seam decides who drives: the local player inputs only for their own
@@ -454,16 +462,13 @@ int main() {
             if (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER)) {
                 source->submit(net::Intent::endTurn());
             }
-        } else if (!finished) {
-            if (auto s = source->update(dt)) status = *s;
         }
 
         if (finished) {
-            // Let the source do end-of-game work (a correspondence source finalizes
-            // the decoy reveals + submits its scoresheet here; local/live no-op).
-            if (auto s = source->update(dt)) status = *s;
+            // update() (pumped above) let a correspondence source finalize + submit;
+            // keep its result message, else show the win/loss.
             auto w = source->battle().winner();
-            if (status.rfind("Game over", 0) != 0) // keep a correspondence result message if set
+            if (status.rfind("Game over", 0) != 0)
                 status = (w && *w == Faction::Player) ? "Victory! Tab=editor, R=rematch."
                                                       : "Defeat. Tab=editor, R=rematch.";
         }

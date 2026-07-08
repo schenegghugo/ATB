@@ -71,6 +71,13 @@ int main(int argc, char** argv) {
         CatalogLoad l = loadCatalogFromFile("data/catalog.json");
         if (!l.ok) { std::fprintf(stderr, "tb_lobby: data/catalog.json invalid\n"); return 1; }
         cfg.catalog = std::move(l.catalog);
+    } else {
+        // No ./data → compiled defaults, whose hash cannot match a GUI that loaded
+        // data/. This is the #1 "content hash mismatch" cause — say so loudly.
+        std::fprintf(stderr,
+                     "tb_lobby: WARNING — no ./data/catalog.json found; using compiled defaults.\n"
+                     "          A GUI client that loaded data/ will FAIL the content-hash check.\n"
+                     "          Run tb_lobby from the repo root (where ./data lives).\n");
     }
     if (std::ifstream("data/creatures.json").good()) {
         CreatureLoad l = loadCreaturesFromFile("data/creatures.json");
