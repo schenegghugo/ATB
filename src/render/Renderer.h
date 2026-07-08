@@ -59,6 +59,13 @@ struct ViewState {
     // Combat log panel (drawn in the empty column right of the board, if it fits).
     int windowW = 0, windowH = 0; // actual window size (the board uses Layout::screen*)
     int logScroll = 0;            // lines scrolled up from the newest (0 = autoscroll to bottom)
+
+    // Move clock strip atop the log column (timed networked matches). Two big MM:SS:
+    // YOU on the left, OPPONENT on the right; the side whose turn it is ticks + is
+    // highlighted (red under 5 s). Hidden when showClock is false.
+    bool showClock = false;
+    float myClock = 0.0f, oppClock = 0.0f; // seconds remaining shown per side
+    bool myTurnActive = false;             // true → my side is the one ticking
 };
 
 // Converts a pixel position to a grid coordinate (caller checks inBounds).

@@ -6,6 +6,7 @@
 #include "raylib.h"
 
 #include <algorithm>
+#include <cmath>
 #include <string>
 #include <utility>
 #include <vector>
@@ -190,9 +191,32 @@ void drawCombatLog(const Layout& l, const Battle& battle, const ViewState& view)
     const int x0 = l.screenWidth(g) + 8;
     const int panelW = view.windowW - x0 - 8;
     if (panelW < 200) return; // too narrow — the board fills the window
-    const int y0 = l.originY;
-    const int panelH = view.windowH - y0 - 8;
+    int y0 = l.originY;
 
+    // Move-clock strip atop the column: two big MM:SS side by side (YOU | OPPONENT),
+    // the active side highlighted (red under 5 s). The log starts below it.
+    if (view.showClock) {
+        const int stripH = 68;
+        DrawRectangle(x0, y0, panelW, stripH, Color{12, 14, 20, 235});
+        DrawRectangleLines(x0, y0, panelW, stripH, kGridLine);
+        const int half = panelW / 2;
+        const Color kClockLo{230, 90, 90, 255};
+        auto side = [&](int sx, const char* label, float secs, bool active) {
+            const int s = std::max(0, static_cast<int>(std::ceil(secs)));
+            const char* t = TextFormat("%d:%02d", s / 60, s % 60);
+            const Color c = active ? (s <= 5 ? kClockLo : kText) : kTextDim;
+            const int lw = MeasureText(label, 13);
+            DrawText(label, sx + (half - lw) / 2, y0 + 8, 13, active ? kText : kTextDim);
+            const int tw = MeasureText(t, 40);
+            DrawText(t, sx + (half - tw) / 2, y0 + 24, 40, c);
+        };
+        side(x0, "YOU", view.myClock, view.myTurnActive);
+        side(x0 + half, "OPPONENT", view.oppClock, !view.myTurnActive);
+        DrawLine(x0 + half, y0 + 6, x0 + half, y0 + stripH - 6, kGridLine);
+        y0 += stripH + 6;
+    }
+
+    const int panelH = view.windowH - y0 - 8;
     DrawRectangle(x0, y0, panelW, panelH, Color{12, 14, 20, 230});
     DrawRectangleLines(x0, y0, panelW, panelH, kGridLine);
     DrawText("COMBAT LOG", x0 + 8, y0 + 6, 14, kText);

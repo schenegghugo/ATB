@@ -505,6 +505,14 @@ int main() {
         view.windowW = GetScreenWidth();
         view.windowH = GetScreenHeight();
         view.logScroll = logScroll;
+        // Two-clock strip atop the log column (timed matches): my time ticks on my
+        // turn, the opponent's on theirs; the idle side shows the full window.
+        view.showClock = clockSec > 0 && !finished;
+        if (view.showClock) {
+            view.myTurnActive = playerControl;
+            view.myClock = playerControl ? turnClock : static_cast<float>(clockSec);
+            view.oppClock = playerControl ? static_cast<float>(clockSec) : turnClock;
+        }
         if (playerControl) {
             const EntityId me = active;
             const Entity& u = source->battle().unit(me);
@@ -528,16 +536,6 @@ int main() {
         bool returnToLobby = false;
         BeginDrawing();
         render::drawFrame(layout, source->battle(), view, pack ? &*pack : nullptr, &animator);
-
-        // Visible move clock (timed matches): a countdown for the active seat, red in
-        // the final seconds.
-        if (clockSec > 0 && !finished) {
-            const int secs = static_cast<int>(std::ceil(turnClock));
-            const char* whose = playerControl ? "Your move" : "Opponent";
-            const char* txt = TextFormat("%s  %02d:%02d", whose, secs / 60, secs % 60);
-            const int tw = MeasureText(txt, 24);
-            DrawText(txt, (GetScreenWidth() - tw) / 2, 14, 24, secs <= 5 ? RED : RAYWHITE);
-        }
 
         // End-of-match screen for an ONLINE game: clear result + return to the lobby
         // (a local match keeps the Tab=editor / R=rematch status instead).

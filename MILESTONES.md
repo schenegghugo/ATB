@@ -1071,9 +1071,10 @@ Each is independently shippable.
   remote **Enemy-seat** player). `tb_lobby_forfeit_demo` (in CI, stress-run 5×): an
   idle seeker forfeits, the opponent wins + gains Elo zero-sum. **Visible clock ☑:**
   the window ships in `welcome` (`MirrorSession::clockSec()` →
-  `MatchSource::clockSeconds()`); the HUD draws a centred **`Your move` / `Opponent`
-  countdown** for the active seat, red in the last 5 s. *Remaining:* a true **Chess
-  bank** (accumulating time, not just a per-move cap).
+  `MatchSource::clockSeconds()`); the HUD draws a **two-clock strip atop the log
+  column** — big MM:SS, **YOU** on the left / **OPPONENT** on the right — the side
+  whose turn it is ticking + highlighted (red under 5 s), the log starting below it.
+  *Remaining:* a true **Chess bank** (accumulating time, not just a per-move cap).
 - **6.7 ☑ End-of-match screen + return to lobby.** A finished **online** match now
   shows a **VICTORY / DEFEAT / DRAW** overlay with a **Return to lobby** button (local
   matches keep the Tab=editor / R=rematch status). Also fixed: the build editor's
