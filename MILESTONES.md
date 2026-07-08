@@ -1039,6 +1039,50 @@ same seam) + match-history rows; a widening-band **queue**; and **transport
 encryption (TLS)** before any public, non-VPN ranked launch (passwords are currently
 in the clear).
 
+### Slice 6 ☐ — Online UX pass (first-playtest feedback)
+
+The lobby works end to end, but the first live playtest surfaced flow + UX gaps.
+Each is independently shippable.
+
+- **6.1 ☐ Fix the online entry flow.** Today *Play Online* routes **menu → build
+  editor → Connect → Lobby**, which is confusing (why author a build before you've
+  even logged in?). Desired: **boot → Main menu → Play Online → Login screen →
+  Lobby**. The build is *not* chosen up front — it moves to the per-match ready
+  check (6.2). So: repurpose `ConnectScreen` as a **Login screen** (host + user +
+  pass) reached directly from the menu; drop the pre-lobby editor step; seek/
+  challenge no longer carries a build (the wire moves the build from
+  seek/challenge-time to ready-check-time).
+- **6.2 ☐ Per-match ready check.** When a pairing lands, **both players get a 30 s
+  ready check**: pick a **saved, ranked-legal build** of their own *or* edit a new
+  one, then click **READY**. The match starts only when **both** ready in time; if
+  either fails to ready (timeout or decline) the **game is cancelled** and both
+  return to the lobby (no rating change). Needs: a `ReadyCheckScreen` (countdown +
+  build picker/editor + Ready), and a lobby protocol round — `paired` → both
+  `submitBuild{build}` + `ready` within the window → server validates both builds vs
+  the format's ruleset, then issues the live token / correspondence handle; a
+  no-show cancels. (Server-authoritative, so an illegal or absent build can't start
+  a ranked game.)
+- **6.3 ☐ Visible in-game clock + enforcement.** There is no on-screen clock. Draw a
+  **per-player clock in the battle HUD** (both seats), and make the timed formats
+  *real*: Per-move (Ns/turn) and Chess (bank + increment) tick on the active
+  player's turn and **flag = loss**, enforced server-side with a forfeit that
+  notifies the opponent (today `runAdmittedMatch` aborts silently on a read timeout;
+  the clock state must be tracked + broadcast so the client can render it). Folds in
+  the "real chess clock" item above.
+- **6.4 ☐ In-match & lobby chat.** No chat surface yet — see **4.6** (text chat over
+  the transport, HUD panel beside the combat log).
+- **6.5 ☐ BUG: no movement in an online match.** First playtest: left-clicking a
+  tile did not move the champion in a networked game. Investigate — likely a
+  seat/turn-order issue (only the seat that holds the active unit may input; the
+  acceptor is Enemy and moves second) vs. a real input-plumbing bug in
+  `RemoteMatchSource`/`CorrespondenceMatchSource` submit. Reproduce with two clients,
+  confirm which seat/turn, and fix (or clarify the "waiting for opponent" HUD so it's
+  obvious whose turn it is).
+- **6.6 ☐ (papercut) `tb_lobby` fails loudly without `./data`.** Running the daemon
+  from the wrong directory silently falls back to the compiled-default content →
+  a "content hash mismatch" the GUI can't explain. Warn (or exit) when
+  `./data/catalog.json` is absent, pointing at the repo root.
+
 **Deployment & trust model (decided):** two tiers, one codebase.
 - **Ranked → server-authoritative, self-hosted.** A persistent instance (the HP
   EliteDesk G3) is the *single source of truth*: it owns the `MatchRunner`, pins
