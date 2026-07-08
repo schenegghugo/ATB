@@ -49,6 +49,10 @@ public:
     [[nodiscard]] Faction localSeat() const override { return session_->seat(); }
     [[nodiscard]] int clockSeconds() const override { return session_->clockSec(); }
 
+    [[nodiscard]] bool chatEnabled() const override { return true; }
+    [[nodiscard]] const std::vector<net::ChatLine>& chatLog() const override { return session_->chat(); }
+    void sendChat(const std::string& text) override { session_->sendChat(text); }
+
 private:
     std::unique_ptr<net::MirrorSession> session_;
 };

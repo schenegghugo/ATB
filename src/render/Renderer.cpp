@@ -186,20 +186,50 @@ bool formatEvent(const Battle& b, const BattleEvent& ev, std::string& out, Color
 
 // Scrolling combat log in the empty column to the right of the board. Skipped if
 // the window isn't wide enough to give it a readable strip.
+// Geometry of the right-hand column: the clock strip, the chat panel (+ its input
+// box), and the combat log. Shared by the renderer and the frontend's hit-test.
+struct RightColumn {
+    bool fits = false;
+    int x0 = 0, w = 0;
+    int clockH = 0;
+    int chatY = 0, chatH = 0;  // chat panel (0 height when no chat)
+    Rect input;                // chat text-input box
+    int logY = 0, logH = 0;
+};
+RightColumn rightColumn(const Layout& l, const Grid& g, const ViewState& view) {
+    RightColumn r;
+    r.x0 = l.screenWidth(g) + 8;
+    r.w = view.windowW - r.x0 - 8;
+    if (r.w < 200) return r;
+    r.fits = true;
+    r.clockH = view.showClock ? 74 : 0; // 68px strip + 6px gap
+    const int top = l.originY + r.clockH;
+    const int avail = view.windowH - 8 - top;
+    if (view.showChat) {
+        r.chatY = top;
+        r.chatH = avail / 2;
+        const int inputH = 28;
+        r.input = {r.x0 + 6, r.chatY + r.chatH - inputH - 6, r.w - 12, inputH};
+        r.logY = top + r.chatH + 6;
+        r.logH = avail - r.chatH - 6;
+    } else {
+        r.logY = top;
+        r.logH = avail;
+    }
+    return r;
+}
+
 void drawCombatLog(const Layout& l, const Battle& battle, const ViewState& view) {
     const Grid& g = battle.grid();
-    const int x0 = l.screenWidth(g) + 8;
-    const int panelW = view.windowW - x0 - 8;
-    if (panelW < 200) return; // too narrow — the board fills the window
-    int y0 = l.originY;
+    const RightColumn r = rightColumn(l, g, view);
+    if (!r.fits) return; // too narrow — the board fills the window
 
-    // Move-clock strip atop the column: two big MM:SS side by side (YOU | OPPONENT),
-    // the active side highlighted (red under 5 s). The log starts below it.
+    // Move-clock strip atop the column: two big MM:SS side by side (YOU | OPPONENT).
     if (view.showClock) {
-        const int stripH = 68;
-        DrawRectangle(x0, y0, panelW, stripH, Color{12, 14, 20, 235});
-        DrawRectangleLines(x0, y0, panelW, stripH, kGridLine);
-        const int half = panelW / 2;
+        const int y0 = l.originY, stripH = 68;
+        DrawRectangle(r.x0, y0, r.w, stripH, Color{12, 14, 20, 235});
+        DrawRectangleLines(r.x0, y0, r.w, stripH, kGridLine);
+        const int half = r.w / 2;
         const Color kClockLo{230, 90, 90, 255};
         auto side = [&](int sx, const char* label, float secs, bool active) {
             const int s = std::max(0, static_cast<int>(std::ceil(secs)));
@@ -210,20 +240,45 @@ void drawCombatLog(const Layout& l, const Battle& battle, const ViewState& view)
             const int tw = MeasureText(t, 40);
             DrawText(t, sx + (half - tw) / 2, y0 + 24, 40, c);
         };
-        side(x0, "YOU", view.myClock, view.myTurnActive);
-        side(x0 + half, "OPPONENT", view.oppClock, !view.myTurnActive);
-        DrawLine(x0 + half, y0 + 6, x0 + half, y0 + stripH - 6, kGridLine);
-        y0 += stripH + 6;
+        side(r.x0, "YOU", view.myClock, view.myTurnActive);
+        side(r.x0 + half, "OPPONENT", view.oppClock, !view.myTurnActive);
+        DrawLine(r.x0 + half, y0 + 6, r.x0 + half, y0 + stripH - 6, kGridLine);
     }
 
-    const int panelH = view.windowH - y0 - 8;
-    DrawRectangle(x0, y0, panelW, panelH, Color{12, 14, 20, 230});
-    DrawRectangleLines(x0, y0, panelW, panelH, kGridLine);
-    DrawText("COMBAT LOG", x0 + 8, y0 + 6, 14, kText);
+    // Chat panel: transcript (own lines accented) + a text-input box at the foot.
+    if (view.showChat) {
+        DrawRectangle(r.x0, r.chatY, r.w, r.chatH, Color{12, 14, 20, 230});
+        DrawRectangleLines(r.x0, r.chatY, r.w, r.chatH, kGridLine);
+        DrawText("CHAT", r.x0 + 8, r.chatY + 6, 14, kText);
+        const int lineH = 16, top = r.chatY + 26;
+        const int rows = std::max(0, (r.chatH - 26 - r.input.h - 12) / lineH);
+        const std::vector<net::ChatLine>* log = view.chatLog;
+        const int total = log ? static_cast<int>(log->size()) : 0;
+        const int start = std::max(0, total - rows);
+        for (int i = 0; start + i < total; ++i) {
+            const net::ChatLine& cl = (*log)[start + i];
+            const bool mine = cl.seat == view.localSeat;
+            const std::string s = (mine ? "You: " : "Them: ") + cl.text;
+            DrawText(s.c_str(), r.x0 + 8, top + i * lineH, 13, mine ? kZoneOk : kText);
+        }
+        // Input box.
+        DrawRectangle(r.input.x, r.input.y, r.input.w, r.input.h,
+                      view.chatFocused ? Color{44, 50, 66, 255} : Color{24, 28, 38, 255});
+        DrawRectangleLines(r.input.x, r.input.y, r.input.w, r.input.h,
+                           view.chatFocused ? kZoneOk : kGridLine);
+        const std::string shown =
+            (view.chatDraft.empty() && !view.chatFocused) ? std::string("Press Enter or click to chat…")
+                                                          : view.chatDraft + (view.chatFocused ? "_" : "");
+        DrawText(shown.c_str(), r.input.x + 6, r.input.y + 7, 14,
+                 view.chatDraft.empty() && !view.chatFocused ? kTextDim : kText);
+    }
 
-    const int lineH = 16, top = y0 + 28;
-    const int rows = std::max(0, (panelH - 34) / lineH);
-
+    // Combat log.
+    DrawRectangle(r.x0, r.logY, r.w, r.logH, Color{12, 14, 20, 230});
+    DrawRectangleLines(r.x0, r.logY, r.w, r.logH, kGridLine);
+    DrawText("COMBAT LOG", r.x0 + 8, r.logY + 6, 14, kText);
+    const int lineH = 16, top = r.logY + 28;
+    const int rows = std::max(0, (r.logH - 34) / lineH);
     std::vector<std::pair<std::string, Color>> lines;
     for (const BattleEvent& ev : battle.events()) {
         std::string text;
@@ -234,12 +289,17 @@ void drawCombatLog(const Layout& l, const Battle& battle, const ViewState& view)
     const int maxStart = std::max(0, total - rows);
     const int start = std::clamp(maxStart - view.logScroll, 0, maxStart);
     for (int i = 0; i < rows && start + i < total; ++i)
-        DrawText(lines[start + i].first.c_str(), x0 + 8, top + i * lineH, 13, lines[start + i].second);
+        DrawText(lines[start + i].first.c_str(), r.x0 + 8, top + i * lineH, 13, lines[start + i].second);
     if (start < maxStart) // more history above the fold
-        DrawText("^ scroll", x0 + panelW - MeasureText("^ scroll", 12) - 8, y0 + 8, 12, kTextDim);
+        DrawText("^ scroll", r.x0 + r.w - MeasureText("^ scroll", 12) - 8, r.logY + 8, 12, kTextDim);
 }
 
 } // namespace
+
+Rect chatInputRect(const Layout& l, const Grid& g, const ViewState& view) {
+    const RightColumn r = rightColumn(l, g, view);
+    return (r.fits && view.showChat) ? r.input : Rect{};
+}
 
 Rect spellSlotRect(const Layout& l, const Grid& g, int slot, int slotCount) {
     const int gap = 8;

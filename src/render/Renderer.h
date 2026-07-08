@@ -7,6 +7,7 @@
 // geometric primitives. Swap this file out and the game core runs headless.
 //
 #include "../core/Battle.h"
+#include "../data/Net.h" // net::ChatLine
 
 #include <string>
 #include <vector>
@@ -66,7 +67,19 @@ struct ViewState {
     bool showClock = false;
     float myClock = 0.0f, oppClock = 0.0f; // seconds remaining shown per side
     bool myTurnActive = false;             // true → my side is the one ticking
+
+    // In-match chat (live networked matches): the log column splits — chat above the
+    // combat log — with a text input at the chat panel's foot.
+    bool showChat = false;
+    const std::vector<net::ChatLine>* chatLog = nullptr; // the running transcript
+    Faction localSeat = Faction::Player;                 // colour our own lines
+    std::string chatDraft;                               // text being typed
+    bool chatFocused = false;                            // input has keyboard focus
 };
+
+// The chat text-input rectangle (hit-test in the frontend), or an empty Rect when
+// chat isn't shown. Single source of truth shared with the renderer.
+[[nodiscard]] Rect chatInputRect(const Layout& l, const Grid& g, const ViewState& view);
 
 // Converts a pixel position to a grid coordinate (caller checks inBounds).
 [[nodiscard]] Vec2i screenToGrid(const Layout& l, int px, int py);

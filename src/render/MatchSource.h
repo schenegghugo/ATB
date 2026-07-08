@@ -60,6 +60,15 @@ public:
     // The per-move idle window (seconds) for a timed networked match; 0 = no clock
     // (local play, or an untimed / correspondence game). The HUD shows a countdown.
     [[nodiscard]] virtual int clockSeconds() const { return 0; }
+
+    // In-match chat: whether this source has a chat channel (a live networked match),
+    // the running transcript, and a send. Default off (local / correspondence v1).
+    [[nodiscard]] virtual bool chatEnabled() const { return false; }
+    [[nodiscard]] virtual const std::vector<net::ChatLine>& chatLog() const {
+        static const std::vector<net::ChatLine> kEmpty;
+        return kEmpty;
+    }
+    virtual void sendChat(const std::string&) {}
 };
 
 // Drives the Battle directly, in-process — the single-player / hotseat path and

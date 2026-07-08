@@ -258,6 +258,8 @@ int main() {
     bool onlineMatch = false;      // this battle came from the lobby (→ end screen returns there)
     float turnClock = 0.0f;        // seconds left in the active seat's move (timed matches)
     EntityId lastActive = 0;       // detect turn changes to reset turnClock
+    std::string chatDraft;         // in-match chat being typed
+    bool chatFocused = false;      // chat input has keyboard focus
 
     // The networking screen is seeded from the ATB_* env vars (so they still work
     // as defaults), then edited live in the GUI.
@@ -434,10 +436,10 @@ int main() {
         // Combat-log scrollback: wheel up = older, down = newer (clamped ≥ 0).
         logScroll = std::max(0, logScroll + static_cast<int>(GetMouseWheelMove()));
 
-        if (IsKeyPressed(KEY_TAB)) { state = AppState::Editor; continue; }
+        if (!chatFocused && IsKeyPressed(KEY_TAB)) { state = AppState::Editor; continue; }
         // R starts a fresh LOCAL arena. (In a networked match the server owns the
         // arena, so this just drops you into a local rematch — Tab returns to editor.)
-        if (IsKeyPressed(KEY_R)) {
+        if (!chatFocused && IsKeyPressed(KEY_R)) {
             source = newLocalMatch();
             onlineMatch = false;
             animator.reset();
@@ -470,11 +472,40 @@ int main() {
             else turnClock = std::max(0.0f, turnClock - dt);
         }
 
+        // In-match chat focus + typing (live networked matches). Click the input box
+        // to focus (click elsewhere unfocuses); while focused, keystrokes go to chat
+        // and the board/spell hotkeys are suppressed.
+        if (source->chatEnabled() && !finished) {
+            render::ViewState geo;
+            geo.windowW = GetScreenWidth();
+            geo.windowH = GetScreenHeight();
+            geo.showClock = clockSec > 0;
+            geo.showChat = true;
+            const render::Rect ci = render::chatInputRect(layout, source->battle().grid(), geo);
+            if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+                chatFocused = ci.contains(GetMouseX(), GetMouseY());
+            if (chatFocused) {
+                int k = GetCharPressed();
+                while (k > 0) {
+                    if (k >= 32 && k < 127 && chatDraft.size() < 200)
+                        chatDraft.push_back(static_cast<char>(k));
+                    k = GetCharPressed();
+                }
+                if (IsKeyPressed(KEY_BACKSPACE) && !chatDraft.empty()) chatDraft.pop_back();
+                if (IsKeyPressed(KEY_ENTER) && !chatDraft.empty()) {
+                    source->sendChat(chatDraft);
+                    chatDraft.clear();
+                }
+            }
+        } else {
+            chatFocused = false;
+        }
+
         // Which spell button (if any) the cursor is over — set inside the player
         // block below; also read later when composing the view (hover tooltip).
         int hoveredSpell = -1;
 
-        if (playerControl) {
+        if (playerControl && !chatFocused) {
             const EntityId me = active;
             const int spellCount = static_cast<int>(source->battle().unit(me).spells.size());
             for (int k = 0; k < spellCount && k < 9; ++k)
@@ -532,6 +563,13 @@ int main() {
             view.myTurnActive = playerControl;
             view.myClock = playerControl ? turnClock : static_cast<float>(clockSec);
             view.oppClock = playerControl ? static_cast<float>(clockSec) : turnClock;
+        }
+        view.showChat = source->chatEnabled();
+        if (view.showChat) {
+            view.chatLog = &source->chatLog();
+            view.localSeat = source->localSeat();
+            view.chatDraft = chatDraft;
+            view.chatFocused = chatFocused;
         }
         if (playerControl) {
             const EntityId me = active;

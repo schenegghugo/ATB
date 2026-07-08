@@ -66,6 +66,11 @@ public:
     // advances when the server echoes it back through pump().
     bool send(const Intent& in) { return conn_.send(proto_intent(in)); }
 
+    // In-match chat: send a line, and read the running transcript (both seats),
+    // filled from the server's broadcasts drained in pump().
+    bool sendChat(const std::string& text) { return conn_.send(proto_chat(text)); }
+    [[nodiscard]] const std::vector<ChatLine>& chat() const { return chat_; }
+
     // Apply any server messages ready within timeoutMs (0 = non-blocking poll) to
     // the mirror. Returns false once the match has ended or the link broke.
     bool pump(int timeoutMs);
@@ -74,6 +79,7 @@ private:
     MirrorSession(Connection conn, MatchRunner runner, Faction seat, int clockSec)
         : conn_(std::move(conn)), runner_(std::move(runner)), seat_(seat), clockSec_(clockSec) {}
     static std::string proto_intent(const Intent& in); // avoids leaking Protocol.h here
+    static std::string proto_chat(const std::string& text);
     // After our first frame is sent, read the server's `welcome` and build the
     // mirror — shared by connect() (hello) and joinToken() (lobby pairing).
     static std::unique_ptr<MirrorSession>
@@ -86,6 +92,7 @@ private:
     bool ended_ = false;
     std::optional<Faction> forfeitWinner_;
     int clockSec_ = 0;
+    std::vector<ChatLine> chat_;
 };
 
 } // namespace tb::net

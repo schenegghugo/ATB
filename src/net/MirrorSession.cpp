@@ -9,6 +9,7 @@
 namespace tb::net {
 
 std::string MirrorSession::proto_intent(const Intent& in) { return proto::intentMsg(in); }
+std::string MirrorSession::proto_chat(const std::string& text) { return proto::chatMsg(text); }
 
 std::unique_ptr<MirrorSession>
 MirrorSession::fromWelcome(Connection conn, const Ruleset& ruleset, const SpellCatalog& catalog,
@@ -95,6 +96,10 @@ bool MirrorSession::pump(int timeoutMs) {
             const std::optional<Faction> seat = proto::factionParse(m->field("seat"));
             const Parse<Intent> in = parseIntent(m->field("intent"));
             if (seat && in.ok) runner_.submit(*seat, in.value); // authoritative replay
+        }
+        if (m->type == "chat") {
+            const std::optional<Faction> seat = proto::factionParse(m->field("seat"));
+            if (seat) chat_.push_back({*seat, m->field("text")});
         }
     }
     return !ended_;

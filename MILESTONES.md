@@ -1085,8 +1085,21 @@ Each is independently shippable.
   matches keep the Tab=editor / R=rematch status). Also fixed: the build editor's
   **‹ Menu** (and primary button) return to the **lobby** when opened from the lobby's
   *Edit build*, not the main menu.
-- **6.4 ☐ In-match & lobby chat.** No chat surface yet — see **4.6** (text chat over
-  the transport, HUD panel beside the combat log).
+- **6.4 ◐ In-match chat ☑ / lobby chat ☐.** Live matches now carry **in-match text
+  chat** over the match transport. The authoritative loop (`runAdmittedMatch`) was
+  reworked from a blocking per-turn read into a **poll of both connections**, so
+  chat flows from **either** seat at any moment (async, out of turn) while the
+  idle-forfeit deadline still guards the clock (chat doesn't reset it). The server
+  broadcasts each line tagged with the sender's seat; `MirrorSession` keeps the
+  transcript (`chat()` / `sendChat()`), surfaced through the `MatchSource` seam
+  (`chatEnabled` / `chatLog` / `sendChat`). GUI: the right column **splits** — a
+  **CHAT** panel (own lines accented) with a text input at its foot, above the
+  combat log, under the clock strip; click the box (or it's the default focus) to
+  type, Enter sends, board/spell hotkeys suppressed while typing. `tb_chat_demo`
+  (in CI): two clients exchange chat both ways incl. **out of turn**, both
+  transcripts converge with correct seat attribution; the reworked match loop keeps
+  every existing live-match test green. *Remaining:* **lobby** chat (pre-match) and
+  correspondence-game chat — see **4.6**.
 - **6.5 ☑ BUG: no movement in an online match — fixed.** Real bug (not turn-order):
   the battle loop only pumped `source->update()` when it was *not* the local
   player's turn, so a remote/correspondence mirror never drained the server's echo

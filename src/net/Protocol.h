@@ -88,6 +88,15 @@ inline std::string intentMsg(const Intent& in) {
     o.set("intent", serializeIntent(in));
     return json::dump(o, false);
 }
+// In-match chat. A client sends {text}; the server re-broadcasts it tagged with the
+// sender's seat so both mirrors show who spoke.
+inline std::string chatMsg(const std::string& text, std::optional<Faction> seat = std::nullopt) {
+    json::Value o = json::Value::makeObject();
+    o.set("type", "chat");
+    if (seat) o.set("seat", factionName(*seat));
+    o.set("text", text);
+    return json::dump(o, false);
+}
 
 // --- parsing ----------------------------------------------------------------
 struct Msg {

@@ -25,6 +25,12 @@
 
 namespace tb::net {
 
+// One in-match chat line: who said it (by seat) + the text.
+struct ChatLine {
+    Faction seat = Faction::Player;
+    std::string text;
+};
+
 // --- Intent -----------------------------------------------------------------
 // One player action. `move` walks toward `target` (spends MP, like moveToward);
 // `cast` resolves spell slot `spellIdx` at `target`; `endTurn` passes.

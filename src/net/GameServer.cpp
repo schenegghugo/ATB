@@ -13,6 +13,8 @@
 #include "data/Net.h"
 #include "data/Sha256.h"
 
+#include <algorithm>
+#include <chrono>
 #include <cstdlib>
 #include <limits>
 #include <random>
@@ -95,39 +97,64 @@ ServeResult runAdmittedMatch(Connection c0, Connection c1, const CharacterBuild&
     MatchRunner runner(std::move(battle), Seat::Human, Seat::Human);
 
     auto connFor = [&](Faction f) -> Connection& { return f == Faction::Player ? c0 : c1; };
+    auto broadcast = [&](const std::string& msg) { c0.send(msg); c1.send(msg); };
+    // Forfeit `idle`: the opponent wins, both told the winner (no death to infer it).
+    auto forfeit = [&](Faction idle) {
+        const Faction winner = opposing(idle);
+        res.winner = winner;
+        res.ok = true;
+        res.error = "forfeit (idle clock / disconnect)";
+        broadcast(proto::endMsg(winner, /*forfeit=*/true));
+        res.finalSnapshot = serializeSnapshot(runner.snapshot());
+    };
+    // Relay one pending chat message from `c` (tagged with `from`); false if the
+    // connection produced no chat (idle or a non-chat frame we ignore here).
+    auto relayChat = [&](Connection& c, Faction from) {
+        const std::optional<std::string> raw = c.recv();
+        if (!raw) return;
+        const std::optional<proto::Msg> m = proto::parse(*raw);
+        if (m && m->type == "chat") broadcast(proto::chatMsg(m->field("text"), from));
+    };
 
-    // Read the awaited seat's next intent, apply it authoritatively, and broadcast
-    // it to BOTH mirrors. Clients reproduce everything else (AI/summon/inert turns)
-    // deterministically off this stream — so only human intents cross the wire.
+    using Clock = std::chrono::steady_clock;
+    // Drive one human decision at a time. Chat may arrive from EITHER seat at any
+    // moment, so poll both connections; the active seat's move advances the turn,
+    // while the idle-forfeit deadline (chat does NOT reset it) guards the clock.
     for (int guard = 0; guard < 20000 && !runner.finished(); ++guard) {
         const std::optional<Faction> awaiting = runner.awaitingSeat();
         if (!awaiting) { res.error = "no seat awaited but match not finished"; return res; }
+        Connection& active = connFor(*awaiting);
+        Connection& other = connFor(opposing(*awaiting));
+        const auto deadline = Clock::now() + std::chrono::seconds(clockSec > 0 ? clockSec : 36000);
 
-        const std::optional<std::string> raw = connFor(*awaiting).recv();
-        if (!raw) {
-            // The active player ran out their move clock (the conn read timeout) or
-            // dropped → they FORFEIT; the opponent wins. Both are told the winner
-            // (no death to infer it from). Elo is recorded by the caller on r.winner.
-            const Faction winner = opposing(*awaiting);
-            res.winner = winner;
-            res.ok = true;
-            res.error = "forfeit (idle clock / disconnect)";
-            c0.send(proto::endMsg(winner, /*forfeit=*/true));
-            c1.send(proto::endMsg(winner, /*forfeit=*/true));
-            res.finalSnapshot = serializeSnapshot(runner.snapshot());
-            return res;
+        bool moved = false;
+        while (!moved && !runner.finished()) {
+            if (other.waitReadable(0)) relayChat(other, opposing(*awaiting)); // opponent chatter
+
+            const long msLeft =
+                std::chrono::duration_cast<std::chrono::milliseconds>(deadline - Clock::now()).count();
+            if (msLeft <= 0) { forfeit(*awaiting); return res; } // ran out the clock
+
+            if (!active.waitReadable(static_cast<int>(std::min<long>(msLeft, 200)))) continue;
+            const std::optional<std::string> raw = active.recv();
+            if (!raw) { forfeit(*awaiting); return res; } // disconnected mid-turn
+            const std::optional<proto::Msg> m = proto::parse(*raw);
+            if (!m) continue;
+            if (m->type == "chat") { // active player chatted — relay, don't advance
+                broadcast(proto::chatMsg(m->field("text"), *awaiting));
+                continue;
+            }
+            if (m->type != "intent") continue;
+            const Parse<Intent> in = parseIntent(m->field("intent"));
+            if (!in.ok) continue;
+            // The runner enforces ownership + legality; a rejected intent is a no-op
+            // (never trust the client's outcome). Broadcast the applied intent so both
+            // mirrors advance in lockstep with the authoritative Battle.
+            runner.submit(*awaiting, in.value);
+            const std::string msg = proto::applied(*awaiting, in.value);
+            if (!c0.send(msg) || !c1.send(msg)) { res.error = "broadcast failed (disconnect)"; return res; }
+            moved = true;
         }
-        const std::optional<proto::Msg> m = proto::parse(*raw);
-        if (!m || m->type != "intent") continue; // ignore noise
-        const Parse<Intent> in = parseIntent(m->field("intent"));
-        if (!in.ok) continue; // malformed — wait for a valid one
-
-        // The runner enforces ownership + legality; a rejected intent is a no-op
-        // (never trust the client's outcome). Broadcast the applied intent so both
-        // mirrors advance in lockstep with the authoritative Battle.
-        runner.submit(*awaiting, in.value);
-        const std::string msg = proto::applied(*awaiting, in.value);
-        if (!c0.send(msg) || !c1.send(msg)) { res.error = "broadcast failed (disconnect)"; return res; }
     }
 
     c0.send(proto::endMsg());

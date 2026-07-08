@@ -186,6 +186,10 @@ target_link_libraries(tb_lobby_forfeit_demo PRIVATE tb_transport Threads::Thread
 add_executable(tb_ready_check_demo tests/ready_check_demo.cpp)
 target_link_libraries(tb_ready_check_demo PRIVATE tb_transport Threads::Threads)
 
+# Phase 4.5 slice 6.4: in-match chat relay (async, seat-tagged).
+add_executable(tb_chat_demo tests/chat_demo.cpp)
+target_link_libraries(tb_chat_demo PRIVATE tb_transport Threads::Threads)
+
 add_executable(tb_server tools/server_main.cpp)
 target_link_libraries(tb_server PRIVATE tb_transport)
 
