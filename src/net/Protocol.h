@@ -49,13 +49,14 @@ inline std::string hello(const std::string& contentHash, const std::string& buil
     return json::dump(o, false);
 }
 inline std::string welcome(Faction seat, int seed, const std::string& playerBuild,
-                           const std::string& enemyBuild) {
+                           const std::string& enemyBuild, int clockSec = 0) {
     json::Value o = json::Value::makeObject();
     o.set("type", "welcome");
     o.set("seat", factionName(seat));
     o.set("seed", seed);
     o.set("playerBuild", playerBuild);
     o.set("enemyBuild", enemyBuild);
+    o.set("clockSec", clockSec); // per-move idle window (0 = no clock, e.g. correspondence)
     return json::dump(o, false);
 }
 inline std::string error(const std::string& message) {

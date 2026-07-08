@@ -56,6 +56,10 @@ public:
     // Which seat the local player controls — so the HUD can say victory vs defeat
     // (a remote player may be the Enemy seat). Local/hotseat play is the Player.
     [[nodiscard]] virtual Faction localSeat() const { return Faction::Player; }
+
+    // The per-move idle window (seconds) for a timed networked match; 0 = no clock
+    // (local play, or an untimed / correspondence game). The HUD shows a countdown.
+    [[nodiscard]] virtual int clockSeconds() const { return 0; }
 };
 
 // Drives the Battle directly, in-process — the single-player / hotseat path and

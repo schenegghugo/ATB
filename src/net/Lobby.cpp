@@ -498,8 +498,8 @@ void matchJoin(Connection conn, const proto::Msg& join, const LobbyConfig& cfg, 
     }
     p->connP.setReadTimeout(clock);
     p->connE.setReadTimeout(clock);
-    const ServeResult r =
-        runAdmittedMatch(std::move(p->connP), std::move(p->connE), p->buildP, p->buildE, mc);
+    const ServeResult r = runAdmittedMatch(std::move(p->connP), std::move(p->connE), p->buildP,
+                                           p->buildE, mc, clock);
     if (p->fmt.rated && cfg.accounts && r.ok && r.winner) {
         const bool playerWon = *r.winner == Faction::Player;
         cfg.accounts->recordResult(playerWon ? p->userP : p->userE,

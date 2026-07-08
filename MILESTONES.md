@@ -1069,10 +1069,16 @@ Each is independently shippable.
   recorded. The `MatchSource` seam gained `matchOver()` / `winner()` / `localSeat()`
   so the GUI shows the right result (this also fixed victory/defeat display for a
   remote **Enemy-seat** player). `tb_lobby_forfeit_demo` (in CI, stress-run 5×): an
-  idle seeker forfeits, the opponent wins + gains Elo zero-sum. *Remaining:* the
-  **visible on-screen countdown** (send the window in `welcome`; HUD counts down for
-  the active seat each turn) and a true **Chess bank** (accumulating time, not just a
-  per-move cap).
+  idle seeker forfeits, the opponent wins + gains Elo zero-sum. **Visible clock ☑:**
+  the window ships in `welcome` (`MirrorSession::clockSec()` →
+  `MatchSource::clockSeconds()`); the HUD draws a centred **`Your move` / `Opponent`
+  countdown** for the active seat, red in the last 5 s. *Remaining:* a true **Chess
+  bank** (accumulating time, not just a per-move cap).
+- **6.7 ☑ End-of-match screen + return to lobby.** A finished **online** match now
+  shows a **VICTORY / DEFEAT / DRAW** overlay with a **Return to lobby** button (local
+  matches keep the Tab=editor / R=rematch status). Also fixed: the build editor's
+  **‹ Menu** (and primary button) return to the **lobby** when opened from the lobby's
+  *Edit build*, not the main menu.
 - **6.4 ☐ In-match & lobby chat.** No chat surface yet — see **4.6** (text chat over
   the transport, HUD panel beside the combat log).
 - **6.5 ☑ BUG: no movement in an online match — fixed.** Real bug (not turn-order):

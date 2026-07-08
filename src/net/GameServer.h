@@ -57,7 +57,7 @@ ServeResult serveOneMatch(Listener& listener, const MatchConfig& cfg, int readTi
 // + admitted, reusing the exact same authoritative path. Does NOT record Elo — the
 // caller does that on the result (see serveMatches).
 ServeResult runAdmittedMatch(Connection c0, Connection c1, const CharacterBuild& b0,
-                             const CharacterBuild& b1, const MatchConfig& cfg);
+                             const CharacterBuild& b1, const MatchConfig& cfg, int clockSec = 0);
 
 // Persistent matchmaking server (Phase 4.5): accept players, admit each, and pair
 // them FIFO — every two admitted players start a match that runs in its own

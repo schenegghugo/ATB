@@ -75,7 +75,7 @@ Admit handshake(Connection& c, const MatchConfig& cfg) {
 
 // Run one already-admitted match to completion over the two connections.
 ServeResult runAdmittedMatch(Connection c0, Connection c1, const CharacterBuild& b0,
-                             const CharacterBuild& b1, const MatchConfig& cfg) {
+                             const CharacterBuild& b1, const MatchConfig& cfg, int clockSec) {
     ServeResult res;
 
     // A concrete NON-ZERO seed, chosen once and sent to both clients so the server
@@ -88,8 +88,8 @@ ServeResult runAdmittedMatch(Connection c0, Connection c1, const CharacterBuild&
     // an identical deterministic mirror (both builds + the arena seed).
     const std::string pBuild = serializeBuild(b0);
     const std::string eBuild = serializeBuild(b1);
-    c0.send(proto::welcome(Faction::Player, static_cast<int>(seed), pBuild, eBuild));
-    c1.send(proto::welcome(Faction::Enemy, static_cast<int>(seed), pBuild, eBuild));
+    c0.send(proto::welcome(Faction::Player, static_cast<int>(seed), pBuild, eBuild, clockSec));
+    c1.send(proto::welcome(Faction::Enemy, static_cast<int>(seed), pBuild, eBuild, clockSec));
 
     Battle battle = buildMatch(cfg.ruleset, {b0}, {b1}, cfg.catalog, seed, cfg.creatures);
     MatchRunner runner(std::move(battle), Seat::Human, Seat::Human);
@@ -153,7 +153,7 @@ ServeResult serveOneMatch(Listener& listener, const MatchConfig& cfg, int readTi
     if (!a0.ok || !a1.ok)
         return {false, std::nullopt, {}, !a0.ok ? ("player: " + a0.error) : ("enemy: " + a1.error)};
 
-    return runAdmittedMatch(std::move(*c0), std::move(*c1), a0.build, a1.build, cfg);
+    return runAdmittedMatch(std::move(*c0), std::move(*c1), a0.build, a1.build, cfg, readTimeoutSec);
 }
 
 int serveMatches(Listener& listener, const MatchConfig& cfg, int maxMatches, int readTimeoutSec) {
@@ -172,9 +172,10 @@ int serveMatches(Listener& listener, const MatchConfig& cfg, int maxMatches, int
     // Start a match on its own thread; a `rated` open-matchmaking result updates Elo.
     auto startMatch = [&](Waiter x, Waiter y, bool rated) {
         std::thread t([&cfg, c0 = std::move(x.conn), b0 = std::move(x.build), u0 = std::move(x.user),
-                       c1 = std::move(y.conn), b1 = std::move(y.build), u1 = std::move(y.user),
-                       rated]() mutable {
-            const ServeResult r = runAdmittedMatch(std::move(c0), std::move(c1), b0, b1, cfg);
+                       c1 = std::move(y.conn), b1 = std::move(y.build), u1 = std::move(y.user), rated,
+                       readTimeoutSec]() mutable {
+            const ServeResult r =
+                runAdmittedMatch(std::move(c0), std::move(c1), b0, b1, cfg, readTimeoutSec);
             if (rated && cfg.accounts && r.ok && r.winner) {
                 const bool playerWon = *r.winner == Faction::Player;
                 cfg.accounts->recordResult(playerWon ? u0 : u1, playerWon ? u1 : u0);

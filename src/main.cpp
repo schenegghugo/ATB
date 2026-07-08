@@ -45,10 +45,12 @@
 #include "render/Renderer.h"
 #include "render/SettingsScreen.h"
 #include "render/SpritePack.h"
+#include "render/Ui.h"
 
 #include "raylib.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <memory>
 #include <optional>
@@ -249,7 +251,10 @@ int main() {
     render::Animator animator; // per-entity event-clip playback (cast flashes, §2.4)
     std::string status;
     int selectedSpell = 0;
-    int logScroll = 0; // combat-log scrollback (0 = pinned to newest)
+    int logScroll = 0;             // combat-log scrollback (0 = pinned to newest)
+    bool onlineMatch = false;      // this battle came from the lobby (→ end screen returns there)
+    float turnClock = 0.0f;        // seconds left in the active seat's move (timed matches)
+    EntityId lastActive = 0;       // detect turn changes to reset turnClock
 
     // The networking screen is seeded from the ATB_* env vars (so they still work
     // as defaults), then edited live in the GUI.
@@ -290,6 +295,7 @@ int main() {
     // CorrespondenceSession over this lobby connection. A rated game mirrors under
     // the ranked ruleset (which must be loaded locally).
     auto routePairing = [&](const net::PairedInfo& pi) {
+        onlineMatch = true; // → the end-of-match screen returns to the lobby
         const Ruleset& rs =
             (pi.rated && session.rankedRuleset) ? *session.rankedRuleset : session.ruleset;
         if (pi.live) {
@@ -348,12 +354,13 @@ int main() {
             BeginDrawing();
             const auto r = editor.runFrame(GetScreenWidth(), GetScreenHeight(), editorMode);
             EndDrawing();
-            if (r == render::BuildEditorScreen::Result::Fight) enterBattleWith(newLocalMatch());
+            if (r == render::BuildEditorScreen::Result::Fight) { onlineMatch = false; enterBattleWith(newLocalMatch()); }
             // In Online mode the editor is reached only from the lobby's "Edit build",
-            // so its primary button returns there (else fall back to the menu).
+            // so BOTH its primary button and "‹ Menu" return to the lobby (else menu).
             else if (r == render::BuildEditorScreen::Result::PlayOnline)
                 state = lobby ? AppState::Lobby : AppState::Menu;
-            else if (r == render::BuildEditorScreen::Result::Menu) state = AppState::Menu;
+            else if (r == render::BuildEditorScreen::Result::Menu)
+                state = lobby ? AppState::Lobby : AppState::Menu;
             continue;
         }
 
@@ -412,6 +419,7 @@ int main() {
         // arena, so this just drops you into a local rematch — Tab returns to editor.)
         if (IsKeyPressed(KEY_R)) {
             source = newLocalMatch();
+            onlineMatch = false;
             animator.reset();
             selectedSpell = 0;
             logScroll = 0;
@@ -432,6 +440,15 @@ int main() {
         // Champions; summons (either team) are AI and objects (bombs) auto-pass —
         // all handled by source->update().
         const bool playerControl = source->awaitingLocalInput();
+
+        // Turn clock (timed networked matches): reset to the per-move window whenever
+        // the active unit changes, tick down otherwise. Approximate (client-local),
+        // just a visible indicator of the server-enforced idle-forfeit window.
+        const int clockSec = source->clockSeconds();
+        if (clockSec > 0 && !finished) {
+            if (active != lastActive) { turnClock = static_cast<float>(clockSec); lastActive = active; }
+            else turnClock = std::max(0.0f, turnClock - dt);
+        }
 
         // Which spell button (if any) the cursor is over — set inside the player
         // block below; also read later when composing the view (hover tooltip).
@@ -508,9 +525,42 @@ int main() {
         // Trigger cast-clip animations off the same event stream the log reads.
         animator.sync(source->battle(), GetTime());
 
+        bool returnToLobby = false;
         BeginDrawing();
         render::drawFrame(layout, source->battle(), view, pack ? &*pack : nullptr, &animator);
+
+        // Visible move clock (timed matches): a countdown for the active seat, red in
+        // the final seconds.
+        if (clockSec > 0 && !finished) {
+            const int secs = static_cast<int>(std::ceil(turnClock));
+            const char* whose = playerControl ? "Your move" : "Opponent";
+            const char* txt = TextFormat("%s  %02d:%02d", whose, secs / 60, secs % 60);
+            const int tw = MeasureText(txt, 24);
+            DrawText(txt, (GetScreenWidth() - tw) / 2, 14, 24, secs <= 5 ? RED : RAYWHITE);
+        }
+
+        // End-of-match screen for an ONLINE game: clear result + return to the lobby
+        // (a local match keeps the Tab=editor / R=rematch status instead).
+        if (finished && onlineMatch) {
+            const int W = GetScreenWidth(), H = GetScreenHeight();
+            DrawRectangle(0, 0, W, H, Color{0, 0, 0, 190});
+            const std::optional<Faction> w = source->winner();
+            const char* title = !w ? "DRAW" : (*w == source->localSeat()) ? "VICTORY" : "DEFEAT";
+            const Color tc = !w ? render::ui::kMuted
+                                : (*w == source->localSeat()) ? render::ui::kGood : render::ui::kBad;
+            const int titleW = MeasureText(title, 64);
+            DrawText(title, (W - titleW) / 2, H / 2 - 90, 64, tc);
+            Rectangle btn{static_cast<float>(W) / 2 - 130, static_cast<float>(H) / 2 + 20, 260, 46};
+            if (render::ui::button(btn, "Return to lobby", GetMousePosition(), render::ui::kAccent))
+                returnToLobby = true;
+        }
         EndDrawing();
+
+        if (returnToLobby) {
+            source.reset();
+            onlineMatch = false;
+            state = lobby ? AppState::Lobby : AppState::Menu;
+        }
     }
 
     if (pack) pack->unload(); // free textures while the GL context is still alive

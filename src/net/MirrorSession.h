@@ -56,6 +56,9 @@ public:
     // disconnect) — the mirror has no death to infer it from. nullopt otherwise (a
     // normal end is read from battle().winner()).
     [[nodiscard]] std::optional<Faction> forfeitWinner() const { return forfeitWinner_; }
+    // The per-move idle window (seconds) the server enforces; 0 = no clock. Sent in
+    // the welcome so the client can show a countdown.
+    [[nodiscard]] int clockSec() const { return clockSec_; }
     // The local seat holds the active unit (its input is live).
     [[nodiscard]] bool awaitingMe() const { return !finished() && runner_.awaitingSeat() == seat_; }
 
@@ -68,8 +71,8 @@ public:
     bool pump(int timeoutMs);
 
 private:
-    MirrorSession(Connection conn, MatchRunner runner, Faction seat)
-        : conn_(std::move(conn)), runner_(std::move(runner)), seat_(seat) {}
+    MirrorSession(Connection conn, MatchRunner runner, Faction seat, int clockSec)
+        : conn_(std::move(conn)), runner_(std::move(runner)), seat_(seat), clockSec_(clockSec) {}
     static std::string proto_intent(const Intent& in); // avoids leaking Protocol.h here
     // After our first frame is sent, read the server's `welcome` and build the
     // mirror — shared by connect() (hello) and joinToken() (lobby pairing).
@@ -82,6 +85,7 @@ private:
     Faction seat_ = Faction::Player;
     bool ended_ = false;
     std::optional<Faction> forfeitWinner_;
+    int clockSec_ = 0;
 };
 
 } // namespace tb::net

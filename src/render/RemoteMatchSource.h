@@ -47,6 +47,7 @@ public:
         return session_->battle().winner();
     }
     [[nodiscard]] Faction localSeat() const override { return session_->seat(); }
+    [[nodiscard]] int clockSeconds() const override { return session_->clockSec(); }
 
 private:
     std::unique_ptr<net::MirrorSession> session_;

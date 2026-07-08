@@ -36,7 +36,7 @@ MirrorSession::fromWelcome(Connection conn, const Ruleset& ruleset, const SpellC
         buildMatch(ruleset, {*pB}, {*eB}, catalog, static_cast<unsigned>(seed), creatures);
     MatchRunner runner(std::move(battle), Seat::Human, Seat::Human);
     return std::unique_ptr<MirrorSession>(
-        new MirrorSession(std::move(conn), std::move(runner), *seat));
+        new MirrorSession(std::move(conn), std::move(runner), *seat, m->intField("clockSec", 0)));
 }
 
 std::unique_ptr<MirrorSession>
