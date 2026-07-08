@@ -243,6 +243,7 @@ add_executable(tactical_battler
     src/render/BuildEditorScreen.cpp
     src/render/ConnectScreen.cpp
     src/render/ContentPaths.cpp
+    src/render/LobbyScreen.cpp
     src/render/MainMenuScreen.cpp
     src/render/MatchSource.cpp
     src/render/PackManifest.cpp

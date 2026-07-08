@@ -31,11 +31,14 @@
 #include "data/Net.h"
 #include "data/RulesetJson.h"
 #include "net/GameServer.h"   // contentHashOf
+#include "net/Lobby.h"
 #include "net/MirrorSession.h"
 #include "render/Animator.h"
 #include "render/BuildEditorScreen.h"
 #include "render/ConnectScreen.h"
 #include "render/ContentPaths.h"
+#include "render/CorrespondenceMatchSource.h"
+#include "render/LobbyScreen.h"
 #include "render/MainMenuScreen.h"
 #include "render/MatchSource.h"
 #include "render/RemoteMatchSource.h"
@@ -56,12 +59,13 @@ using namespace tb;
 
 namespace {
 
-enum class AppState { Menu, Editor, Connect, Battle, Settings };
+enum class AppState { Menu, Editor, Connect, Lobby, Battle, Settings };
 
 struct Session {
     SpellCatalog catalog = makeDefaultCatalog();
     std::vector<Entity> creatures = makeDefaultCreatures(); // bestiary (Summon effects)
     Ruleset ruleset = makeDefaultRuleset();                 // economy + ring + arena + format
+    std::optional<Ruleset> rankedRuleset;                   // data/rules.ranked.json (rated online)
     std::optional<Grid> staticArena;                        // set when rules.arena.map is used
     std::unique_ptr<BuildRepository> repo = std::make_unique<InMemoryBuildRepository>();
 };
@@ -158,6 +162,19 @@ int main() {
         TraceLog(LOG_WARNING, "No data/rules.json found — using the built-in default ruleset.");
     }
 
+    // The official ranked ruleset (data/rules.ranked.json) — needed to build an
+    // identical mirror for a RATED online game. Optional: absent → rated online
+    // play is simply unavailable (the lobby's rated toggle is disabled).
+    if (std::optional<std::string> path = render::findContent("rules.ranked.json")) {
+        RulesetLoad load = loadRulesetFromFile(*path);
+        if (load.ok) {
+            session.rankedRuleset = std::move(load.ruleset);
+            TraceLog(LOG_INFO, "Loaded ranked ruleset '%s' (rated online enabled)", path->c_str());
+        } else {
+            TraceLog(LOG_WARNING, "data/rules.ranked.json is invalid — rated online disabled.");
+        }
+    }
+
     // Static map (if the ruleset names one): load data/maps/<map>.json once.
     if (!session.ruleset.arena.map.empty()) {
         const std::string rel = "maps/" + session.ruleset.arena.map + ".json";
@@ -216,6 +233,10 @@ int main() {
     render::BuildEditorScreen editor(session.catalog, *session.repo, session.ruleset);
     render::MainMenuScreen menu;
     render::SettingsScreen settings;
+    render::LobbyScreen lobbyScreen;
+    std::unique_ptr<net::LobbySession> lobby; // live lobby connection (Online Home)
+    std::string lobbyHost = "127.0.0.1";      // parsed from the connect form on join
+    uint16_t lobbyPort = 5555;
 
     AppState state = AppState::Menu;
     // Which action the build editor was entered for (set by the mode-first menu).
@@ -247,24 +268,12 @@ int main() {
                        session.staticArena ? &*session.staticArena : nullptr));
     };
 
-    // Join a networked match (RemoteMatchSource mirrors the authoritative server —
-    // same render path). Returns nullptr with `err` set on failure. NOTE: this
-    // blocks until the server pairs us with an opponent (a "waiting…" screen /
-    // async connect is a follow-up).
-    auto connectRemote = [&](const render::ConnectScreen::Params& pr,
-                             std::string& err) -> std::unique_ptr<render::MatchSource> {
-        const auto colon = pr.host.find(':');
-        const std::string host = colon == std::string::npos ? pr.host : pr.host.substr(0, colon);
-        const uint16_t port = static_cast<uint16_t>(
-            colon == std::string::npos ? 5555 : std::atoi(pr.host.substr(colon + 1).c_str()));
-        std::unique_ptr<net::MirrorSession> ms = net::MirrorSession::connect(
-            host, port, net::contentHashOf(session.catalog), editor.playerTeam().front(),
-            session.ruleset, session.catalog, session.creatures, &err, /*readTimeoutSec=*/15,
-            pr.user, pr.pass, pr.lobby);
-        if (!ms) return nullptr;
-        TraceLog(LOG_INFO, "Connected to %s — playing as %s.", pr.host.c_str(),
-                 ms->seat() == Faction::Player ? "player" : "enemy");
-        return std::make_unique<render::RemoteMatchSource>(std::move(ms));
+    // Split "host:port" (default port 5555).
+    auto parseHostPort = [](const std::string& s, std::string& host, uint16_t& port) {
+        const auto colon = s.find(':');
+        host = colon == std::string::npos ? s : s.substr(0, colon);
+        port = static_cast<uint16_t>(colon == std::string::npos ? 5555
+                                                                : std::atoi(s.substr(colon + 1).c_str()));
     };
 
     auto enterBattleWith = [&](std::unique_ptr<render::MatchSource> src) {
@@ -274,6 +283,30 @@ int main() {
         logScroll = 0;
         status = "Player turn — left-click move, click a spell (or 1-9), right-click cast, Tab=editor.";
         state = AppState::Battle;
+    };
+
+    // Turn a lobby pairing into a playable MatchSource: a live token → a mirror
+    // (RemoteMatchSource) over a fresh match conn; a correspondence handle → a
+    // CorrespondenceSession over this lobby connection. A rated game mirrors under
+    // the ranked ruleset (which must be loaded locally).
+    auto routePairing = [&](const net::PairedInfo& pi) {
+        const Ruleset& rs =
+            (pi.rated && session.rankedRuleset) ? *session.rankedRuleset : session.ruleset;
+        if (pi.live) {
+            std::string err;
+            std::unique_ptr<net::MirrorSession> ms = net::MirrorSession::joinToken(
+                lobbyHost, lobbyPort, pi.token, rs, session.catalog, session.creatures, &err);
+            if (ms) enterBattleWith(std::make_unique<render::RemoteMatchSource>(std::move(ms)));
+            else lobbyScreen.setStatus("Join failed: " + err);
+        } else {
+            net::CorrespondenceSetup setup{rs, session.catalog, session.creatures, pi.seed, pi.player,
+                                           pi.enemy};
+            auto cs = std::make_unique<net::CorrespondenceSession>(
+                std::make_unique<net::LobbyChannel>(lobby.get()), pi.game, setup, pi.seat,
+                lobby->account().user);
+            enterBattleWith(std::make_unique<render::CorrespondenceMatchSource>(
+                std::move(cs), lobby.get(), pi.game, pi.seat, pi.rated));
+        }
     };
 
     using EMode = render::BuildEditorScreen::Mode;
@@ -328,9 +361,35 @@ int main() {
             if (r == render::ConnectScreen::Result::Back) {
                 state = AppState::Editor;
             } else if (r == render::ConnectScreen::Result::Connect) {
+                // Connect to the lobby (the Online Home), then browse/challenge there.
+                const render::ConnectScreen::Params& pr = connect.params();
+                parseHostPort(pr.host, lobbyHost, lobbyPort);
                 std::string err;
-                if (auto src = connectRemote(connect.params(), err)) enterBattleWith(std::move(src));
-                else connect.setStatus("Connect failed: " + err);
+                lobby = net::LobbySession::connect(lobbyHost, lobbyPort,
+                                                   net::contentHashOf(session.catalog), pr.user,
+                                                   pr.pass, &err);
+                if (lobby) {
+                    lobbyScreen.setStatus(session.rankedRuleset ? ""
+                                                                : "Rated online disabled (no ranked ruleset).");
+                    state = AppState::Lobby;
+                } else {
+                    connect.setStatus("Lobby connect failed: " + err);
+                }
+            }
+            continue;
+        }
+
+        if (state == AppState::Lobby) {
+            BeginDrawing();
+            const auto r = lobbyScreen.runFrame(GetScreenWidth(), GetScreenHeight(), *lobby,
+                                                editor.playerTeam().front(),
+                                                /*ratedAvailable=*/session.rankedRuleset.has_value());
+            EndDrawing();
+            if (r == render::LobbyScreen::Result::Back) {
+                lobby.reset();
+                state = AppState::Editor;
+            } else if (r == render::LobbyScreen::Result::Paired) {
+                routePairing(lobbyScreen.pairing()); // → Battle, or a setStatus on failure
             }
             continue;
         }
@@ -400,9 +459,13 @@ int main() {
         }
 
         if (finished) {
+            // Let the source do end-of-game work (a correspondence source finalizes
+            // the decoy reveals + submits its scoresheet here; local/live no-op).
+            if (auto s = source->update(dt)) status = *s;
             auto w = source->battle().winner();
-            status = (w && *w == Faction::Player) ? "Victory! Tab=editor, R=rematch."
-                                                  : "Defeat. Tab=editor, R=rematch.";
+            if (status.rfind("Game over", 0) != 0) // keep a correspondence result message if set
+                status = (w && *w == Faction::Player) ? "Victory! Tab=editor, R=rematch."
+                                                      : "Defeat. Tab=editor, R=rematch.";
         }
 
         render::ViewState view;

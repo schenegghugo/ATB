@@ -1006,13 +1006,32 @@ reconnects**, the game finishes, both scoresheets agree, and the arbiter ranks i
 server restart; **cold resume** — rebuild the mirror by replaying the log, + client
 secret persistence for decoy games — is a follow-up, as is file persistence.)*
 
-**Remaining:** persist the lobby store + `Mailbox` to disk (server-restart
-durability) and **cold-resume**; the **GUI lobby + correspondence screens**; async
-connect + a "waiting for opponent" screen; a real **chess clock**; editable Settings
-+ saved network defaults; move the store to **SQLite** for scale (behind the same
-seam) + match-history rows; a widening-band **queue**; and **transport encryption
-(TLS)** before any public, non-VPN ranked launch (passwords are currently in the
-clear).
+**Slice 5c ◐ — GUI: the Online Home + correspondence play.** `render/LobbyScreen`
+(immediate-mode like `ConnectScreen`) drives a live `LobbySession`: a **format bar**
+(rated toggle + clock presets — Unlimited / 30s·60s per-move / 5+5 · 10min), an
+**open-seeks** column (list + Accept + Create seek), a **challenge** form (username +
+Send) and an **incoming-challenges** list (Accept / Decline); it polls for pairings
+on a throttled timer. "Play Online" now goes **editor → Connect (host + login) →
+Lobby**; accepting (or being accepted, via poll) routes through `routePairing`: a
+**live** token → `MirrorSession::joinToken` → `RemoteMatchSource`; a
+**correspondence** handle → a `CorrespondenceSession` over a `LobbyChannel` →
+`render/CorrespondenceMatchSource` (a `MatchSource` that syncs the opponent's moves
+each frame, shows a *"waiting for your opponent…"* status on their turn, and on
+finish finalizes the decoy-reveals + submits the scoresheet to the lobby). The
+client loads `data/rules.ranked.json` so a **rated** game mirrors under the ranked
+ruleset (absent → the rated toggle is disabled). Builds under `-DTB_BUILD_GUI=ON`;
+**needs in-GUI playtesting** (screens can't be auto-tested — run two clients against
+a local `tb_lobby`). *(v1: the correspondence decoy cast defaults to "stay original"
+— an in-cast choice prompt is a follow-up; matches still Tab back to the editor
+rather than the lobby.)*
+
+**Remaining:** a `tb_lobby` daemon binary + persist the lobby store + `Mailbox` to
+disk (server-restart durability) and **cold-resume**; the decoy-choice prompt +
+return-to-lobby-after-match; async connect + a "waiting for opponent" screen; a real
+**chess clock**; editable Settings + saved network defaults; move the store to
+**SQLite** for scale (behind the same seam) + match-history rows; a widening-band
+**queue**; and **transport encryption (TLS)** before any public, non-VPN ranked
+launch (passwords are currently in the clear).
 
 **Deployment & trust model (decided):** two tiers, one codebase.
 - **Ranked → server-authoritative, self-hosted.** A persistent instance (the HP
