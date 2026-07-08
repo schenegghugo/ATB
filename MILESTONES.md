@@ -1020,18 +1020,24 @@ each frame, shows a *"waiting for your opponent…"* status on their turn, and o
 finish finalizes the decoy-reveals + submits the scoresheet to the lobby). The
 client loads `data/rules.ranked.json` so a **rated** game mirrors under the ranked
 ruleset (absent → the rated toggle is disabled). Builds under `-DTB_BUILD_GUI=ON`;
-**needs in-GUI playtesting** (screens can't be auto-tested — run two clients against
-a local `tb_lobby`). *(v1: the correspondence decoy cast defaults to "stay original"
-— an in-cast choice prompt is a follow-up; matches still Tab back to the editor
-rather than the lobby.)*
+**needs in-GUI playtesting** (screens can't be auto-tested). *(v1: the correspondence
+decoy cast defaults to "stay original" — an in-cast choice prompt is a follow-up;
+matches still Tab back to the editor rather than the lobby.)*
 
-**Remaining:** a `tb_lobby` daemon binary + persist the lobby store + `Mailbox` to
-disk (server-restart durability) and **cold-resume**; the decoy-choice prompt +
-return-to-lobby-after-match; async connect + a "waiting for opponent" screen; a real
-**chess clock**; editable Settings + saved network defaults; move the store to
-**SQLite** for scale (behind the same seam) + match-history rows; a widening-band
-**queue**; and **transport encryption (TLS)** before any public, non-VPN ranked
-launch (passwords are currently in the clear).
+**Slice 5d ☑ — the `tb_lobby` daemon.** `tools/lobby_main.cpp` → `tb_lobby [port]
+[bind] [casual-rules] [ranked-rules]` hosts the Online Home: loads `./data` (so its
+content hash matches the GUI), persistent `accounts.json`, line-buffered logs, and
+`serveLobby` forever. **Playtest:** run `./build/tb_lobby` (default `127.0.0.1:5556`),
+then two GUI clients → *Play Online* → set the server to `127.0.0.1:5556`, log in as
+two different users, and one seeks / challenges while the other accepts.
+
+**Remaining:** persist the lobby store + `Mailbox` to disk (server-restart
+durability) and **cold-resume**; the decoy-choice prompt + return-to-lobby-after-match;
+async connect + a "waiting for opponent" screen; a real **chess clock**; editable
+Settings + saved network defaults; move the store to **SQLite** for scale (behind the
+same seam) + match-history rows; a widening-band **queue**; and **transport
+encryption (TLS)** before any public, non-VPN ranked launch (passwords are currently
+in the clear).
 
 **Deployment & trust model (decided):** two tiers, one codebase.
 - **Ranked → server-authoritative, self-hosted.** A persistent instance (the HP

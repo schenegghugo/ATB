@@ -181,6 +181,9 @@ target_link_libraries(tb_lobby_correspondence_demo PRIVATE tb_transport Threads:
 add_executable(tb_server tools/server_main.cpp)
 target_link_libraries(tb_server PRIVATE tb_transport)
 
+add_executable(tb_lobby tools/lobby_main.cpp)
+target_link_libraries(tb_lobby PRIVATE tb_transport Threads::Threads)
+
 add_executable(tb_net_transport_demo tests/net_transport_demo.cpp)
 target_link_libraries(tb_net_transport_demo PRIVATE tb_transport Threads::Threads)
 
