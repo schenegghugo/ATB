@@ -16,6 +16,8 @@
 #include "net/MirrorSession.h"
 #include "net/Socket.h"
 
+#include "lobby_test_util.h"
+
 #include <chrono>
 #include <cstdio>
 #include <memory>
@@ -33,15 +35,8 @@ static int g_fails = 0;
         else { std::printf("  [FAIL] %s\n", msg); ++g_fails; }                                     \
     } while (0)
 
-namespace {
-CharacterBuild makeBuild(const char* name) {
-    CharacterBuild b;
-    b.name = name;
-    b.stats.hpPurchases = 2;
-    b.spellIds = {spellid::Attack};
-    return b;
-}
-} // namespace
+using tbtest::makeBuild;
+using tbtest::readyUp;
 
 int main() {
     const SpellCatalog catalog = makeDefaultCatalog();
@@ -80,20 +75,23 @@ int main() {
             LobbySession::connect("127.0.0.1", port, cfg.contentHash, "bob", "pw-b", &e);
         CHECK(alice && bob, "both players log in");
 
-        CHECK(alice->seek(fmt, makeBuild("Alice"), &e), "alice seeks a 1s/move rated game");
+        CHECK(alice->seek(fmt, &e), "alice seeks a 1s/move rated game");
         std::optional<std::vector<SeekInfo>> seeks = bob->listSeeks();
-        std::optional<PairedInfo> bobPair =
-            (seeks && !seeks->empty()) ? bob->acceptSeek((*seeks)[0].id, makeBuild("Bob"), &e)
-                                       : std::nullopt;
-        std::optional<PairedInfo> alicePair = alice->poll();
-        CHECK(bobPair && alicePair && bobPair->live, "paired into a live match");
-        if (!bobPair || !alicePair) { lobby.join(); return 1; }
+        std::optional<ReadyCheckInfo> bobRc =
+            (seeks && !seeks->empty()) ? bob->acceptSeek((*seeks)[0].id, &e) : std::nullopt;
+        LobbyEvent aliceEv = alice->poll();
+        PairedInfo alicePair, bobPair;
+        const bool paired = bobRc && aliceEv.kind == LobbyEvent::Kind::ReadyCheck &&
+                            readyUp(*alice, aliceEv.readyCheck, makeBuild("Alice"), *bob, *bobRc,
+                                    makeBuild("Bob"), alicePair, bobPair);
+        CHECK(paired && bobPair.live, "ready up → paired into a live match");
+        if (!paired) { lobby.join(); return 1; }
 
         std::printf("Alice (Player, moves first) sits idle and forfeits\n");
         // Concurrent join; alice then does NOTHING while bob waits for the end.
         std::unique_ptr<MirrorSession> aMs, bMs;
-        std::thread ta([&] { aMs = MirrorSession::joinToken("127.0.0.1", port, alicePair->token, ruleset, catalog, creatures, &e); });
-        std::thread tb([&] { bMs = MirrorSession::joinToken("127.0.0.1", port, bobPair->token, ruleset, catalog, creatures, &e); });
+        std::thread ta([&] { aMs = MirrorSession::joinToken("127.0.0.1", port, alicePair.token, ruleset, catalog, creatures, &e); });
+        std::thread tb([&] { bMs = MirrorSession::joinToken("127.0.0.1", port, bobPair.token, ruleset, catalog, creatures, &e); });
         ta.join();
         tb.join();
         CHECK(aMs && bMs, "both clients join the match");

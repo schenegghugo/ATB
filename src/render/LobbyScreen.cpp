@@ -83,9 +83,10 @@ LobbyScreen::Result LobbyScreen::runFrame(int screenW, int screenH, net::LobbySe
     refreshTimer_ += GetFrameTime();
     if (refreshTimer_ >= 0.8f) {
         refreshTimer_ = 0.0f;
-        if (std::optional<net::PairedInfo> pi = session.poll()) {
-            pairing_ = *pi;
-            return Result::Paired;
+        const net::LobbyEvent ev = session.poll();
+        if (ev.kind == net::LobbyEvent::Kind::ReadyCheck) { // someone accepted mine
+            rc_ = ev.readyCheck;
+            return Result::ReadyCheck;
         }
         refresh(session);
     }
@@ -135,7 +136,7 @@ LobbyScreen::Result LobbyScreen::runFrame(int screenW, int screenH, net::LobbySe
     DrawText("OPEN SEEKS", static_cast<int>(lx), static_cast<int>(y), 16, kText);
     if (button({lx + colW - 150, y - 4, 150, 28}, "Create seek", m, kAccent)) {
         std::string err;
-        if (session.seek(fmt, myBuild, &err)) status_ = "Seek posted — waiting for an opponent…";
+        if (session.seek(fmt, &err)) status_ = "Seek posted — waiting for an opponent…";
         else status_ = "Seek rejected: " + err;
         refresh(session);
     }
@@ -151,9 +152,9 @@ LobbyScreen::Result LobbyScreen::runFrame(int screenW, int screenH, net::LobbySe
         if (session.account().user != s.user &&
             button({lx + colW - 92, ry + 6, 84, 28}, "Accept", m, kAccent)) {
             std::string err;
-            if (std::optional<net::PairedInfo> pi = session.acceptSeek(s.id, myBuild, &err)) {
-                pairing_ = *pi;
-                return Result::Paired;
+            if (std::optional<net::ReadyCheckInfo> r = session.acceptSeek(s.id, &err)) {
+                rc_ = *r;
+                return Result::ReadyCheck;
             }
             status_ = "Accept failed: " + err;
         }
@@ -167,7 +168,7 @@ LobbyScreen::Result LobbyScreen::runFrame(int screenW, int screenH, net::LobbySe
     if (button({rx + colW - 140, y + 52, 140, 32}, "Send challenge", m, kAccent)) {
         std::string err;
         if (challengeUser_.empty()) status_ = "Enter a username to challenge.";
-        else if (session.challenge(challengeUser_, fmt, myBuild, &err))
+        else if (session.challenge(challengeUser_, fmt, &err))
             status_ = "Challenge sent to " + challengeUser_ + ".";
         else status_ = "Challenge rejected: " + err;
     }
@@ -185,9 +186,9 @@ LobbyScreen::Result LobbyScreen::runFrame(int screenW, int screenH, net::LobbySe
                  12, kMuted);
         if (button({rx + colW - 176, cy + 6, 80, 28}, "Accept", m, kAccent)) {
             std::string err;
-            if (std::optional<net::PairedInfo> pi = session.acceptChallenge(c.id, myBuild, &err)) {
-                pairing_ = *pi;
-                return Result::Paired;
+            if (std::optional<net::ReadyCheckInfo> r = session.acceptChallenge(c.id, &err)) {
+                rc_ = *r;
+                return Result::ReadyCheck;
             }
             status_ = "Accept failed: " + err;
         }

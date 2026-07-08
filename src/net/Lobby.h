@@ -54,6 +54,7 @@ struct LobbyConfig {
     Ruleset rankedRules;              // rated ones pin these (e.g. rules.ranked.json)
     std::string contentHash;          // catalog pin clients must match (contentHashOf)
     AccountStore* accounts = nullptr; // required for rated play / non-guest login
+    int readyCheckSec = 30;           // per-pairing ready-check window (both must READY)
 };
 
 // Serve the lobby. Accepts up to `maxConns` connections total — sessions and match
@@ -102,6 +103,36 @@ struct SubmitResult {
     std::string error;  // set on Rejected
 };
 
+// A pairing has formed and BOTH players now get a ready check: pick/edit a build and
+// READY within `seconds`, or the game is cancelled. No build was committed up front.
+struct ReadyCheckInfo {
+    int id = 0;
+    std::string opponent;
+    Faction seat = Faction::Player; // the seat you'll play
+    bool rated = false;
+    MatchFormat format;
+    int seconds = 30; // the ready window
+};
+
+// The reply to ready(): Waiting (you readied, opponent hasn't), Matched (both ready →
+// `paired`), Rejected (your build is illegal — re-pick), or Cancelled (timeout/decline).
+struct ReadyResult {
+    enum class Status { Waiting, Matched, Rejected, Cancelled };
+    Status status = Status::Cancelled;
+    PairedInfo paired;  // valid on Matched
+    std::string error;  // Rejected reason
+};
+
+// An async lobby event drained by poll(): someone accepted your seek/challenge
+// (ReadyCheck), both of you readied (Paired), or a pending ready check was cancelled.
+struct LobbyEvent {
+    enum class Kind { None, ReadyCheck, Paired, Cancelled };
+    Kind kind = Kind::None;
+    ReadyCheckInfo readyCheck;
+    PairedInfo paired;
+    std::string message; // cancel reason
+};
+
 // A lobby session: connect + (optionally) log in, then browse/seek/challenge/poll.
 // All calls are blocking request→reply on this session's own socket.
 class LobbySession {
@@ -116,25 +147,30 @@ public:
     [[nodiscard]] bool guest() const { return guest_; }
 
     // Open seeks (anyone may accept). Exactly one open seek per session (re-seek
-    // replaces it).
-    bool seek(const MatchFormat& fmt, const CharacterBuild& build, std::string* error = nullptr);
+    // replaces it). No build — you choose it at the ready check after pairing.
+    bool seek(const MatchFormat& fmt, std::string* error = nullptr);
     bool cancelSeek();
     [[nodiscard]] std::optional<std::vector<SeekInfo>> listSeeks();
-    // Accept an open seek — pairs immediately (the seek's owner learns via poll()).
-    [[nodiscard]] std::optional<PairedInfo> acceptSeek(int seekId, const CharacterBuild& build,
-                                                       std::string* error = nullptr);
+    // Accept an open seek → a ready check (the seek's owner learns via poll()).
+    [[nodiscard]] std::optional<ReadyCheckInfo> acceptSeek(int seekId, std::string* error = nullptr);
 
     // Directed challenges (to a specific username).
-    bool challenge(const std::string& toUser, const MatchFormat& fmt, const CharacterBuild& build,
-                   std::string* error = nullptr);
+    bool challenge(const std::string& toUser, const MatchFormat& fmt, std::string* error = nullptr);
     [[nodiscard]] std::optional<std::vector<ChallengeInfo>> listChallenges(); // incoming
-    [[nodiscard]] std::optional<PairedInfo> acceptChallenge(int id, const CharacterBuild& build,
-                                                            std::string* error = nullptr);
+    [[nodiscard]] std::optional<ReadyCheckInfo> acceptChallenge(int id, std::string* error = nullptr);
     bool declineChallenge(int id);
 
-    // One pending pairing event, if any (my seek/challenge was accepted). Call every
-    // frame / poll tick.
-    [[nodiscard]] std::optional<PairedInfo> poll();
+    // --- ready check (after a pairing) --------------------------------------
+    // Submit your build + READY. Waiting → poll() for the Paired/Cancelled outcome;
+    // Matched → the pairing is in `paired`; Rejected → your build is illegal.
+    [[nodiscard]] ReadyResult ready(int readyCheckId, const CharacterBuild& build,
+                                    std::string* error = nullptr);
+    // Decline / leave a ready check (cancels it for both).
+    bool cancelReady(int readyCheckId);
+
+    // One async event, if any (a ready check appeared, both readied, or one was
+    // cancelled). Call every frame / poll tick.
+    [[nodiscard]] LobbyEvent poll();
 
     // --- correspondence move transport (used by LobbyChannel) ---------------
     // Post one move-string to a correspondence game's server-side log; returns the

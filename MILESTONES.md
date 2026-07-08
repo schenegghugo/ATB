@@ -1051,16 +1051,21 @@ Each is independently shippable.
   still rides on the seek/challenge for now (moving it to the ready check is 6.2).
   *(Follow-up: the unused "lobby code" field on the login screen, and resetting the
   lobby session if you leave the online-mode editor via ‹Menu.)*
-- **6.2 ☐ Per-match ready check.** When a pairing lands, **both players get a 30 s
-  ready check**: pick a **saved, ranked-legal build** of their own *or* edit a new
-  one, then click **READY**. The match starts only when **both** ready in time; if
-  either fails to ready (timeout or decline) the **game is cancelled** and both
-  return to the lobby (no rating change). Needs: a `ReadyCheckScreen` (countdown +
-  build picker/editor + Ready), and a lobby protocol round — `paired` → both
-  `submitBuild{build}` + `ready` within the window → server validates both builds vs
-  the format's ruleset, then issues the live token / correspondence handle; a
-  no-show cancels. (Server-authoritative, so an illegal or absent build can't start
-  a ranked game.)
+- **6.2 ☑ Per-match ready check (all games).** Seeks/challenges now carry only a
+  **format** — the build moves to a **ready check** after pairing. Accepting opens a
+  server-side `ReadyCheck`; **both** players submit a build + **READY** within the
+  window (default 30 s, `LobbyConfig::readyCheckSec`), the server validates each
+  build vs the format's ruleset (illegal → `notReady`, re-pick), and only when both
+  are ready does it issue the live token / correspondence handle. A **decline or
+  timeout cancels** for both (no rating change); a disconnect cancels the opponent's
+  check too. Applies to **all** games incl. correspondence (both must be online to
+  *start*; async resumes after). Protocol: `poll()` now returns a `LobbyEvent`
+  (ReadyCheck / Paired / Cancelled); `ready()` → Waiting / Matched / Rejected /
+  Cancelled. GUI: `render/ReadyCheckScreen` (MATCH FOUND + countdown + build +
+  READY/Decline/Edit build), a new `AppState::ReadyCheck`, and `editorReturn` so
+  "Edit build" pops to the editor and comes back. Headless: `tb_ready_check_demo`
+  (both-ready → paired, illegal build rejected, decline cancels, timeout cancels) +
+  the three existing lobby demos rewritten to the ready-check flow; GUI compiles.
 - **6.3 ◐ Idle-clock forfeit ☑ / visible clock ☐.** *Enforcement done:* a live match
   now **forfeits the active player who sits idle** past the per-move window (Per-move
   → `perMoveSec`; Chess → `mainSec / 5`, the anti-sandbag/disconnect threshold you

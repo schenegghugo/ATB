@@ -41,6 +41,7 @@
 #include "render/LobbyScreen.h"
 #include "render/MainMenuScreen.h"
 #include "render/MatchSource.h"
+#include "render/ReadyCheckScreen.h"
 #include "render/RemoteMatchSource.h"
 #include "render/Renderer.h"
 #include "render/SettingsScreen.h"
@@ -61,7 +62,7 @@ using namespace tb;
 
 namespace {
 
-enum class AppState { Menu, Editor, Connect, Lobby, Battle, Settings };
+enum class AppState { Menu, Editor, Connect, Lobby, ReadyCheck, Battle, Settings };
 
 struct Session {
     SpellCatalog catalog = makeDefaultCatalog();
@@ -236,9 +237,11 @@ int main() {
     render::MainMenuScreen menu;
     render::SettingsScreen settings;
     render::LobbyScreen lobbyScreen;
+    render::ReadyCheckScreen readyScreen;
     std::unique_ptr<net::LobbySession> lobby; // live lobby connection (Online Home)
     std::string lobbyHost = "127.0.0.1";      // parsed from the connect form on join
     uint16_t lobbyPort = 5555;
+    AppState editorReturn = AppState::Menu;   // where the build editor returns to
 
     AppState state = AppState::Menu;
     // Which action the build editor was entered for (set by the mode-first menu).
@@ -325,9 +328,9 @@ int main() {
             const auto r = menu.runFrame(GetScreenWidth(), GetScreenHeight());
             EndDrawing();
             switch (r) {
-                case render::MainMenuScreen::Result::LocalMatch:  editorMode = EMode::Local;  state = AppState::Editor; break;
+                case render::MainMenuScreen::Result::LocalMatch:  editorMode = EMode::Local; editorReturn = AppState::Menu; state = AppState::Editor; break;
                 case render::MainMenuScreen::Result::PlayOnline:  state = AppState::Connect; break; // → login → lobby
-                case render::MainMenuScreen::Result::BuildEditor: editorMode = EMode::Edit;   state = AppState::Editor; break;
+                case render::MainMenuScreen::Result::BuildEditor: editorMode = EMode::Edit; editorReturn = AppState::Menu; state = AppState::Editor; break;
                 case render::MainMenuScreen::Result::Settings:    state = AppState::Settings; break;
                 case render::MainMenuScreen::Result::Quit:        quit = true; break;
                 case render::MainMenuScreen::Result::None: break;
@@ -355,12 +358,10 @@ int main() {
             const auto r = editor.runFrame(GetScreenWidth(), GetScreenHeight(), editorMode);
             EndDrawing();
             if (r == render::BuildEditorScreen::Result::Fight) { onlineMatch = false; enterBattleWith(newLocalMatch()); }
-            // In Online mode the editor is reached only from the lobby's "Edit build",
-            // so BOTH its primary button and "‹ Menu" return to the lobby (else menu).
-            else if (r == render::BuildEditorScreen::Result::PlayOnline)
-                state = lobby ? AppState::Lobby : AppState::Menu;
-            else if (r == render::BuildEditorScreen::Result::Menu)
-                state = lobby ? AppState::Lobby : AppState::Menu;
+            // Both the primary button and "‹ Menu" return to wherever the editor was
+            // opened from (the lobby or a ready check when editing an online build).
+            else if (r == render::BuildEditorScreen::Result::PlayOnline) state = editorReturn;
+            else if (r == render::BuildEditorScreen::Result::Menu) state = editorReturn;
             continue;
         }
 
@@ -400,9 +401,28 @@ int main() {
                 state = AppState::Menu;
             } else if (r == render::LobbyScreen::Result::EditBuild) {
                 editorMode = EMode::Online; // author/pick a build, then return to the lobby
+                editorReturn = AppState::Lobby;
                 state = AppState::Editor;
-            } else if (r == render::LobbyScreen::Result::Paired) {
-                routePairing(lobbyScreen.pairing()); // → Battle, or a setStatus on failure
+            } else if (r == render::LobbyScreen::Result::ReadyCheck) {
+                readyScreen.begin(lobbyScreen.readyCheck());
+                state = AppState::ReadyCheck;
+            }
+            continue;
+        }
+
+        if (state == AppState::ReadyCheck) {
+            BeginDrawing();
+            const auto r = readyScreen.runFrame(GetScreenWidth(), GetScreenHeight(), *lobby,
+                                                editor.playerTeam().front());
+            EndDrawing();
+            if (r == render::ReadyCheckScreen::Result::Matched) {
+                routePairing(readyScreen.pairing()); // → Battle
+            } else if (r == render::ReadyCheckScreen::Result::Cancelled) {
+                state = AppState::Lobby;
+            } else if (r == render::ReadyCheckScreen::Result::EditBuild) {
+                editorMode = EMode::Online;
+                editorReturn = AppState::ReadyCheck; // resume the ready check afterwards
+                state = AppState::Editor;
             }
             continue;
         }

@@ -21,21 +21,22 @@ namespace tb::render {
 
 class LobbyScreen {
 public:
-    enum class Result { None, Paired, Back, EditBuild };
+    enum class Result { None, ReadyCheck, Back, EditBuild };
 
-    // `session` is the live lobby connection; `myBuild` is the team's champion used
-    // when seeking/challenging/accepting; `ratedAvailable` gates the rated toggle
-    // (false for guests or when the ranked ruleset isn't loaded locally).
+    // `session` is the live lobby connection; `myBuild` shows the current build (the
+    // one you'll ready with); `ratedAvailable` gates the rated toggle (false for
+    // guests or when the ranked ruleset isn't loaded locally). Accepting a seek /
+    // challenge (or someone accepting yours, via poll) returns ReadyCheck.
     Result runFrame(int screenW, int screenH, net::LobbySession& session,
                     const CharacterBuild& myBuild, bool ratedAvailable);
 
-    [[nodiscard]] const net::PairedInfo& pairing() const { return pairing_; }
+    [[nodiscard]] const net::ReadyCheckInfo& readyCheck() const { return rc_; }
     void setStatus(std::string s) { status_ = std::move(s); }
 
 private:
     void refresh(net::LobbySession& session);
 
-    net::PairedInfo pairing_;
+    net::ReadyCheckInfo rc_;
     std::string status_;
     std::string challengeUser_; // the username to direct-challenge
     bool challengeFocus_ = false;

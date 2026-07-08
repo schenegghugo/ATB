@@ -21,6 +21,8 @@
 #include "net/MirrorSession.h"
 #include "net/Socket.h"
 
+#include "lobby_test_util.h"
+
 #include <cstdio>
 #include <memory>
 #include <optional>
@@ -30,6 +32,8 @@
 
 using namespace tb;
 using namespace tb::net;
+using tbtest::makeBuild;
+using tbtest::readyUp;
 
 static int g_fails = 0;
 #define CHECK(cond, msg)                                                                           \
@@ -39,14 +43,6 @@ static int g_fails = 0;
     } while (0)
 
 namespace {
-
-CharacterBuild makeBuild(const char* name) {
-    CharacterBuild b;
-    b.name = name;
-    b.stats.hpPurchases = 2;
-    b.spellIds = {spellid::Attack};
-    return b;
-}
 
 // Drive both mirrors of one live match to a finish (single thread — the match
 // alternates, so only one side ever awaits input). One Brain action per step, then
@@ -134,58 +130,62 @@ int main() {
             std::unique_ptr<LobbySession> guest =
                 LobbySession::connect("127.0.0.1", port, cfg.contentHash, "", "", &e);
             std::string ge;
-            CHECK(guest && !guest->seek(rated, makeBuild("G"), &ge),
-                  "a guest's rated seek is refused");
+            CHECK(guest && !guest->seek(rated, &ge), "a guest's rated seek is refused");
             CHECK(ge.find("login") != std::string::npos, "…with a 'needs login' reason");
             // guest disconnects here (scope end) — its session thread exits.
         }
 
-        std::printf("Open seek → accepted → a live rated match\n");
-        CHECK(alice->seek(rated, makeBuild("Alice"), &e), "alice posts an open rated seek");
+        std::printf("Open seek → ready check → a live rated match\n");
+        CHECK(alice->seek(rated, &e), "alice posts an open rated seek (no build yet)");
         std::optional<std::vector<SeekInfo>> seeks = bob->listSeeks();
         CHECK(seeks && seeks->size() == 1 && (*seeks)[0].user == "alice", "bob sees alice's seek");
 
         std::string ownErr;
-        CHECK(!alice->acceptSeek(seeks ? (*seeks)[0].id : 0, makeBuild("Alice"), &ownErr).has_value(),
+        CHECK(!alice->acceptSeek(seeks ? (*seeks)[0].id : 0, &ownErr).has_value(),
               "you can't accept your own seek");
-        CHECK(!bob->acceptSeek(999999, makeBuild("Bob")).has_value(), "accepting a bad id fails");
+        CHECK(!bob->acceptSeek(999999).has_value(), "accepting a bad id fails");
 
-        std::optional<PairedInfo> bobPair = bob->acceptSeek((*seeks)[0].id, makeBuild("Bob"), &e);
-        CHECK(bobPair && bobPair->seat == Faction::Enemy, "bob accepts → paired as Enemy");
-        std::optional<PairedInfo> alicePair = alice->poll();
-        CHECK(alicePair && alicePair->seat == Faction::Player,
-              "alice learns via poll → paired as Player");
-        CHECK(alicePair && bobPair && alicePair->rated && bobPair->rated, "the pairing is rated");
+        std::optional<ReadyCheckInfo> bobRc = bob->acceptSeek((*seeks)[0].id, &e);
+        CHECK(bobRc && bobRc->seat == Faction::Enemy, "bob accepts → a ready check (Enemy)");
+        LobbyEvent aliceEv = alice->poll();
+        CHECK(aliceEv.kind == LobbyEvent::Kind::ReadyCheck && aliceEv.readyCheck.seat == Faction::Player,
+              "alice learns of the ready check via poll (Player)");
 
-        const bool g1 = alicePair && bobPair &&
-                        playPairing("127.0.0.1", port, *alicePair, *bobPair, ruleset, catalog, creatures);
-        CHECK(g1, "the seek match plays to a finish over the network");
+        PairedInfo alicePair, bobPair;
+        const bool ready1 = bobRc && aliceEv.kind == LobbyEvent::Kind::ReadyCheck &&
+                            readyUp(*alice, aliceEv.readyCheck, makeBuild("Alice"), *bob, *bobRc,
+                                    makeBuild("Bob"), alicePair, bobPair);
+        CHECK(ready1, "both ready up (build chosen at the ready check) → paired");
+        CHECK(ready1 && alicePair.rated && bobPair.rated, "the pairing is rated");
+        CHECK(ready1 && playPairing("127.0.0.1", port, alicePair, bobPair, ruleset, catalog, creatures),
+              "the seek match plays to a finish over the network");
 
         std::printf("Directed challenge → declined, then accepted → a live match\n");
-        // A casual challenge alice declines-tests first.
         MatchFormat casual;
         casual.time = MatchFormat::Time::PerMove;
         casual.perMoveSec = 20;
-        casual.rated = false;
-        CHECK(bob->challenge("alice", casual, makeBuild("BobC"), &e), "bob challenges alice (casual)");
+        CHECK(bob->challenge("alice", casual, &e), "bob challenges alice (casual)");
         std::optional<std::vector<ChallengeInfo>> inc = alice->listChallenges();
         CHECK(inc && inc->size() == 1 && (*inc)[0].from == "bob", "alice sees the incoming challenge");
         CHECK(alice->declineChallenge((*inc)[0].id), "alice declines it");
         std::optional<std::vector<ChallengeInfo>> gone = alice->listChallenges();
         CHECK(gone && gone->empty(), "the declined challenge is gone");
 
-        // Now a rated challenge alice accepts and plays.
-        CHECK(alice->challenge("bob", rated, makeBuild("AliceC"), &e), "alice challenges bob (rated)");
+        CHECK(alice->challenge("bob", rated, &e), "alice challenges bob (rated)");
         inc = bob->listChallenges();
         CHECK(inc && inc->size() == 1 && (*inc)[0].from == "alice", "bob sees alice's challenge");
-        std::optional<PairedInfo> bobPair2 = bob->acceptChallenge((*inc)[0].id, makeBuild("Bob2"), &e);
-        CHECK(bobPair2 && bobPair2->seat == Faction::Enemy, "bob accepts the challenge → Enemy");
-        std::optional<PairedInfo> alicePair2 = alice->poll();
-        CHECK(alicePair2 && alicePair2->seat == Faction::Player, "alice is paired as Player (challenger)");
+        std::optional<ReadyCheckInfo> bobRc2 = bob->acceptChallenge((*inc)[0].id, &e);
+        CHECK(bobRc2 && bobRc2->seat == Faction::Enemy, "bob accepts the challenge → ready check (Enemy)");
+        LobbyEvent aliceEv2 = alice->poll();
+        CHECK(aliceEv2.kind == LobbyEvent::Kind::ReadyCheck, "alice (challenger) gets the ready check");
 
-        const bool g2 = alicePair2 && bobPair2 &&
-                        playPairing("127.0.0.1", port, *alicePair2, *bobPair2, ruleset, catalog, creatures);
-        CHECK(g2, "the challenge match plays to a finish over the network");
+        PairedInfo alicePair2, bobPair2;
+        const bool ready2 = bobRc2 && aliceEv2.kind == LobbyEvent::Kind::ReadyCheck &&
+                            readyUp(*alice, aliceEv2.readyCheck, makeBuild("AliceC"), *bob, *bobRc2,
+                                    makeBuild("Bob2"), alicePair2, bobPair2);
+        CHECK(ready2 && alicePair2.seat == Faction::Player, "alice is Player (challenger) after readying");
+        CHECK(ready2 && playPairing("127.0.0.1", port, alicePair2, bobPair2, ruleset, catalog, creatures),
+              "the challenge match plays to a finish over the network");
     }
 
     lobby.join();

@@ -22,6 +22,8 @@
 #include "net/Lobby.h"
 #include "net/Socket.h"
 
+#include "lobby_test_util.h"
+
 #include <cstdio>
 #include <memory>
 #include <optional>
@@ -41,13 +43,8 @@ static int g_fails = 0;
 
 namespace {
 
-CharacterBuild makeBuild(const char* name) {
-    CharacterBuild b;
-    b.name = name;
-    b.stats.hpPurchases = 2;
-    b.spellIds = {spellid::Attack}; // no decoy → no commitments, keeps the test lean
-    return b;
-}
+using tbtest::makeBuild;
+using tbtest::readyUp;
 
 // Build a CorrespondenceSession from a lobby correspondence pairing, over a channel
 // on `session`.
@@ -111,27 +108,35 @@ int main() {
             LobbySession::connect("127.0.0.1", port, cfg.contentHash, "bob", "pw-b", &e);
         CHECK(alice && bob, "both players log in");
 
-        std::printf("An Unlimited challenge routes to a correspondence game\n");
-        CHECK(alice->challenge("bob", corr, makeBuild("Alice"), &e), "alice sends an Unlimited challenge");
+        std::printf("An Unlimited challenge → ready check → a correspondence game\n");
+        CHECK(alice->challenge("bob", corr, &e), "alice sends an Unlimited challenge (no build yet)");
         std::optional<std::vector<ChallengeInfo>> inc = bob->listChallenges();
         CHECK(inc && inc->size() == 1, "bob sees the challenge");
-        std::optional<PairedInfo> bobPair = bob->acceptChallenge((*inc)[0].id, makeBuild("Bob"), &e);
-        CHECK(bobPair && !bobPair->live, "bob accepts → a CORRESPONDENCE pairing (not a live token)");
-        std::optional<PairedInfo> alicePair = alice->poll();
-        CHECK(alicePair && !alicePair->live, "alice learns of the correspondence game via poll");
-        CHECK(alicePair && bobPair && alicePair->game == bobPair->game && !alicePair->game.empty(),
+        std::optional<ReadyCheckInfo> bobRc = bob->acceptChallenge((*inc)[0].id, &e);
+        CHECK(bobRc.has_value(), "bob accepts → a ready check");
+        LobbyEvent aliceEv = alice->poll();
+        CHECK(aliceEv.kind == LobbyEvent::Kind::ReadyCheck, "alice gets the ready check via poll");
+
+        PairedInfo alicePair, bobPair;
+        const bool ok = bobRc && aliceEv.kind == LobbyEvent::Kind::ReadyCheck &&
+                        readyUp(*alice, aliceEv.readyCheck, makeBuild("Alice"), *bob, *bobRc,
+                                makeBuild("Bob"), alicePair, bobPair);
+        CHECK(ok, "both ready up → paired");
+        CHECK(ok && !alicePair.live && !bobPair.live,
+              "a CORRESPONDENCE pairing (setup, not a live token)");
+        CHECK(ok && alicePair.game == bobPair.game && !alicePair.game.empty(),
               "both sides share the same game id");
-        CHECK(alicePair && bobPair && alicePair->seed == bobPair->seed && alicePair->seed != 0,
+        CHECK(ok && alicePair.seed == bobPair.seed && alicePair.seed != 0,
               "both sides share the same non-zero seed");
-        if (!alicePair || !bobPair) { std::printf("no pairing\n"); return 1; }
-        game = alicePair->game;
-        aliceSeat = alicePair->seat;
-        bobSeat = bobPair->seat;
+        if (!ok) { std::printf("no pairing\n"); lobby.join(); return 1; }
+        game = alicePair.game;
+        aliceSeat = alicePair.seat;
+        bobSeat = bobPair.seat;
 
         std::unique_ptr<CorrespondenceSession> ca =
-            buildCorr(alice.get(), *alicePair, ruleset, catalog, creatures, "alice");
+            buildCorr(alice.get(), alicePair, ruleset, catalog, creatures, "alice");
         std::unique_ptr<CorrespondenceSession> cb =
-            buildCorr(bob.get(), *bobPair, ruleset, catalog, creatures, "bob");
+            buildCorr(bob.get(), bobPair, ruleset, catalog, creatures, "bob");
 
         std::printf("Play a few turns, then bob drops and reconnects\n");
         for (int i = 0; i < 3; ++i) {
