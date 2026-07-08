@@ -70,8 +70,8 @@ ConnectScreen::Result ConnectScreen::runFrame(int screenW, int screenH) {
     const float x = (W - panelW) / 2.0f;
     float y = 90.0f;
 
-    DrawText("PLAY ONLINE", static_cast<int>(x), 44, 26, kText);
-    DrawText("Blank login = custom match. A shared lobby code = private game with a friend.",
+    DrawText("LOG IN — ONLINE HOME", static_cast<int>(x), 44, 26, kText);
+    DrawText("Log in to the lobby to seek + challenge. Blank username = guest (casual only).",
              static_cast<int>(x), 74, 13, kMuted);
 
     // Tab cycles focus between the four fields.

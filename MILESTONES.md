@@ -1044,14 +1044,13 @@ in the clear).
 The lobby works end to end, but the first live playtest surfaced flow + UX gaps.
 Each is independently shippable.
 
-- **6.1 ☐ Fix the online entry flow.** Today *Play Online* routes **menu → build
-  editor → Connect → Lobby**, which is confusing (why author a build before you've
-  even logged in?). Desired: **boot → Main menu → Play Online → Login screen →
-  Lobby**. The build is *not* chosen up front — it moves to the per-match ready
-  check (6.2). So: repurpose `ConnectScreen` as a **Login screen** (host + user +
-  pass) reached directly from the menu; drop the pre-lobby editor step; seek/
-  challenge no longer carries a build (the wire moves the build from
-  seek/challenge-time to ready-check-time).
+- **6.1 ☑ Fix the online entry flow.** *Play Online* now goes **menu → Login
+  (`ConnectScreen`, relabelled) → Lobby**, no forced pre-lobby build editor. The
+  lobby shows the current build + an **"Edit build"** button that pops to the editor
+  (Online mode) and returns to the lobby; Connect/Lobby **Back** → Menu. The build
+  still rides on the seek/challenge for now (moving it to the ready check is 6.2).
+  *(Follow-up: the unused "lobby code" field on the login screen, and resetting the
+  lobby session if you leave the online-mode editor via ‹Menu.)*
 - **6.2 ☐ Per-match ready check.** When a pairing lands, **both players get a 30 s
   ready check**: pick a **saved, ranked-legal build** of their own *or* edit a new
   one, then click **READY**. The match starts only when **both** ready in time; if
@@ -1071,17 +1070,16 @@ Each is independently shippable.
   the "real chess clock" item above.
 - **6.4 ☐ In-match & lobby chat.** No chat surface yet — see **4.6** (text chat over
   the transport, HUD panel beside the combat log).
-- **6.5 ☐ BUG: no movement in an online match.** First playtest: left-clicking a
-  tile did not move the champion in a networked game. Investigate — likely a
-  seat/turn-order issue (only the seat that holds the active unit may input; the
-  acceptor is Enemy and moves second) vs. a real input-plumbing bug in
-  `RemoteMatchSource`/`CorrespondenceMatchSource` submit. Reproduce with two clients,
-  confirm which seat/turn, and fix (or clarify the "waiting for opponent" HUD so it's
-  obvious whose turn it is).
-- **6.6 ☐ (papercut) `tb_lobby` fails loudly without `./data`.** Running the daemon
-  from the wrong directory silently falls back to the compiled-default content →
-  a "content hash mismatch" the GUI can't explain. Warn (or exit) when
-  `./data/catalog.json` is absent, pointing at the repo root.
+- **6.5 ☑ BUG: no movement in an online match — fixed.** Real bug (not turn-order):
+  the battle loop only pumped `source->update()` when it was *not* the local
+  player's turn, so a remote/correspondence mirror never drained the server's echo
+  of the player's **own** move — the mirror stayed on our turn and nothing appeared
+  (local play was fine because `LocalMatchSource::submit` is synchronous). `main.cpp`
+  now pumps `update()` **every frame** before reading whose turn it is
+  (`LocalMatchSource` no-ops during our turn / when finished).
+- **6.6 ☑ `tb_lobby` warns without `./data`.** The daemon now prints a loud WARNING
+  when `./data/catalog.json` is absent (compiled defaults → guaranteed content-hash
+  mismatch with a GUI that loaded `data/`), pointing at the repo root.
 
 **Deployment & trust model (decided):** two tiers, one codebase.
 - **Ranked → server-authoritative, self-hosted.** A persistent instance (the HP

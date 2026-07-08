@@ -21,7 +21,7 @@ namespace tb::render {
 
 class LobbyScreen {
 public:
-    enum class Result { None, Paired, Back };
+    enum class Result { None, Paired, Back, EditBuild };
 
     // `session` is the live lobby connection; `myBuild` is the team's champion used
     // when seeking/challenging/accepting; `ratedAvailable` gates the rated toggle

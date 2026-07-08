@@ -320,7 +320,7 @@ int main() {
             EndDrawing();
             switch (r) {
                 case render::MainMenuScreen::Result::LocalMatch:  editorMode = EMode::Local;  state = AppState::Editor; break;
-                case render::MainMenuScreen::Result::PlayOnline:  editorMode = EMode::Online; state = AppState::Editor; break;
+                case render::MainMenuScreen::Result::PlayOnline:  state = AppState::Connect; break; // → login → lobby
                 case render::MainMenuScreen::Result::BuildEditor: editorMode = EMode::Edit;   state = AppState::Editor; break;
                 case render::MainMenuScreen::Result::Settings:    state = AppState::Settings; break;
                 case render::MainMenuScreen::Result::Quit:        quit = true; break;
@@ -349,7 +349,10 @@ int main() {
             const auto r = editor.runFrame(GetScreenWidth(), GetScreenHeight(), editorMode);
             EndDrawing();
             if (r == render::BuildEditorScreen::Result::Fight) enterBattleWith(newLocalMatch());
-            else if (r == render::BuildEditorScreen::Result::PlayOnline) state = AppState::Connect;
+            // In Online mode the editor is reached only from the lobby's "Edit build",
+            // so its primary button returns there (else fall back to the menu).
+            else if (r == render::BuildEditorScreen::Result::PlayOnline)
+                state = lobby ? AppState::Lobby : AppState::Menu;
             else if (r == render::BuildEditorScreen::Result::Menu) state = AppState::Menu;
             continue;
         }
@@ -359,7 +362,7 @@ int main() {
             const auto r = connect.runFrame(GetScreenWidth(), GetScreenHeight());
             EndDrawing();
             if (r == render::ConnectScreen::Result::Back) {
-                state = AppState::Editor;
+                state = AppState::Menu;
             } else if (r == render::ConnectScreen::Result::Connect) {
                 // Connect to the lobby (the Online Home), then browse/challenge there.
                 const render::ConnectScreen::Params& pr = connect.params();
@@ -387,6 +390,9 @@ int main() {
             EndDrawing();
             if (r == render::LobbyScreen::Result::Back) {
                 lobby.reset();
+                state = AppState::Menu;
+            } else if (r == render::LobbyScreen::Result::EditBuild) {
+                editorMode = EMode::Online; // author/pick a build, then return to the lobby
                 state = AppState::Editor;
             } else if (r == render::LobbyScreen::Result::Paired) {
                 routePairing(lobbyScreen.pairing()); // → Battle, or a setStatus on failure

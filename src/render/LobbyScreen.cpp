@@ -103,6 +103,12 @@ LobbyScreen::Result LobbyScreen::runFrame(int screenW, int screenH, net::LobbySe
     DrawText(who.c_str(), static_cast<int>(margin), 66, 14, kMuted);
     Result result = Result::None;
     if (button({W - margin - 130, 34, 130, 34}, "< Back", m, kPanel)) result = Result::Back;
+    // Current build + edit: the build you seek/challenge/accept with comes from the
+    // editor; "Edit build" pops to it and returns here.
+    const std::string buildLabel =
+        std::string("Build: ") + (myBuild.name.empty() ? "(unnamed)" : myBuild.name);
+    DrawText(buildLabel.c_str(), static_cast<int>(W - margin - 320), 72, 14, kMuted);
+    if (button({W - margin - 130, 70, 130, 30}, "Edit build", m, kPanel)) result = Result::EditBuild;
 
     // Format bar: rated toggle + clock presets.
     float y = 104.0f;
