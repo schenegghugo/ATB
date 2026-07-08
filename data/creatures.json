@@ -94,7 +94,7 @@
     {
       "key": "brute",
       "kind": "summon",
-      "hp": 18,
+      "hp": 12,
       "ap": 3,
       "mp": 4,
       "initiative": 5,

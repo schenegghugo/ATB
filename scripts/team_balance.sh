@@ -12,7 +12,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.." # repo root (this script lives in scripts/)
 
-matches=4000
+matches=40000
 seed=42
 out="output/team_report.txt"
 team=2

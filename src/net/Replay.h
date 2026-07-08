@@ -42,6 +42,12 @@ struct DecoyCommit {
 // hash(choice, nonce) exactly as verify() recomputes it.
 [[nodiscard]] std::string makeCommitment(const std::string& choice, const std::string& nonce);
 
+// The terse per-intent token used in the notation (`m8,4` / `c1@10,6` / `.`).
+// Exposed so the correspondence wire (CR.6 slice 3) carries the same tokens as the
+// scoresheet — one encoding, no drift.
+[[nodiscard]] std::string intentToken(const net::Intent& in);
+[[nodiscard]] bool parseIntentToken(const std::string& token, net::Intent& out);
+
 struct GameRecord {
     int version = 1;
     std::string catalogHash;          // pins the spell catalog (== net::contentHashOf)

@@ -20,10 +20,14 @@ client) plus **4.5**'s server slices (multi-match daemon, accounts + PBKDF2,
 Elo/MMR, private lobbies, connect screen + main menu). The **correspondence-ranked
 arc (CR.1–CR.5) is built end-to-end**: cross-platform determinism, the game
 notation + verifier (= replays, §5.1), the mailbox relay, the double-submit
-arbiter, and the official perfect-information ranked ruleset. **Open threads:**
-GUI playtesting + async connect/waiting screen, SQLite behind the store seam,
-TLS before any public non-VPN launch, 4.6 chat, Phase 5.2 spectate, and the
-hidden-information ranked ideas (commit-reveal / decoys) parked under CR.6.
+arbiter, and the official perfect-information ranked ruleset. **CR.6's hidden-info
+ranked** now has all three slices built — the decoy mechanic (engine + content),
+the commitment layer (notation + verifier), and the correspondence session that
+plays a decoy game over the relay and generates commitments at cast. **Open
+threads:** GUI playtesting + async connect/waiting screen, SQLite behind the store
+seam, TLS before any public non-VPN launch, 4.6 chat, Phase 5.2 spectate, wiring
+the decoy-choice prompt + a self-hosted arbiter endpoint into the GUI, and the
+heavier hidden-info options (commit-reveal movement / ZK) still parked under CR.6.
 
 **The one rule (satisfied):** no netcode before the catalog loader, content hash,
 and serialization round-trip tests exist (Phase 1 + 4.1) — all long since done.
@@ -1125,7 +1129,7 @@ play. Abandonment falls back to a start-of-game ping + timeout → forfeit.
 relay → CR.4 double-submit arbiter → CR.5 official ranked ruleset. Ranked is
 perfect-information v1: invisibility stays casual/custom until CR.6.
 
-### CR.6 ◐ Hidden information in trustless ranked
+### CR.6 ◐ Hidden information in trustless ranked (slices 1–3 ☑; deeper options parked)
 
 **Slice 1 ☑ — the decoy mechanic (engine + content).** Option 1 below is now a
 `core/` mechanic. `Effect::Type::Decoy` spawns a **full, publicly identical twin**
@@ -1179,8 +1183,32 @@ opponent won't co-sign a scoresheet whose commitments they never saw in play.
 `tb_commit_demo` (23 checks, in CI): honest `a`, honest swap-`b`, and honest
 expiry all verify; the lie, the chicken-out, the bad hash, the missing and the
 surplus commitment are all rejected; notation round-trips byte-identically.
-*(Remaining for a full in-game flow: the client generating a commitment at cast +
-shipping it with the move over the relay — protocol UX, not trust machinery.)*
+
+**Slice 3 ☑ — the correspondence session (in-game commitment flow).** `net/
+Correspondence.{h,cpp}`: `CorrespondenceSession` is the client half of "verify,
+don't host" — two peers share a match setup + a relay game id and each run an
+**identical deterministic mirror `MatchRunner`** (like `MirrorSession`, but neither
+side is authoritative — the shared determinism is). A player `submitLocal`s their
+own intents and POSTs them to the **mailbox relay** (CR.3); `sync()` pulls the
+opponent's and applies them. Only the awaiting seat can act, so the human-intent
+stream stays globally ordered and both mirrors stay in lockstep. **The new piece:
+the decoy-commitment wire flow** — on a decoy cast the session mints a nonce,
+computes `commit = sha256(choice ":" nonce)` (`replay::makeCommitment`), and ships
+**the hash only** with the move (`<token> C<commit>`), pinning the hidden choice
+before the opponent reacts; `finalize()` exchanges the `choice:nonce` reveals
+**after** the game so both peers rebuild a **byte-identical `GameRecord`**. That
+record is the scoresheet — `replay::verify()` reproduces the winner and the
+`Arbiter` (CR.4) ranks the two agreeing submissions. Engine + intent stream
+untouched; the token encoder (`replay::intentToken`/`parseIntentToken`) is now
+shared by the notation *and* the wire (no drift). `tb_correspondence_demo` (13
+checks, in CI): two sessions play a decoy game **entirely over a real relay
+socket**, both derive an identical scoresheet, the shipped hash matches
+choice+nonce (a real commitment crossed the wire), `verify()` reproduces the match,
+and the arbiter ranks it. *(v1 limits: teamSize 1; the caller decides the decoy
+choice at cast — inherent to commit-reveal — and must then act honestly from the
+committed member, which `verify()` enforces; reveal-at-end rather than at
+stealth-end; GUI wiring of the choice prompt + a self-hosted arbiter endpoint are
+follow-ups.)*
 
 #### Design options considered (for reference)
 

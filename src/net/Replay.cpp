@@ -17,20 +17,6 @@
 namespace tb::replay {
 namespace {
 
-// --- terse intent token <-> Intent -----------------------------------------
-std::string intentToken(const net::Intent& in) {
-    switch (in.kind) {
-        case net::Intent::Kind::Move:
-            return "m" + std::to_string(in.target.x) + "," + std::to_string(in.target.y);
-        case net::Intent::Kind::Cast:
-            return "c" + std::to_string(in.spellIdx) + "@" + std::to_string(in.target.x) + "," +
-                   std::to_string(in.target.y);
-        case net::Intent::Kind::EndTurn:
-            return ".";
-    }
-    return ".";
-}
-
 // Parse "x,y" -> Vec2i (x may be negative). Returns false on malformed.
 bool parseXY(const std::string& s, Vec2i& out) {
     const auto comma = s.find(',');
@@ -43,6 +29,22 @@ bool parseXY(const std::string& s, Vec2i& out) {
     if (ys.empty() || *end != '\0') return false;
     out = {static_cast<int>(x), static_cast<int>(y)};
     return true;
+}
+
+} // namespace
+
+// --- terse intent token <-> Intent (shared by the notation + the CR.6 wire) ---
+std::string intentToken(const net::Intent& in) {
+    switch (in.kind) {
+        case net::Intent::Kind::Move:
+            return "m" + std::to_string(in.target.x) + "," + std::to_string(in.target.y);
+        case net::Intent::Kind::Cast:
+            return "c" + std::to_string(in.spellIdx) + "@" + std::to_string(in.target.x) + "," +
+                   std::to_string(in.target.y);
+        case net::Intent::Kind::EndTurn:
+            return ".";
+    }
+    return ".";
 }
 
 bool parseIntentToken(const std::string& t, net::Intent& out) {
@@ -66,8 +68,6 @@ bool parseIntentToken(const std::string& t, net::Intent& out) {
     }
     return false;
 }
-
-} // namespace
 
 std::string catalogHash(const SpellCatalog& catalog) {
     return sha256Hex(serializeCatalog(catalog, "match"));
