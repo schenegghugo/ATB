@@ -21,10 +21,12 @@
 #include "net/Arbiter.h"
 #include "net/Correspondence.h"
 #include "net/MailboxRelay.h"
+#include "net/MoveChannel.h"
 #include "net/Replay.h"
 #include "net/Socket.h"
 
 #include <cstdio>
+#include <memory>
 #include <optional>
 #include <string>
 #include <thread>
@@ -127,8 +129,10 @@ int main() {
         CHECK(ra && rb, "both peers connect to the relay");
 
         const std::string game = "corr-1";
-        CorrespondenceSession player(std::move(*ra), game, setup, Faction::Player, "alice");
-        CorrespondenceSession enemy(std::move(*rb), game, setup, Faction::Enemy, "bob");
+        CorrespondenceSession player(std::make_unique<RelayChannel>(std::move(*ra)), game, setup,
+                                     Faction::Player, "alice");
+        CorrespondenceSession enemy(std::make_unique<RelayChannel>(std::move(*rb)), game, setup,
+                                    Faction::Enemy, "bob");
 
         std::printf("Two peers play a decoy game entirely through the relay\n");
         Driver drv;

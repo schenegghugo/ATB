@@ -9,10 +9,10 @@
 
 namespace tb::net {
 
-CorrespondenceSession::CorrespondenceSession(RelayClient relay, std::string game,
+CorrespondenceSession::CorrespondenceSession(std::unique_ptr<MoveChannel> channel, std::string game,
                                              CorrespondenceSetup setup, Faction mySeat,
                                              std::string user)
-    : relay_(std::move(relay)), game_(std::move(game)), mySeat_(mySeat), user_(std::move(user)),
+    : channel_(std::move(channel)), game_(std::move(game)), mySeat_(mySeat), user_(std::move(user)),
       runner_(buildMatch(setup.ruleset, {setup.player}, {setup.enemy}, setup.catalog, setup.seed,
                          setup.creatures),
               Seat::Human, Seat::Human),
@@ -70,13 +70,13 @@ bool CorrespondenceSession::submitLocal(const Intent& in, std::optional<char> de
         seenCloaks_ = now;
         msg += " C" + commit;
     }
-    (void)relay_.post(game_, user_, msg);
+    (void)channel_->post(game_, user_, msg);
     return true;
 }
 
 bool CorrespondenceSession::sync() {
     if (finished()) return false; // reveals (post-finish) are finalize()'s job
-    const std::optional<RelayClient::PollResult> res = relay_.poll(game_, pollCursor_);
+    const std::optional<ChannelPoll> res = channel_->poll(game_, pollCursor_);
     if (!res) return false;
 
     bool applied = false;
@@ -122,13 +122,13 @@ bool CorrespondenceSession::finalize() {
     if (!revealsPosted_) {
         for (const std::size_t idx : myCommits_) {
             const replay::DecoyCommit& c = rec_.commits[idx];
-            (void)relay_.post(game_, user_,
+            (void)channel_->post(game_, user_,
                               "R " + std::to_string(idx) + ' ' + c.choice + ' ' + c.nonce);
         }
         revealsPosted_ = true;
     }
 
-    const std::optional<RelayClient::PollResult> res = relay_.poll(game_, pollCursor_);
+    const std::optional<ChannelPoll> res = channel_->poll(game_, pollCursor_);
     if (res) {
         for (const MailEntry& e : res->entries) {
             if (e.sender == user_ || e.msg.rfind("R ", 0) != 0) continue;

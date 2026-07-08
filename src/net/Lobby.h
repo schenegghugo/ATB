@@ -21,6 +21,7 @@
 // uses the per-move read timeout today).
 //
 #include "AccountStore.h" // AccountView, kDefaultRating
+#include "MoveChannel.h"  // MoveChannel, ChannelPoll
 #include "Socket.h"
 #include "core/Build.h"
 #include "core/Entity.h" // Faction
@@ -78,10 +79,27 @@ struct ChallengeInfo { // an INCOMING challenge (someone challenged me)
     MatchFormat format;
 };
 
+// The result of accepting (or being accepted into) a game. A LIVE pairing carries a
+// match token to join; a CORRESPONDENCE pairing carries the full setup to build a
+// CorrespondenceSession (played over a LobbyChannel on this same session).
 struct PairedInfo {
-    std::string token; // hand to MirrorSession::joinToken()
+    bool live = true;   // true → live match (token); false → correspondence (game + setup)
     Faction seat = Faction::Player;
     bool rated = false; // pick ranked vs casual ruleset locally to match the server
+    // live:
+    std::string token; // hand to MirrorSession::joinToken()
+    // correspondence:
+    std::string game;   // relay/lobby game id
+    unsigned seed = 0;  // regenerates the arena
+    CharacterBuild player, enemy; // both builds (seat Player / Enemy)
+};
+
+// The outcome of submitting a finished correspondence scoresheet to the lobby.
+struct SubmitResult {
+    enum class Status { Ranked, Pending, Casual, Rejected };
+    Status status = Status::Rejected;
+    std::string winner; // username; empty on draw / pending / casual / rejected
+    std::string error;  // set on Rejected
 };
 
 // A lobby session: connect + (optionally) log in, then browse/seek/challenge/poll.
@@ -118,6 +136,17 @@ public:
     // frame / poll tick.
     [[nodiscard]] std::optional<PairedInfo> poll();
 
+    // --- correspondence move transport (used by LobbyChannel) ---------------
+    // Post one move-string to a correspondence game's server-side log; returns the
+    // new log length. The sender is the authenticated user (server-side).
+    [[nodiscard]] std::optional<std::size_t> corrPost(const std::string& game,
+                                                      const std::string& msg);
+    // Poll the game's log from `from`.
+    [[nodiscard]] std::optional<ChannelPoll> corrPoll(const std::string& game, std::size_t from);
+    // Submit this seat's finished scoresheet; a rated game ranks once both agree.
+    [[nodiscard]] SubmitResult submitScore(const std::string& game, Faction seat,
+                                           const std::string& notation);
+
 private:
     explicit LobbySession(Connection c) : conn_(std::move(c)) {}
     // send one request, read one reply; nullopt on link failure.
@@ -126,6 +155,23 @@ private:
     Connection conn_;
     AccountView acct_;
     bool guest_ = true;
+};
+
+// A MoveChannel that carries correspondence moves over a lobby session (the server
+// holds the log). Non-owning — the LobbySession must outlive it.
+class LobbyChannel : public MoveChannel {
+public:
+    explicit LobbyChannel(LobbySession* session) : session_(session) {}
+    std::optional<std::size_t> post(const std::string& game, const std::string& /*sender*/,
+                                    const std::string& msg) override {
+        return session_->corrPost(game, msg);
+    }
+    std::optional<ChannelPoll> poll(const std::string& game, std::size_t from) override {
+        return session_->corrPoll(game, from);
+    }
+
+private:
+    LobbySession* session_;
 };
 
 } // namespace tb::net

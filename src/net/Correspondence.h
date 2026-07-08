@@ -28,15 +28,16 @@
 // at cast (inherent to commit-reveal) and must then act honestly from the
 // committed member — dishonesty is caught by verify(), not prevented here.
 //
-#include "MailboxRelay.h" // RelayClient
 #include "MatchRunner.h"
-#include "Replay.h" // GameRecord
+#include "MoveChannel.h" // MoveChannel transport seam
+#include "Replay.h"      // GameRecord
 #include "core/Build.h"
 #include "core/Entity.h" // Faction
 #include "core/Ruleset.h"
 #include "core/Spells.h" // SpellCatalog
 
 #include <cstddef>
+#include <memory>
 #include <optional>
 #include <random>
 #include <string>
@@ -57,12 +58,17 @@ struct CorrespondenceSetup {
 
 class CorrespondenceSession {
 public:
-    // `relay` is this client's own connection; `game` the shared relay game id;
-    // `mySeat` which side this client plays; `user` its authenticated name (the
-    // relay sender + the arbiter identity). Both peers pass an identical setup +
-    // game id and differ only in mySeat/user.
-    CorrespondenceSession(RelayClient relay, std::string game, CorrespondenceSetup setup,
-                          Faction mySeat, std::string user);
+    // `channel` is this client's move transport (a RelayChannel over a direct relay,
+    // or a LobbyChannel over a lobby session); `game` the shared game id; `mySeat`
+    // which side this client plays; `user` its authenticated name (the move sender +
+    // arbiter identity). Both peers pass an identical setup + game id and differ only
+    // in mySeat/user.
+    CorrespondenceSession(std::unique_ptr<MoveChannel> channel, std::string game,
+                          CorrespondenceSetup setup, Faction mySeat, std::string user);
+
+    // Swap the move transport (e.g. after a dropped session reconnects). The mirror
+    // state + poll cursor are unchanged, so play resumes against the same log.
+    void rebind(std::unique_ptr<MoveChannel> channel) { channel_ = std::move(channel); }
 
     [[nodiscard]] const Battle& battle() const { return runner_.battle(); }
     [[nodiscard]] Faction seat() const { return mySeat_; }
@@ -106,7 +112,7 @@ private:
     void trackNewCloaks(const std::string* wireCommit);
     [[nodiscard]] std::string mintNonce();
 
-    RelayClient relay_;
+    std::unique_ptr<MoveChannel> channel_;
     std::string game_;
     Faction mySeat_;
     std::string user_;

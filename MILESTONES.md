@@ -983,17 +983,36 @@ seek's poster/challenger becomes Player, the acceptor Enemy. `tb_lobby_challenge
 (in CI, stress-run 5×): over real sockets, a seek and a directed challenge are both
 accepted and **play a live rated match to a finish**, ratings move zero-sum, and the
 refusals hold (accept-your-own-seek, unknown id, decline, guest-barred-from-rated).
-*(v1: teamSize 1; **Unlimited routes to correspondence in slice 6** — rejected for
-now; a real chess **clock** — bank/increment/flag-loss + forfeit-notify — is a
-follow-up, today Per-move uses the per-move read timeout; the board is in-memory.)*
+*(v1: teamSize 1; a real chess **clock** — bank/increment/flag-loss + forfeit-notify
+— is a follow-up, today Per-move uses the per-move read timeout; the board is
+in-memory.)*
 
-**Remaining:** wire **Unlimited → correspondence** (the CR.6 `CorrespondenceSession`
-+ a persisted `Mailbox` over the session conn) and a persistent lobby store; the
-**GUI lobby + correspondence screens**; async connect + a "waiting for opponent"
-screen; editable Settings + saved network defaults; move the store to **SQLite** for
-scale (behind the same seam) + match-history rows; a widening-band **queue**; and
-**transport encryption (TLS)** before any public, non-VPN ranked launch (passwords
-are currently in the clear).
+**Slice 5b ☑ — Unlimited → correspondence, played + ranked over the lobby.**
+Accepting an **Unlimited** format now mints a **correspondence game** instead of a
+live token: the lobby stores the setup (seed + both builds + seat map) and hands
+both sides the full setup in the `paired` reply/event (`PairedInfo.live == false`).
+Each client plays a **`CorrespondenceSession`** over a **`LobbyChannel`** — the CR.6
+session gained a `MoveChannel` transport seam (`net/MoveChannel.h`: a `RelayChannel`
+over a direct relay, or a `LobbyChannel` that carries moves as `corrPost`/`corrPoll`
+over the lobby session conn, backed by the server's embedded `Mailbox`). On finish
+both `submit` their scoresheet; the lobby's embedded **`Arbiter`** (pinned to the
+ranked ruleset) double-checks they agree, re-simulates, and records **Elo**. Because
+the game lives server-side, a client can **drop the transport and reconnect**: the
+session's `rebind()` swaps in a fresh `LobbyChannel` and play resumes against the
+same log. `tb_lobby_correspondence_demo` (in CI, stress-run 5×): an Unlimited rated
+challenge is accepted, played over the lobby, **bob disconnects mid-game and
+reconnects**, the game finishes, both scoresheets agree, and the arbiter ranks it
+(zero-sum Elo). *(v1: in-memory server state — survives a client reconnect but not a
+server restart; **cold resume** — rebuild the mirror by replaying the log, + client
+secret persistence for decoy games — is a follow-up, as is file persistence.)*
+
+**Remaining:** persist the lobby store + `Mailbox` to disk (server-restart
+durability) and **cold-resume**; the **GUI lobby + correspondence screens**; async
+connect + a "waiting for opponent" screen; a real **chess clock**; editable Settings
++ saved network defaults; move the store to **SQLite** for scale (behind the same
+seam) + match-history rows; a widening-band **queue**; and **transport encryption
+(TLS)** before any public, non-VPN ranked launch (passwords are currently in the
+clear).
 
 **Deployment & trust model (decided):** two tiers, one codebase.
 - **Ranked → server-authoritative, self-hosted.** A persistent instance (the HP

@@ -3,12 +3,15 @@
 //
 #include "Lobby.h"
 
-#include "GameServer.h" // MatchConfig, runAdmittedMatch, contentHashOf
-#include "Protocol.h"   // proto::parse / Msg / helpers
-#include "core/Build.h" // (de)serializeBuild, validateBuild
+#include "Arbiter.h"     // correspondence ranking
+#include "GameServer.h"  // MatchConfig, runAdmittedMatch, contentHashOf
+#include "MailboxRelay.h" // Mailbox (correspondence move log)
+#include "Protocol.h"    // proto::parse / Msg / helpers
+#include "core/Build.h"  // (de)serializeBuild, validateBuild
 #include "data/Json.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <memory>
 #include <mutex>
 #include <random>
@@ -61,22 +64,35 @@ std::string ok() {
     return json::dump(o, false);
 }
 std::string err(const std::string& msg) { return proto::error(msg); }
-std::string pairedMsg(const std::string& token, Faction seat, bool rated) {
+// The shared "paired" payload (a live token, or a correspondence setup). The reply
+// tags it "type", the async event tags it "kind" — otherwise identical.
+json::Value livePairedObj(const std::string& token, Faction seat, bool rated) {
     json::Value o = json::Value::makeObject();
-    o.set("type", "paired");
-    o.set("token", token);
-    o.set("seat", proto::factionName(seat));
-    o.set("rated", rated);
-    return json::dump(o, false);
-}
-// The same object, minus the "type", enqueued as an async event.
-json::Value pairedEvent(const std::string& token, Faction seat, bool rated) {
-    json::Value o = json::Value::makeObject();
-    o.set("kind", "paired");
+    o.set("live", true);
     o.set("token", token);
     o.set("seat", proto::factionName(seat));
     o.set("rated", rated);
     return o;
+}
+json::Value corrPairedObj(const std::string& game, unsigned seed, Faction seat, bool rated,
+                          const CharacterBuild& bP, const CharacterBuild& bE) {
+    json::Value o = json::Value::makeObject();
+    o.set("live", false);
+    o.set("game", game);
+    o.set("seed", static_cast<int>(seed));
+    o.set("seat", proto::factionName(seat));
+    o.set("rated", rated);
+    o.set("playerBuild", serializeBuild(bP));
+    o.set("enemyBuild", serializeBuild(bE));
+    return o;
+}
+std::string asReply(json::Value obj) {
+    obj.set("type", "paired");
+    return json::dump(obj, false);
+}
+json::Value asEvent(json::Value obj) {
+    obj.set("kind", "paired");
+    return obj;
 }
 
 // --- server state ------------------------------------------------------------
@@ -96,13 +112,20 @@ struct Challenge {
     CharacterBuild fromBuild;
     bool fromGuest = false;
 };
-// A confirmed pairing waiting for both players to open their match conn.
+// A confirmed LIVE pairing waiting for both players to open their match conn.
 struct Pairing {
     MatchFormat fmt;
     std::string tokenP, tokenE, userP, userE;
     CharacterBuild buildP, buildE;
     Connection connP, connE;
     bool haveP = false, haveE = false, started = false;
+};
+// A CORRESPONDENCE game: setup + seat map, played async over the server Mailbox.
+struct CorrGame {
+    MatchFormat fmt;
+    unsigned seed = 0;
+    std::string userP, userE;
+    CharacterBuild buildP, buildE;
 };
 
 struct LobbyState {
@@ -112,9 +135,13 @@ struct LobbyState {
     std::vector<Seek> seeks;
     std::vector<Challenge> challenges;
     std::unordered_map<std::string, std::shared_ptr<Pairing>> byToken; // both tokens → pairing
+    std::unordered_map<std::string, CorrGame> corrGames;               // game id → correspondence
     std::unordered_map<std::string, std::vector<json::Value>> events;  // user → async events
+    Mailbox mailbox;                        // correspondence move logs (per game id)
+    std::unique_ptr<Arbiter> arbiter;       // rated-correspondence ranking (null on casual servers)
 
     std::string mintToken() { return "tk" + std::to_string(nextId++) + "-" + std::to_string(rng()); }
+    std::string mintGameId() { return "cg" + std::to_string(nextId++) + "-" + std::to_string(rng()); }
 };
 
 MatchConfig makeMatchConfig(const LobbyConfig& cfg, const MatchFormat& fmt) {
@@ -130,7 +157,6 @@ MatchConfig makeMatchConfig(const LobbyConfig& cfg, const MatchFormat& fmt) {
 // Reject a pairing whose format we can't honour. Empty string = ok.
 std::string pairingError(const LobbyConfig& cfg, const MatchFormat& fmt, const CharacterBuild& a,
                          const CharacterBuild& b, bool aGuest, bool bGuest) {
-    if (!fmt.live()) return "unlimited (correspondence) play is not available yet";
     if (fmt.rated && (!cfg.accounts || aGuest || bGuest))
         return "rated play needs both players logged in";
     const Ruleset& rs = fmt.rated ? cfg.rankedRules : cfg.casualRules;
@@ -141,24 +167,37 @@ std::string pairingError(const LobbyConfig& cfg, const MatchFormat& fmt, const C
     return "";
 }
 
-// Create a pairing (initiator = Player, acceptor = Enemy), file the tokens, and
-// enqueue the async `paired` event for the initiator. Returns the acceptor's reply.
-// Caller holds st.mu.
+// Create a pairing (initiator = Player, acceptor = Enemy), enqueue the async
+// `paired` event for the initiator, and return the acceptor's reply. A live format
+// files two match tokens; an Unlimited format registers a correspondence game. The
+// initiator learns of it via poll(). Caller holds st.mu.
 std::string pairUp(LobbyState& st, const MatchFormat& fmt, const std::string& initUser,
                    const CharacterBuild& initBuild, const std::string& accUser,
                    const CharacterBuild& accBuild) {
-    auto p = std::make_shared<Pairing>();
-    p->fmt = fmt;
-    p->tokenP = st.mintToken();
-    p->tokenE = st.mintToken();
-    p->userP = initUser;
-    p->userE = accUser;
-    p->buildP = initBuild;
-    p->buildE = accBuild;
-    st.byToken[p->tokenP] = p;
-    st.byToken[p->tokenE] = p;
-    st.events[initUser].push_back(pairedEvent(p->tokenP, Faction::Player, fmt.rated));
-    return pairedMsg(p->tokenE, Faction::Enemy, fmt.rated);
+    if (fmt.live()) {
+        auto p = std::make_shared<Pairing>();
+        p->fmt = fmt;
+        p->tokenP = st.mintToken();
+        p->tokenE = st.mintToken();
+        p->userP = initUser;
+        p->userE = accUser;
+        p->buildP = initBuild;
+        p->buildE = accBuild;
+        st.byToken[p->tokenP] = p;
+        st.byToken[p->tokenE] = p;
+        st.events[initUser].push_back(
+            asEvent(livePairedObj(p->tokenP, Faction::Player, fmt.rated)));
+        return asReply(livePairedObj(p->tokenE, Faction::Enemy, fmt.rated));
+    }
+
+    // Correspondence: mint a game + seed and hand both sides the full setup. A
+    // non-zero seed keeps both mirrors' arenas identical (see runAdmittedMatch).
+    const std::string game = st.mintGameId();
+    const unsigned seed = static_cast<unsigned>(st.rng() % 1000000000u) + 1u;
+    st.corrGames[game] = {fmt, seed, initUser, accUser, initBuild, accBuild};
+    st.events[initUser].push_back(
+        asEvent(corrPairedObj(game, seed, Faction::Player, fmt.rated, initBuild, accBuild)));
+    return asReply(corrPairedObj(game, seed, Faction::Enemy, fmt.rated, initBuild, accBuild));
 }
 
 // Drop a departed user's open seek + challenges + queued events.
@@ -184,7 +223,6 @@ void handleRequest(const proto::Msg& m, Connection& conn, const std::string& use
         const std::optional<CharacterBuild> b = deserializeBuild(m.field("build"));
         if (!b) { conn.send(err("malformed build")); return; }
         if (fmt.rated && guest) { conn.send(err("rated play needs login")); return; }
-        if (!fmt.live()) { conn.send(err("unlimited (correspondence) not available yet")); return; }
         const Ruleset& rs = fmt.rated ? cfg.rankedRules : cfg.casualRules;
         if (!validateBuild(*b, cfg.catalog, rs.economy, rs.bannedSpells).ok) {
             conn.send(err("build illegal for this format"));
@@ -247,7 +285,6 @@ void handleRequest(const proto::Msg& m, Connection& conn, const std::string& use
         const std::optional<CharacterBuild> b = deserializeBuild(m.field("build"));
         if (to.empty() || !b) { conn.send(err("bad challenge")); return; }
         if (fmt.rated && guest) { conn.send(err("rated play needs login")); return; }
-        if (!fmt.live()) { conn.send(err("unlimited (correspondence) not available yet")); return; }
         const Ruleset& rs = fmt.rated ? cfg.rankedRules : cfg.casualRules;
         if (!validateBuild(*b, cfg.catalog, rs.economy, rs.bannedSpells).ok) {
             conn.send(err("build illegal for this format"));
@@ -317,6 +354,68 @@ void handleRequest(const proto::Msg& m, Connection& conn, const std::string& use
         json::Value reply = json::Value::makeObject();
         reply.set("type", "events");
         reply.set("list", std::move(list));
+        conn.send(json::dump(reply, false));
+        return;
+    }
+
+    // --- correspondence: move relay + scoresheet submission -----------------
+    if (t == "corrPost") {
+        const std::string game = m.field("game");
+        std::size_t len = 0;
+        {
+            std::lock_guard<std::mutex> lk(st.mu);
+            if (!st.corrGames.count(game)) { conn.send(err("no such correspondence game")); return; }
+        }
+        len = st.mailbox.post(game, user, m.field("msg")); // Mailbox is itself thread-safe
+        json::Value reply = json::Value::makeObject();
+        reply.set("type", "posted");
+        reply.set("len", static_cast<int>(len));
+        conn.send(json::dump(reply, false));
+        return;
+    }
+    if (t == "corrPoll") {
+        const std::string game = m.field("game");
+        const std::size_t from = static_cast<std::size_t>(m.intField("from"));
+        const std::vector<MailEntry> entries = st.mailbox.poll(game, from);
+        json::Value list = json::Value::makeArray();
+        for (const MailEntry& e : entries) {
+            json::Value o = json::Value::makeObject();
+            o.set("sender", e.sender);
+            o.set("msg", e.msg);
+            list.push_back(std::move(o));
+        }
+        json::Value reply = json::Value::makeObject();
+        reply.set("type", "corrlog");
+        reply.set("list", std::move(list));
+        reply.set("next", static_cast<int>(from + entries.size()));
+        conn.send(json::dump(reply, false));
+        return;
+    }
+    if (t == "submit") {
+        const std::string game = m.field("game");
+        const std::optional<Faction> seat = proto::factionParse(m.field("seat"));
+        const std::string notation = m.field("notation");
+        std::string opponent;
+        bool rated = false;
+        {
+            std::lock_guard<std::mutex> lk(st.mu);
+            auto it = st.corrGames.find(game);
+            if (it == st.corrGames.end() || !seat) { conn.send(err("no such correspondence game")); return; }
+            rated = it->second.fmt.rated;
+            opponent = (*seat == Faction::Player) ? it->second.userE : it->second.userP;
+        }
+        json::Value reply = json::Value::makeObject();
+        reply.set("type", "submitted");
+        if (!rated || !st.arbiter) {
+            reply.set("status", "casual");
+        } else {
+            const Arbiter::Result r = st.arbiter->submit({user, opponent, *seat, notation});
+            reply.set("status", r.status == Arbiter::Status::Ranked      ? "ranked"
+                                : r.status == Arbiter::Status::Pending    ? "pending"
+                                                                          : "rejected");
+            reply.set("winner", r.winner);
+            reply.set("error", r.error);
+        }
         conn.send(json::dump(reply, false));
         return;
     }
@@ -414,6 +513,10 @@ void handleConnection(Connection conn, const LobbyConfig& cfg, LobbyState& st) {
 
 void serveLobby(Listener& listener, const LobbyConfig& cfg, int maxConns, int readTimeoutSec) {
     LobbyState st;
+    // Rated correspondence games rank through an embedded arbiter pinned to the
+    // ranked ruleset (double-submit + re-simulation; CR.4). Casual servers skip it.
+    if (cfg.accounts)
+        st.arbiter = std::make_unique<Arbiter>(*cfg.accounts, cfg.rankedRules, cfg.catalog, cfg.creatures);
     std::vector<std::thread> threads;
     int accepted = 0;
     while (maxConns < 0 || accepted < maxConns) {
@@ -472,23 +575,44 @@ std::unique_ptr<LobbySession> LobbySession::connect(const std::string& host, uin
 }
 
 namespace {
-// Parse a `paired` object/message into PairedInfo.
+// Parse a `paired` object (a reply body or an async event) into PairedInfo. Handles
+// both live (token) and correspondence (game + setup) pairings.
+std::optional<PairedInfo> pairedFromObj(const json::Value& o, std::string* error) {
+    PairedInfo pi;
+    const std::optional<Faction> seat = proto::factionParse(proto::strOf(o, "seat"));
+    if (!seat) {
+        if (error) *error = "malformed pairing";
+        return std::nullopt;
+    }
+    pi.seat = *seat;
+    const json::Value* live = o.find("live");
+    pi.live = !(live && live->isBool()) || live->asBool(); // default live
+    const json::Value* r = o.find("rated");
+    pi.rated = r && r->isBool() && r->asBool();
+    if (pi.live) {
+        pi.token = proto::strOf(o, "token");
+        if (pi.token.empty()) { if (error) *error = "missing match token"; return std::nullopt; }
+    } else {
+        pi.game = proto::strOf(o, "game");
+        pi.seed = static_cast<unsigned>(proto::intOf(o, "seed"));
+        const std::optional<CharacterBuild> p = deserializeBuild(proto::strOf(o, "playerBuild"));
+        const std::optional<CharacterBuild> e = deserializeBuild(proto::strOf(o, "enemyBuild"));
+        if (pi.game.empty() || !p || !e) {
+            if (error) *error = "malformed correspondence setup";
+            return std::nullopt;
+        }
+        pi.player = *p;
+        pi.enemy = *e;
+    }
+    return pi;
+}
+// Parse a `paired`/`error` reply message.
 std::optional<PairedInfo> parsePaired(const proto::Msg& m, std::string* error) {
     if (m.type == "error") {
         if (error) *error = m.field("message");
         return std::nullopt;
     }
-    PairedInfo pi;
-    pi.token = m.field("token");
-    const std::optional<Faction> seat = proto::factionParse(m.field("seat"));
-    if (pi.token.empty() || !seat) {
-        if (error) *error = "malformed pairing reply";
-        return std::nullopt;
-    }
-    pi.seat = *seat;
-    const json::Value* r = m.body.find("rated");
-    pi.rated = r && r->isBool() && r->asBool();
-    return pi;
+    return pairedFromObj(m.body, error);
 }
 } // namespace
 
@@ -616,16 +740,64 @@ std::optional<PairedInfo> LobbySession::poll() {
     if (!list || !list->isArray()) return std::nullopt;
     for (const json::Value& e : list->asArray()) {
         if (proto::strOf(e, "kind") != "paired") continue;
-        PairedInfo pi;
-        pi.token = proto::strOf(e, "token");
-        const std::optional<Faction> seat = proto::factionParse(proto::strOf(e, "seat"));
-        if (pi.token.empty() || !seat) continue;
-        pi.seat = *seat;
-        const json::Value* r = e.find("rated");
-        pi.rated = r && r->isBool() && r->asBool();
-        return pi;
+        if (std::optional<PairedInfo> pi = pairedFromObj(e, nullptr)) return pi;
     }
     return std::nullopt;
+}
+
+std::optional<std::size_t> LobbySession::corrPost(const std::string& game, const std::string& msg) {
+    json::Value o = json::Value::makeObject();
+    o.set("type", "corrPost");
+    o.set("game", game);
+    o.set("msg", msg);
+    const std::optional<std::string> raw = rpc(json::dump(o, false));
+    if (!raw) return std::nullopt;
+    const std::optional<proto::Msg> m = proto::parse(*raw);
+    if (!m || m->type != "posted") return std::nullopt;
+    return static_cast<std::size_t>(m->intField("len"));
+}
+
+std::optional<ChannelPoll> LobbySession::corrPoll(const std::string& game, std::size_t from) {
+    json::Value o = json::Value::makeObject();
+    o.set("type", "corrPoll");
+    o.set("game", game);
+    o.set("from", static_cast<int>(from));
+    const std::optional<std::string> raw = rpc(json::dump(o, false));
+    if (!raw) return std::nullopt;
+    const std::optional<proto::Msg> m = proto::parse(*raw);
+    if (!m || m->type != "corrlog") return std::nullopt;
+    ChannelPoll cp;
+    const json::Value* list = m->body.find("list");
+    if (list && list->isArray())
+        for (const json::Value& e : list->asArray())
+            cp.entries.push_back({proto::strOf(e, "sender"), proto::strOf(e, "msg")});
+    cp.next = static_cast<std::size_t>(m->intField("next"));
+    return cp;
+}
+
+SubmitResult LobbySession::submitScore(const std::string& game, Faction seat,
+                                       const std::string& notation) {
+    SubmitResult res;
+    json::Value o = json::Value::makeObject();
+    o.set("type", "submit");
+    o.set("game", game);
+    o.set("seat", proto::factionName(seat));
+    o.set("notation", notation);
+    const std::optional<std::string> raw = rpc(json::dump(o, false));
+    if (!raw) { res.error = "link failed"; return res; }
+    const std::optional<proto::Msg> m = proto::parse(*raw);
+    if (!m || m->type != "submitted") {
+        res.error = m ? m->field("message") : "bad reply";
+        return res;
+    }
+    const std::string s = m->field("status");
+    res.status = s == "ranked"    ? SubmitResult::Status::Ranked
+                 : s == "pending" ? SubmitResult::Status::Pending
+                 : s == "casual"  ? SubmitResult::Status::Casual
+                                  : SubmitResult::Status::Rejected;
+    res.winner = m->field("winner");
+    res.error = m->field("error");
+    return res;
 }
 
 } // namespace tb::net
