@@ -56,6 +56,16 @@ struct CorrespondenceSetup {
     CharacterBuild enemy;  // seat Enemy
 };
 
+// The secret half of one of MY decoy commitments (choice + nonce). The move log
+// carries only the hashes, so a client must persist these locally (at cast time)
+// to be able to reveal at finalize() after a cold resume.
+struct DecoySecret {
+    std::string choice, nonce;
+};
+// One-line-per-secret text round-trip, for the client's local persistence file.
+[[nodiscard]] std::string serializeDecoySecrets(const std::vector<DecoySecret>& secrets);
+[[nodiscard]] std::vector<DecoySecret> parseDecoySecrets(const std::string& text);
+
 class CorrespondenceSession {
 public:
     // `channel` is this client's move transport (a RelayChannel over a direct relay,
@@ -69,6 +79,19 @@ public:
     // Swap the move transport (e.g. after a dropped session reconnects). The mirror
     // state + poll cursor are unchanged, so play resumes against the same log.
     void rebind(std::unique_ptr<MoveChannel> channel) { channel_ = std::move(channel); }
+
+    // COLD RESUME (persistence): rebuild a fresh session's mirror by replaying the
+    // whole log from index 0 — BOTH seats' intents (sync() skips my own, which were
+    // applied locally when first submitted; after a restart they weren't).
+    // `mySecrets` restores this seat's decoy choices+nonces in cast order (see
+    // DecoySecret; pass {} for games without decoys). Call once, on a session that
+    // has not yet moved or synced. False + *error if the log can't be fetched or
+    // this session isn't fresh.
+    bool resume(const std::vector<DecoySecret>& mySecrets = {}, std::string* error = nullptr);
+
+    // My commitments' secret halves so far, in cast order — persist after every
+    // local move (cheap: rewrite the small file) to survive a client restart.
+    [[nodiscard]] std::vector<DecoySecret> mySecrets() const;
 
     [[nodiscard]] const Battle& battle() const { return runner_.battle(); }
     [[nodiscard]] Faction seat() const { return mySeat_; }
@@ -84,6 +107,13 @@ public:
     // the intent is illegal, or a decoy cast is missing its choice; *error is set.
     bool submitLocal(const Intent& in, std::optional<char> decoyChoice = std::nullopt,
                      std::string* error = nullptr);
+
+    // True if submitting `in` right now would cast a decoy — i.e. submitLocal will
+    // demand a commitment choice. Lets a UI prompt for 'a'/'b' before submitting.
+    [[nodiscard]] bool wouldCastDecoy(const Intent& in) const {
+        return awaitingMe() && in.kind == Intent::Kind::Cast &&
+               isDecoyCast(runner_.battle().activeUnit(), in.spellIdx);
+    }
 
     // Pull and apply any of the opponent's posted intents. Returns true if at
     // least one was applied. Poll this on a timer for correspondence play.

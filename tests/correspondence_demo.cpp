@@ -135,6 +135,15 @@ int main() {
                                     Faction::Enemy, "bob");
 
         std::printf("Two peers play a decoy game entirely through the relay\n");
+        // The GUI-prompt seam: a decoy cast announces it needs a commitment choice
+        // BEFORE submission; a plain attack does not.
+        if (player.awaitingMe()) {
+            const std::optional<Vec2i> t = castableTile(player.battle(), kPlayer, kDecoySlot);
+            CHECK(t && player.wouldCastDecoy(net::Intent::cast(kDecoySlot, *t)),
+                  "a decoy cast reports it needs an 'a'/'b' choice");
+            CHECK(!player.wouldCastDecoy(net::Intent::cast(0, *t)),
+                  "a plain attack does not");
+        }
         Driver drv;
         int guard = 0;
         while (!(player.finished() && enemy.finished()) && guard++ < 20000) {

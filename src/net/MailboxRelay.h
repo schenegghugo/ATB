@@ -24,9 +24,17 @@ struct MailEntry {
     std::string msg;
 };
 
-// The pure store: thread-safe per-game append-only logs.
+// The pure store: thread-safe per-game append-only logs. Optionally disk-backed:
+// openJournal() replays an append-only JSONL file into memory and then appends
+// every subsequent post to it, so the logs survive a server restart.
 class Mailbox {
 public:
+    // Attach the journal at `path` (missing file = start fresh). Replays existing
+    // entries first — call once, BEFORE serving. Returns false if the file can't
+    // be opened for appending. Unparseable lines (e.g. a torn final write) are
+    // skipped, matching append-only journal semantics.
+    bool openJournal(const std::string& path);
+
     // Append `msg` from `sender` to `game`; returns the new log length.
     std::size_t post(const std::string& game, const std::string& sender, const std::string& msg);
     // Entries at indices [from, end).
@@ -36,6 +44,7 @@ public:
 private:
     mutable std::mutex mu_;
     std::unordered_map<std::string, std::vector<MailEntry>> logs_;
+    std::string journalPath_; // empty = memory-only
 };
 
 // Serve `box` over TCP: accept connections (one thread each) and answer post/poll

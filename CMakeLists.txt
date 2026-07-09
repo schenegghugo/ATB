@@ -154,6 +154,7 @@ add_library(tb_transport STATIC
     src/net/MailboxRelay.cpp
     src/net/Correspondence.cpp
     src/net/Lobby.cpp
+    src/net/Spectate.cpp
 )
 target_link_libraries(tb_transport PUBLIC tb_core)
 
@@ -193,6 +194,26 @@ target_link_libraries(tb_ready_check_demo PRIVATE tb_transport Threads::Threads)
 # Phase 4.5 slice 6.4: in-match chat relay (async, seat-tagged).
 add_executable(tb_chat_demo tests/chat_demo.cpp)
 target_link_libraries(tb_chat_demo PRIVATE tb_transport Threads::Threads)
+
+# Phase 5.2: spectate — a watcher mirrors a live match from its logged broadcasts.
+add_executable(tb_spectate_demo tests/spectate_demo.cpp)
+target_link_libraries(tb_spectate_demo PRIVATE tb_transport Threads::Threads)
+
+# Phase 4.5 slice 6.3 (completion): the true chess clock (bank + increment + flag).
+add_executable(tb_chess_clock_demo tests/chess_clock_demo.cpp)
+target_link_libraries(tb_chess_clock_demo PRIVATE tb_transport Threads::Threads)
+
+# Phase 4.6: lobby-wide + correspondence-game chat, with the safety levers.
+add_executable(tb_lobby_chat_demo tests/lobby_chat_demo.cpp)
+target_link_libraries(tb_lobby_chat_demo PRIVATE tb_transport Threads::Threads)
+
+# Persistence: corr games + Mailbox journal survive a restart; clients cold-resume.
+add_executable(tb_lobby_persist_demo tests/lobby_persist_demo.cpp)
+target_link_libraries(tb_lobby_persist_demo PRIVATE tb_transport Threads::Threads)
+
+# Quick-match queue: auto-pairing on a widening Elo band.
+add_executable(tb_queue_demo tests/queue_demo.cpp)
+target_link_libraries(tb_queue_demo PRIVATE tb_transport Threads::Threads)
 
 add_executable(tb_server tools/server_main.cpp)
 target_link_libraries(tb_server PRIVATE tb_transport)

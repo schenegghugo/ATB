@@ -7,12 +7,15 @@
 // played over the built-in Mailbox and ranked by the built-in arbiter). Loads the
 // shared content from ./data so its content hash matches the GUI's.
 //
-//   Usage: tb_lobby [port] [bind-addr] [casual-rules] [ranked-rules]
+//   Usage: tb_lobby [port] [bind-addr] [casual-rules] [ranked-rules] [persist-dir]
 //     port         listen port                (default 5556)
 //     bind-addr    interface to bind          (default 127.0.0.1; 0.0.0.0 = all
 //                  interfaces — only behind a firewall/VPN; or a specific IP)
 //     casual-rules ruleset for casual play    (default data/rules.json)
 //     ranked-rules ruleset for rated play     (default data/rules.ranked.json)
+//     persist-dir  correspondence state dir   (default lobby-state; "-" = in-memory
+//                  only). Open correspondence games + their move logs survive a
+//                  restart; clients cold-resume them from the lobby.
 //
 // Run from the repo root so ./data resolves. Ctrl-C (or a service stop) to quit.
 //
@@ -59,6 +62,7 @@ int main(int argc, char** argv) {
     const std::string bindAddr = argc > 2 ? argv[2] : "127.0.0.1";
     const std::string casualFile = argc > 3 ? argv[3] : "data/rules.json";
     const std::string rankedFile = argc > 4 ? argv[4] : "data/rules.ranked.json";
+    const std::string persistDir = argc > 5 ? argv[5] : "lobby-state";
 
     LobbyConfig cfg;
     cfg.catalog = makeDefaultCatalog();
@@ -93,6 +97,10 @@ int main(int argc, char** argv) {
     // the clear on the wire — put this behind TLS/VPN before exposing it publicly.
     AccountStore accounts("accounts.json");
     cfg.accounts = &accounts;
+    if (persistDir != "-") {
+        cfg.persistDir = persistDir;
+        std::printf("tb_lobby: correspondence state persists in %s/\n", persistDir.c_str());
+    }
 
     std::optional<Listener> listener = Listener::bind(port, bindAddr);
     if (!listener) {

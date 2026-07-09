@@ -61,6 +61,20 @@ public:
     // (local play, or an untimed / correspondence game). The HUD shows a countdown.
     [[nodiscard]] virtual int clockSeconds() const { return 0; }
 
+    // True chess clock (6.3): the match runs accumulating per-seat banks. When true,
+    // bankSeconds() reports each seat's authoritative remaining time and the HUD
+    // shows the two banks instead of a resetting per-move countdown.
+    [[nodiscard]] virtual bool chessClock() const { return false; }
+    [[nodiscard]] virtual float bankSeconds(Faction) const { return 0.0f; }
+
+    // Correspondence decoy casts (CR.6): true if submitting `in` right now would
+    // cast a decoy and so needs the player's hidden 'a'/'b' commitment choice —
+    // the UI prompts, then submits through submitWithChoice instead of submit().
+    [[nodiscard]] virtual bool needsDecoyChoice(const net::Intent&) const { return false; }
+    virtual std::optional<std::string> submitWithChoice(const net::Intent&, char) {
+        return std::nullopt;
+    }
+
     // In-match chat: whether this source has a chat channel (a live networked match),
     // the running transcript, and a send. Default off (local / correspondence v1).
     [[nodiscard]] virtual bool chatEnabled() const { return false; }

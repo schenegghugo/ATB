@@ -3,6 +3,7 @@
 #include "Ui.h"
 #include "raylib.h"
 
+#include <algorithm>
 #include <string>
 
 namespace tb::render {
@@ -49,13 +50,15 @@ std::string formatTag(const net::MatchFormat& f) {
 }
 
 // A labeled single-line text field (click to focus, edits when focused).
-void field(Rectangle box, const char* label, std::string& value, bool& focus, Vector2 m) {
-    DrawText(label, static_cast<int>(box.x), static_cast<int>(box.y) - 18, 14, kMuted);
+void field(Rectangle box, const char* label, std::string& value, bool& focus, Vector2 m,
+           std::size_t maxLen = 24) {
+    if (label && *label)
+        DrawText(label, static_cast<int>(box.x), static_cast<int>(box.y) - 18, 14, kMuted);
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) focus = hovered(box, m);
     if (focus) {
         int key = GetCharPressed();
         while (key > 0) {
-            if (key >= 32 && key < 127 && value.size() < 24) value.push_back(static_cast<char>(key));
+            if (key >= 32 && key < 127 && value.size() < maxLen) value.push_back(static_cast<char>(key));
             key = GetCharPressed();
         }
         if (IsKeyPressed(KEY_BACKSPACE) && !value.empty()) value.pop_back();
@@ -71,6 +74,13 @@ void field(Rectangle box, const char* label, std::string& value, bool& focus, Ve
 void LobbyScreen::refresh(net::LobbySession& session) {
     if (auto s = session.listSeeks()) seeks_ = std::move(*s);
     if (auto c = session.listChallenges()) challenges_ = std::move(*c);
+    if (auto g = session.listGames()) games_ = std::move(*g);
+    if (auto mg = session.myCorrGames()) myGames_ = std::move(*mg);
+    if (auto cp = session.chatPoll(chatCursor_)) { // lobby chat (4.6)
+        for (net::MailEntry& e : cp->entries) chat_.push_back(std::move(e));
+        chatCursor_ = cp->next;
+        if (chat_.size() > 100) chat_.erase(chat_.begin(), chat_.end() - 100);
+    }
 }
 
 LobbyScreen::Result LobbyScreen::runFrame(int screenW, int screenH, net::LobbySession& session,
@@ -84,8 +94,9 @@ LobbyScreen::Result LobbyScreen::runFrame(int screenW, int screenH, net::LobbySe
     if (refreshTimer_ >= 0.8f) {
         refreshTimer_ = 0.0f;
         const net::LobbyEvent ev = session.poll();
-        if (ev.kind == net::LobbyEvent::Kind::ReadyCheck) { // someone accepted mine
+        if (ev.kind == net::LobbyEvent::Kind::ReadyCheck) { // accepted seek or queue match
             rc_ = ev.readyCheck;
+            queued_ = false; // a queue match consumed the slot
             return Result::ReadyCheck;
         }
         refresh(session);
@@ -134,6 +145,24 @@ LobbyScreen::Result LobbyScreen::runFrame(int screenW, int screenH, net::LobbySe
 
     // --- Left: open seeks ---------------------------------------------------
     DrawText("OPEN SEEKS", static_cast<int>(lx), static_cast<int>(y), 16, kText);
+    // Quick match: join the auto-pairing queue (widening Elo band) — the ready
+    // check arrives via poll, exactly like an accepted seek.
+    if (button({lx + colW - 310, y - 4, 150, 28}, queued_ ? "Leave queue" : "Quick match", m,
+               queued_ ? kPanelHot : kAccent)) {
+        if (queued_) {
+            session.queueLeave();
+            queued_ = false;
+            status_ = "Left the queue.";
+        } else {
+            std::string err;
+            if (session.queueJoin(fmt, &err)) {
+                queued_ = true;
+                status_ = "In queue — pairing widens over time…";
+            } else {
+                status_ = "Queue rejected: " + err;
+            }
+        }
+    }
     if (button({lx + colW - 150, y - 4, 150, 28}, "Create seek", m, kAccent)) {
         std::string err;
         if (session.seek(fmt, &err)) status_ = "Seek posted — waiting for an opponent…";
@@ -160,7 +189,31 @@ LobbyScreen::Result LobbyScreen::runFrame(int screenW, int screenH, net::LobbySe
         }
         ry += 46;
     }
-    if (seeks_.empty()) DrawText("(none yet)", static_cast<int>(lx) + 4, static_cast<int>(y) + 40, 14, kMuted);
+    if (seeks_.empty()) {
+        DrawText("(none yet)", static_cast<int>(lx) + 4, static_cast<int>(y) + 40, 14, kMuted);
+        ry += 46;
+    }
+
+    // --- Left, below the seeks: live games (spectate, Phase 5.2) ------------
+    float wy = ry + 24;
+    DrawText("LIVE GAMES", static_cast<int>(lx), static_cast<int>(wy), 16, kText);
+    wy += 28;
+    for (const net::LiveGameInfo& g : games_) {
+        Rectangle row{lx, wy, colW, 40};
+        DrawRectangleRec(row, kPanel);
+        DrawRectangleLinesEx(row, 1.0f, kLine);
+        DrawText(TextFormat("%s  vs  %s", g.userP.c_str(), g.userE.c_str()),
+                 static_cast<int>(lx) + 10, static_cast<int>(wy) + 6, 15, kText);
+        DrawText(g.rated ? "rated" : "casual", static_cast<int>(lx) + 10,
+                 static_cast<int>(wy) + 23, 12, kMuted);
+        if (button({lx + colW - 92, wy + 6, 84, 28}, "Watch", m, kPanelHot)) {
+            watch_ = g;
+            return Result::Watch;
+        }
+        wy += 46;
+    }
+    if (games_.empty())
+        DrawText("(none in progress)", static_cast<int>(lx) + 4, static_cast<int>(wy), 14, kMuted);
 
     // --- Right: challenge form + incoming challenges ------------------------
     DrawText("CHALLENGE A PLAYER", static_cast<int>(rx), static_cast<int>(y), 16, kText);
@@ -198,8 +251,70 @@ LobbyScreen::Result LobbyScreen::runFrame(int screenW, int screenH, net::LobbySe
         }
         cy += 46;
     }
-    if (challenges_.empty())
+    if (challenges_.empty()) {
         DrawText("(none)", static_cast<int>(rx) + 4, static_cast<int>(cy), 14, kMuted);
+        cy += 24;
+    }
+
+    // --- Right, below the challenges: my correspondence games (cold resume) --
+    cy += 18;
+    DrawText("MY CORRESPONDENCE GAMES", static_cast<int>(rx), static_cast<int>(cy), 14, kMuted);
+    cy += 22;
+    for (const net::PairedInfo& g : myGames_) {
+        Rectangle row{rx, cy, colW, 40};
+        DrawRectangleRec(row, kPanel);
+        DrawRectangleLinesEx(row, 1.0f, kLine);
+        DrawText(TextFormat("vs  %s", g.opponent.empty() ? "?" : g.opponent.c_str()),
+                 static_cast<int>(rx) + 10, static_cast<int>(cy) + 6, 15, kText);
+        DrawText(g.rated ? "rated - unlimited" : "casual - unlimited", static_cast<int>(rx) + 10,
+                 static_cast<int>(cy) + 23, 12, kMuted);
+        if (button({rx + colW - 92, cy + 6, 84, 28}, "Resume", m, kAccent)) {
+            resume_ = g;
+            return Result::Resume;
+        }
+        cy += 46;
+    }
+    if (myGames_.empty())
+        DrawText("(none open)", static_cast<int>(rx) + 4, static_cast<int>(cy), 14, kMuted);
+
+    // --- Bottom: lobby chat (4.6) --------------------------------------------
+    // A rolling transcript + input strip above the status line. Enter sends; the
+    // server's safety levers (length / rate / mute) reject with a reason.
+    {
+        const float chatH = 150.0f;
+        const float cy0 = static_cast<float>(screenH) - 44 - chatH;
+        Rectangle panel{margin, cy0, W - 2 * margin, chatH - 40};
+        DrawRectangleRec(panel, kPanel);
+        DrawRectangleLinesEx(panel, 1.0f, kLine);
+        DrawText("LOBBY CHAT", static_cast<int>(margin), static_cast<int>(cy0) - 18, 14, kMuted);
+        const int lines = static_cast<int>((panel.height - 12) / 18);
+        const int first = std::max(0, static_cast<int>(chat_.size()) - lines);
+        float ty = cy0 + 6;
+        for (std::size_t i = static_cast<std::size_t>(first); i < chat_.size(); ++i) {
+            const bool mine = chat_[i].sender == session.account().user;
+            DrawText(TextFormat("%s: %s", chat_[i].sender.c_str(), chat_[i].msg.c_str()),
+                     static_cast<int>(margin) + 8, static_cast<int>(ty), 14,
+                     mine ? kAccent : kText);
+            ty += 18;
+        }
+        if (chat_.empty())
+            DrawText("(say hello)", static_cast<int>(margin) + 8, static_cast<int>(ty), 14, kMuted);
+
+        field({margin, cy0 + panel.height + 6, W - 2 * margin - 90, 30}, "", chatDraft_,
+              chatFocus_, m, /*maxLen=*/200);
+        const bool send =
+            button({W - margin - 84, cy0 + panel.height + 6, 84, 30}, "Send", m, kAccent) ||
+            (chatFocus_ && IsKeyPressed(KEY_ENTER));
+        if (send && !chatDraft_.empty()) {
+            std::string err;
+            if (session.chatSend(chatDraft_, &err)) {
+                chatDraft_.clear();
+                refreshTimer_ = 1.0f; // pick my line up on the next frame
+            } else {
+                status_ = "Chat rejected: " + err;
+            }
+        }
+    }
 
     if (!status_.empty())
         DrawText(status_.c_str(), static_cast<int>(margin), screenH - 36, 15, kAccent);

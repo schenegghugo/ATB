@@ -18,6 +18,7 @@
 #include "core/Spells.h" // SpellCatalog
 #include "data/Net.h"    // Intent
 
+#include <chrono>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -59,6 +60,11 @@ public:
     // The per-move idle window (seconds) the server enforces; 0 = no clock. Sent in
     // the welcome so the client can show a countdown.
     [[nodiscard]] int clockSec() const { return clockSec_; }
+    // True chess clock (6.3): the match runs accumulating banks (main + increment).
+    [[nodiscard]] bool chessClock() const { return mainSec_ > 0; }
+    // A seat's remaining bank right now: the last authoritative value from the
+    // server, ticked down locally while that seat is the one deciding.
+    [[nodiscard]] float bankSeconds(Faction f) const;
     // The local seat holds the active unit (its input is live).
     [[nodiscard]] bool awaitingMe() const { return !finished() && runner_.awaitingSeat() == seat_; }
 
@@ -92,6 +98,11 @@ private:
     bool ended_ = false;
     std::optional<Faction> forfeitWinner_;
     int clockSec_ = 0;
+    // Chess clock (0 = not chess): banks from the last server message + when it
+    // landed, so bankSeconds() can tick the deciding seat between messages.
+    int mainSec_ = 0, incSec_ = 0;
+    float bankP_ = 0.0f, bankE_ = 0.0f;
+    std::chrono::steady_clock::time_point bankStamp_;
     std::vector<ChatLine> chat_;
 };
 

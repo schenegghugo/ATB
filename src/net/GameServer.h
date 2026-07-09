@@ -14,6 +14,7 @@
 #include "core/Ruleset.h"
 #include "core/Spells.h" // SpellCatalog
 
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -43,6 +44,19 @@ struct ServeResult {
     std::string error;         // set when ok == false
 };
 
+// The server-enforced clock for a live match (6.3). Exactly one mode applies:
+//   - perMoveSec > 0 — a fixed idle window per decision (the original per-move cap);
+//   - mainSec > 0    — a TRUE CHESS CLOCK: each seat starts with a `mainSec` bank
+//     that ticks down only on its own decisions, gains `incSec` when its turn
+//     passes to the opponent, and forfeits when the bank hits zero. Both banks ride
+//     on every `applied` broadcast so the mirrors show authoritative time.
+// Neither set = no clock (a very long safety window still guards a wedged client).
+struct MatchClock {
+    int perMoveSec = 0;
+    int mainSec = 0, incSec = 0;
+    [[nodiscard]] bool chess() const { return mainSec > 0; }
+};
+
 // Accept two clients on `listener`, handshake + admit each (content hash, then
 // validateBuild), seat them (first = Player, second = Enemy), build the Battle,
 // and run the authoritative loop over the socket until the match finishes.
@@ -52,12 +66,18 @@ ServeResult serveOneMatch(Listener& listener, const MatchConfig& cfg, int readTi
 // Run one already-admitted match to completion over two connections (seats by
 // argument order: c0 = Player, c1 = Enemy). Sends each side the `welcome` setup,
 // then the authoritative intent → apply → broadcast loop until the match finishes.
-// The connections' read timeouts act as the per-move clock (a wedged client aborts
-// cleanly). Exposed so the lobby (Phase 4.5) can drive matches it has already paired
-// + admitted, reusing the exact same authoritative path. Does NOT record Elo — the
-// caller does that on the result (see serveMatches).
+// `clock` is server-enforced (per-move window or a chess bank — see MatchClock);
+// running it out forfeits the seat. Exposed so the lobby (Phase 4.5) can drive
+// matches it has already paired + admitted, reusing the exact same authoritative
+// path. Does NOT record Elo — the caller does that on the result (see serveMatches).
+// `spectate`, if set, receives the match's broadcast stream — the (Player-seat)
+// `welcome`, each `applied` intent, and the final `end` — so the caller can publish
+// it to watchers (a spectator is just a mirror fed this stream). Called from the
+// match's own thread.
 ServeResult runAdmittedMatch(Connection c0, Connection c1, const CharacterBuild& b0,
-                             const CharacterBuild& b1, const MatchConfig& cfg, int clockSec = 0);
+                             const CharacterBuild& b1, const MatchConfig& cfg,
+                             const MatchClock& clock = {},
+                             const std::function<void(const std::string&)>& spectate = {});
 
 // Persistent matchmaking server (Phase 4.5): accept players, admit each, and pair
 // them FIFO — every two admitted players start a match that runs in its own

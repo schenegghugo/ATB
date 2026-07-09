@@ -7,11 +7,14 @@ Design rationale lives in [`ARCHITECTURE.md`](ARCHITECTURE.md); this file is the
 **Where we are:** the single-player game, content pipeline (data-driven catalog /
 creatures / rulesets, all hash-pinned), pluggable AI, sprite packs, and the full
 **networked PvP + Online Home** are built and playtest-confirmed — lobby daemon,
-seek board + directed challenges, per-match ready check, live *and* correspondence
-matches, idle-forfeit clock, in-match chat, and the "verify-don't-host"
+seek board + directed challenges + quick-match **queue**, per-match ready check,
+live *and* correspondence matches with a true **chess clock**, **spectate**,
+lobby / in-match / correspondence **chat**, correspondence **persistence +
+cold-resume**, async connect + waiting screen, and the "verify-don't-host"
 correspondence-ranked arc (determinism → notation/verifier → relay → arbiter →
-ranked ruleset → decoy hidden-info). What remains is hardening (TLS, persistence,
-SQLite), reach (Web/WASM), and depth (self-teaching AI) — see below.
+ranked ruleset → decoy hidden-info, now with a GUI commit prompt). What remains
+is hardening (TLS, SQLite), reach (Web/WASM), and depth (self-teaching AI) —
+see below.
 
 ---
 
@@ -21,26 +24,27 @@ SQLite), reach (Web/WASM), and depth (self-teaching AI) — see below.
   publicly deployable:
   - ☐ **TLS / transport encryption** — *the* gate before any public, non-VPN launch
     (passwords cross the wire in the clear today; fine behind LAN/VPN).
-  - ☐ **Persistence** — lobby store + `Mailbox` to disk (survive a server restart) +
-    correspondence **cold-resume** (replay the log; client-side secret persistence
-    for decoy games).
+  - ☑ **Persistence** — corr-game registry + `Mailbox` journal to disk
+    (`LobbyConfig.persistDir`, on by default in `tb_lobby`) + **cold-resume**
+    (`myCorrGames` + `CorrespondenceSession::resume`, decoy secrets persisted
+    client-side; GUI "My correspondence games — Resume"; `tb_lobby_persist_demo`).
   - ☐ **SQLite** behind the account/store seam + match-history rows.
-  - ☐ **Chat**: lobby (pre-match) + correspondence-game chat (4.6) — in-match *live*
-    chat is done.
-  - ☐ **True chess clock** — accumulating time bank (today "chess" = a per-move cap).
-  - ☐ Async connect + "waiting for opponent" screen; widening-band **queue**; GUI
-    **decoy-choice prompt**.
+  - ☑ Widening-band **queue** — quick-match auto-pairing (`queueJoin`, band =
+    start + rate×wait; GUI Quick-match; `tb_queue_demo`).
+  - ☑ GUI **decoy-choice prompt** — modal 'stay original / swap to twin' commit at
+    cast (`wouldCastDecoy` / `needsDecoyChoice` seam).
+  - ☑ **Async connect + "waiting for opponent" screen** — lobby login and match
+    join run off-thread; a cancellable Waiting state covers the parked join.
 - **Parallel / depth (off the critical path)**
   - ☐ **Web/WASM build** (W.1–W.5) — browser-playable on itch.io.
   - ☐ **Self-teaching AI** (3.5.1–3.5.7) — NNUE-style learned evaluator.
   - ◐ **CR.6 deeper hidden-info** — commit-reveal movement / ZK (slices 1–3 done).
-  - ☐ **Spectate** (5.2) — subscribe to the snapshot stream.
 - **Polish / content**
   - ◐ **0.6** — file 2–3 good-first-issues (CONTRIBUTING.md done).
   - ☐ **Balance backlog** (5.3) — fireball radius; teach AI to cast
     Portal/Blind/Surge/Flux (unused); synergy tuning via `tb_balance`.
-  - ☐ Initiative `±` in the build-editor GUI; sprite-pack ground-effect/status art;
-    a GUI replay viewer.
+  - ☐ Sprite-pack ground-effect/status art. (Initiative `±` and the GUI replay
+    viewer shipped with BE.2 / 5.1.)
 
 ---
 
@@ -68,7 +72,8 @@ SQLite), reach (Web/WASM), and depth (self-teaching AI) — see below.
 ## Spells & economy (alongside Phase 1)
 
 - ☑ **S.1** Rewind spell (snapshot → restore at 2nd turn; no-revive).
-- ☑ **S.2** Initiative as a build buy (`bonusInitiative`); ☐ expose `±` in editor GUI.
+- ☑ **S.2** Initiative as a build buy (`bonusInitiative`); `±` exposed in the editor
+  (the BE.2 `+INIT` stepper).
 
 ## Roster entities — bombs & summons
 
@@ -158,8 +163,11 @@ SQLite), reach (Web/WASM), and depth (self-teaching AI) — see below.
 - ☑ **Slice 5c** GUI lobby + correspondence play (`render/LobbyScreen`,
   `CorrespondenceMatchSource`).
 - ☑ **Slice 5d** `tb_lobby` daemon (self-hosted Online Home).
-- ☐ **Remaining:** async connect + "waiting" screen; **SQLite** + match history;
-  widening-band **queue**; **TLS**.
+- ☑ Correspondence **persistence + cold-resume** (persistDir registry + Mailbox
+  journal; `myCorrGames` / `resume`; `tb_lobby_persist_demo`).
+- ☑ Widening-band **queue** (quick match; `tb_queue_demo`).
+- ☑ Async connect + "waiting for opponent" screen.
+- ☐ **Remaining:** **SQLite** + match history; **TLS**.
 
 ### Phase 4.5 Slice 6 — Online UX pass (playtest feedback)
 
@@ -167,19 +175,21 @@ SQLite), reach (Web/WASM), and depth (self-teaching AI) — see below.
   in lobby.
 - ☑ **6.2** Per-match **ready check** (all games): build chosen at ready → READY,
   else cancel; server-validated; `tb_ready_check_demo` + `render/ReadyCheckScreen`.
-- ◐ **6.3** Idle-clock **forfeit** ☑ (per-move / chess = `mainSec/5`;
-  `tb_lobby_forfeit_demo`) + **visible two-clock HUD** ☑; ☐ true chess time bank.
-- ◐ **6.4** In-match **chat** ☑ (async relay, split log column, `tb_chat_demo`); ☐
-  lobby + correspondence chat.
+- ☑ **6.3** Idle-clock **forfeit** (per-move; `tb_lobby_forfeit_demo`) + **visible
+  two-clock HUD** + **true chess time bank** — server-enforced main+increment
+  (`MatchClock`, banks on every `applied`; `tb_chess_clock_demo`).
+- ☑ **6.4** In-match **chat** (async relay, split log column, `tb_chat_demo`);
+  lobby + correspondence chat landed as 4.6.
 - ☑ **6.5** BUG fix — online moves now register (pump every frame).
 - ☑ **6.6** `tb_lobby` warns when run without `./data`.
 - ☑ **6.7** End-of-match VICTORY/DEFEAT/DRAW screen → return to lobby; editor
   ‹Menu returns to where it was opened.
 
-### Phase 4.6 — Chat ☐
+### Phase 4.6 — Chat ☑
 
-- ◐ In-match live chat done (6.4); ☐ **lobby chat** + correspondence-game chat +
-  safety levers (rate-limit / mute / length cap).
+- ☑ In-match live chat (6.4); **lobby chat** (capped rolling log + GUI panel) +
+  correspondence-game chat (per-game side log, participants only — the move log
+  stays pure) + safety levers (rate-limit / mute / length cap; `tb_lobby_chat_demo`).
 
 ## Correspondence ranked — "verify, don't host"
 
@@ -203,8 +213,9 @@ SQLite), reach (Web/WASM), and depth (self-teaching AI) — see below.
 
 - ☑ **5.1** Persist `seed + intents`, re-simulate = replay/scoresheet/shareable
   (done as CR.2); ☐ GUI replay viewer.
-- ☐ **5.2** Spectate — subscribe to the snapshot stream (a spectator is another
-  mirror).
+- ☑ **5.2** Spectate — the lobby logs each live match's broadcast stream; a watcher
+  replays it as another mirror (`net/Spectate`, `listGames`/`watch`, GUI "Live
+  games" list; `tb_spectate_demo`).
 - ☐ **5.3** Balance backlog — fireball radius, portal/Blind/Surge/Flux AI, synergy
   tuning via `tb_balance`.
 

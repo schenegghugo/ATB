@@ -47,6 +47,7 @@
 #include "render/ReplayMatchSource.h"
 #include "net/Replay.h"
 #include "render/SettingsScreen.h"
+#include "render/SpectateMatchSource.h"
 #include "render/SpritePack.h"
 #include "render/Ui.h"
 
@@ -57,15 +58,34 @@
 #include <cstdlib>
 #include <fstream>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
+#include <thread>
 #include <vector>
 
 using namespace tb;
 
 namespace {
 
-enum class AppState { Menu, Editor, Connect, Lobby, ReadyCheck, Battle, Settings };
+enum class AppState { Menu, Editor, Connect, Lobby, ReadyCheck, Waiting, Battle, Settings };
+
+// A blocking network call moved off the render thread (async connect / join). The
+// worker fills the result under `mu` and flips `done`; the UI polls each frame.
+// Cancel = drop the owning shared_ptr — the detached worker keeps its own ref and
+// its late result is simply discarded.
+struct PendingConnect {
+    std::mutex mu;
+    bool done = false;
+    std::unique_ptr<tb::net::LobbySession> session;
+    std::string error;
+};
+struct PendingJoin {
+    std::mutex mu;
+    bool done = false;
+    std::unique_ptr<tb::net::MirrorSession> mirror;
+    std::string error;
+};
 
 struct Session {
     SpellCatalog catalog = makeDefaultCatalog();
@@ -264,6 +284,10 @@ int main() {
     std::string chatDraft;         // in-match chat being typed
     bool chatFocused = false;      // chat input has keyboard focus
     render::ReplayMatchSource* replay = nullptr; // non-null when `source` is a replay
+    bool spectating = false;       // `source` watches someone else's live match (5.2)
+    std::optional<net::Intent> pendingDecoy; // a decoy cast awaiting its 'a'/'b' commitment
+    std::shared_ptr<PendingConnect> pendingConnect; // async lobby login in flight
+    std::shared_ptr<PendingJoin> pendingJoin;       // async match join in flight (Waiting)
 
     // The networking screen is seeded from the ATB_* env vars (so they still work
     // as defaults), then edited live in the GUI.
@@ -292,7 +316,9 @@ int main() {
 
     auto enterBattleWith = [&](std::unique_ptr<render::MatchSource> src) {
         source = std::move(src);
-        replay = nullptr; // cleared for live/local; the replay boot sets it after
+        replay = nullptr;    // cleared for live/local; the replay boot sets it after
+        spectating = false;  // likewise set after by the lobby Watch route
+        pendingDecoy.reset();
         animator.reset();
         selectedSpell = 0;
         logScroll = 0;
@@ -303,25 +329,52 @@ int main() {
     // Turn a lobby pairing into a playable MatchSource: a live token → a mirror
     // (RemoteMatchSource) over a fresh match conn; a correspondence handle → a
     // CorrespondenceSession over this lobby connection. A rated game mirrors under
-    // the ranked ruleset (which must be loaded locally).
-    auto routePairing = [&](const net::PairedInfo& pi) {
+    // the ranked ruleset (which must be loaded locally). `resume` = a cold resume of
+    // an existing correspondence game: replay the server's log (and my persisted
+    // decoy secrets) instead of starting fresh.
+    auto routePairing = [&](const net::PairedInfo& pi, bool resume = false) {
         onlineMatch = true; // → the end-of-match screen returns to the lobby
         const Ruleset& rs =
             (pi.rated && session.rankedRuleset) ? *session.rankedRuleset : session.ruleset;
         if (pi.live) {
-            std::string err;
-            std::unique_ptr<net::MirrorSession> ms = net::MirrorSession::joinToken(
-                lobbyHost, lobbyPort, pi.token, rs, session.catalog, session.creatures, &err);
-            if (ms) enterBattleWith(std::make_unique<render::RemoteMatchSource>(std::move(ms)));
-            else lobbyScreen.setStatus("Join failed: " + err);
+            // joinToken blocks until BOTH players' match conns arrive (the first is
+            // parked server-side) — run it off-thread and show the Waiting screen.
+            auto pj = std::make_shared<PendingJoin>();
+            std::thread([pj, host = lobbyHost, port = lobbyPort, token = pi.token, rules = rs,
+                         cat = session.catalog, cre = session.creatures] {
+                std::string err;
+                std::unique_ptr<net::MirrorSession> ms =
+                    net::MirrorSession::joinToken(host, port, token, rules, cat, cre, &err);
+                std::lock_guard<std::mutex> lk(pj->mu);
+                pj->mirror = std::move(ms);
+                pj->error = err;
+                pj->done = true;
+            }).detach();
+            pendingJoin = std::move(pj);
+            state = AppState::Waiting;
         } else {
             net::CorrespondenceSetup setup{rs, session.catalog, session.creatures, pi.seed, pi.player,
                                            pi.enemy};
             auto cs = std::make_unique<net::CorrespondenceSession>(
                 std::make_unique<net::LobbyChannel>(lobby.get()), pi.game, setup, pi.seat,
                 lobby->account().user);
+            // My decoy commitment secrets live beside the app, per game — written on
+            // every local move, read back on a cold resume.
+            const std::string secretsPath = ".atb-secrets/" + pi.game + ".txt";
+            if (resume) {
+                std::ifstream f(secretsPath);
+                const std::string text((std::istreambuf_iterator<char>(f)),
+                                       std::istreambuf_iterator<char>());
+                std::string err;
+                if (!cs->resume(net::parseDecoySecrets(text), &err)) {
+                    lobbyScreen.setStatus("Resume failed: " + err);
+                    onlineMatch = false;
+                    return;
+                }
+            }
             enterBattleWith(std::make_unique<render::CorrespondenceMatchSource>(
-                std::move(cs), lobby.get(), pi.game, pi.seat, pi.rated));
+                std::move(cs), lobby.get(), pi.game, pi.seat, pi.rated, lobby->account().user,
+                secretsPath));
         }
     };
 
@@ -394,26 +447,103 @@ int main() {
         }
 
         if (state == AppState::Connect) {
+            // An async login finished? Adopt (or report) it before drawing.
+            if (pendingConnect) {
+                std::unique_ptr<net::LobbySession> got;
+                std::string err;
+                bool done = false;
+                {
+                    std::lock_guard<std::mutex> lk(pendingConnect->mu);
+                    if (pendingConnect->done) {
+                        done = true;
+                        got = std::move(pendingConnect->session);
+                        err = pendingConnect->error;
+                    }
+                }
+                if (done) {
+                    pendingConnect.reset();
+                    if (got) {
+                        lobby = std::move(got);
+                        lobbyScreen.setStatus(session.rankedRuleset
+                                                  ? ""
+                                                  : "Rated online disabled (no ranked ruleset).");
+                        state = AppState::Lobby;
+                        continue;
+                    }
+                    connect.setStatus("Lobby connect failed: " + err);
+                }
+            }
             BeginDrawing();
             const auto r = connect.runFrame(GetScreenWidth(), GetScreenHeight());
             EndDrawing();
             if (r == render::ConnectScreen::Result::Back) {
+                pendingConnect.reset(); // abandon any in-flight attempt
                 state = AppState::Menu;
-            } else if (r == render::ConnectScreen::Result::Connect) {
-                // Connect to the lobby (the Online Home), then browse/challenge there.
+            } else if (r == render::ConnectScreen::Result::Connect && !pendingConnect) {
+                // Connect to the lobby (the Online Home) OFF-THREAD — a dead host
+                // would otherwise freeze the UI for the whole TCP timeout.
                 const render::ConnectScreen::Params& pr = connect.params();
                 parseHostPort(pr.host, lobbyHost, lobbyPort);
-                std::string err;
-                lobby = net::LobbySession::connect(lobbyHost, lobbyPort,
-                                                   net::contentHashOf(session.catalog), pr.user,
-                                                   pr.pass, &err);
-                if (lobby) {
-                    lobbyScreen.setStatus(session.rankedRuleset ? ""
-                                                                : "Rated online disabled (no ranked ruleset).");
-                    state = AppState::Lobby;
-                } else {
-                    connect.setStatus("Lobby connect failed: " + err);
+                connect.setStatus("Connecting…");
+                auto pc = std::make_shared<PendingConnect>();
+                std::thread([pc, host = lobbyHost, port = lobbyPort,
+                             hash = net::contentHashOf(session.catalog), user = pr.user,
+                             pass = pr.pass] {
+                    std::string err;
+                    std::unique_ptr<net::LobbySession> s =
+                        net::LobbySession::connect(host, port, hash, user, pass, &err);
+                    std::lock_guard<std::mutex> lk(pc->mu);
+                    pc->session = std::move(s);
+                    pc->error = err;
+                    pc->done = true;
+                }).detach();
+                pendingConnect = std::move(pc);
+            }
+            continue;
+        }
+
+        if (state == AppState::Waiting) {
+            // The opponent's match conn arrived (or the join failed)?
+            std::unique_ptr<net::MirrorSession> got;
+            std::string err;
+            bool done = false;
+            if (pendingJoin) {
+                std::lock_guard<std::mutex> lk(pendingJoin->mu);
+                if (pendingJoin->done) {
+                    done = true;
+                    got = std::move(pendingJoin->mirror);
+                    err = pendingJoin->error;
                 }
+            }
+            if (done || !pendingJoin) {
+                pendingJoin.reset();
+                if (got) {
+                    onlineMatch = true;
+                    enterBattleWith(std::make_unique<render::RemoteMatchSource>(std::move(got)));
+                } else {
+                    lobbyScreen.setStatus("Join failed: " + (err.empty() ? "abandoned" : err));
+                    state = lobby ? AppState::Lobby : AppState::Menu;
+                }
+                continue;
+            }
+            const int W = GetScreenWidth(), H = GetScreenHeight();
+            BeginDrawing();
+            ClearBackground(render::ui::kBg);
+            const char* title = "WAITING FOR OPPONENT";
+            const int tw = MeasureText(title, 34);
+            DrawText(title, (W - tw) / 2, H / 2 - 80, 34, render::ui::kText);
+            const int dots = 1 + static_cast<int>(GetTime() * 2) % 3;
+            DrawText(std::string(static_cast<std::size_t>(dots), '.').c_str(), (W + tw) / 2 + 8,
+                     H / 2 - 80, 34, render::ui::kMuted);
+            const char* sub = "Your match starts as soon as they connect.";
+            DrawText(sub, (W - MeasureText(sub, 16)) / 2, H / 2 - 34, 16, render::ui::kMuted);
+            Rectangle c{static_cast<float>(W) / 2 - 90, static_cast<float>(H) / 2 + 30, 180, 40};
+            const bool cancel = render::ui::button(c, "Cancel", GetMousePosition(), render::ui::kPanel);
+            EndDrawing();
+            if (cancel) {
+                pendingJoin.reset(); // the worker's late result is discarded
+                lobbyScreen.setStatus("Join abandoned.");
+                state = lobby ? AppState::Lobby : AppState::Menu;
             }
             continue;
         }
@@ -434,6 +564,34 @@ int main() {
             } else if (r == render::LobbyScreen::Result::ReadyCheck) {
                 readyScreen.begin(lobbyScreen.readyCheck());
                 state = AppState::ReadyCheck;
+            } else if (r == render::LobbyScreen::Result::Resume) {
+                routePairing(lobbyScreen.resumeGame(), /*resume=*/true);
+            } else if (r == render::LobbyScreen::Result::Watch) {
+                // Spectate a live game (5.2): prime a mirror from the match's logged
+                // broadcast stream (the welcome is entry 0), then keep polling it.
+                const net::LiveGameInfo g = lobbyScreen.watchGame();
+                if (g.rated && !session.rankedRuleset) {
+                    lobbyScreen.setStatus("Can't watch a rated game without the ranked ruleset.");
+                } else {
+                    const Ruleset& rs =
+                        (g.rated && session.rankedRuleset) ? *session.rankedRuleset : session.ruleset;
+                    auto mirror = std::make_unique<net::SpectatorMirror>(rs, session.catalog,
+                                                                         session.creatures);
+                    std::size_t cursor = 0;
+                    if (std::optional<net::ChannelPoll> cp = lobby->watchPoll(g.id, 0)) {
+                        for (const net::MailEntry& e : cp->entries) mirror->feed(e.msg);
+                        cursor = cp->next;
+                    }
+                    if (mirror->ready()) {
+                        onlineMatch = true;
+                        enterBattleWith(std::make_unique<render::SpectateMatchSource>(
+                            std::move(mirror), lobby.get(), g.id, cursor));
+                        spectating = true;
+                        status = "SPECTATING " + g.userP + " vs " + g.userE + " — Tab returns to the lobby.";
+                    } else {
+                        lobbyScreen.setStatus("Can't watch that game (its log is unavailable).");
+                    }
+                }
             }
             continue;
         }
@@ -476,10 +634,19 @@ int main() {
                                 replay->cursor(), replay->total());
         }
 
-        if (!replay && !chatFocused && IsKeyPressed(KEY_TAB)) { state = AppState::Editor; continue; }
+        // Spectating: read-only; Tab leaves the stream and returns to the lobby.
+        if (spectating && IsKeyPressed(KEY_TAB)) {
+            source.reset();
+            spectating = false;
+            onlineMatch = false;
+            state = lobby ? AppState::Lobby : AppState::Menu;
+            continue;
+        }
+
+        if (!replay && !spectating && !chatFocused && IsKeyPressed(KEY_TAB)) { state = AppState::Editor; continue; }
         // R starts a fresh LOCAL arena. (In a networked match the server owns the
         // arena, so this just drops you into a local rematch — Tab returns to editor.)
-        if (!replay && !chatFocused && IsKeyPressed(KEY_R)) {
+        if (!replay && !spectating && !chatFocused && IsKeyPressed(KEY_R)) {
             source = newLocalMatch();
             onlineMatch = false;
             animator.reset();
@@ -506,7 +673,9 @@ int main() {
         // Turn clock (timed networked matches): reset to the per-move window whenever
         // the active unit changes, tick down otherwise. Approximate (client-local),
         // just a visible indicator of the server-enforced idle-forfeit window.
+        // A chess-clock match instead reads the authoritative banks off the source.
         const int clockSec = source->clockSeconds();
+        const bool chessClock = source->chessClock();
         if (clockSec > 0 && !finished) {
             if (active != lastActive) { turnClock = static_cast<float>(clockSec); lastActive = active; }
             else turnClock = std::max(0.0f, turnClock - dt);
@@ -519,7 +688,7 @@ int main() {
             render::ViewState geo;
             geo.windowW = GetScreenWidth();
             geo.windowH = GetScreenHeight();
-            geo.showClock = clockSec > 0;
+            geo.showClock = clockSec > 0 || chessClock;
             geo.showChat = true;
             const render::Rect ci = render::chatInputRect(layout, source->battle().grid(), geo);
             if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
@@ -545,7 +714,7 @@ int main() {
         // block below; also read later when composing the view (hover tooltip).
         int hoveredSpell = -1;
 
-        if (playerControl && !chatFocused) {
+        if (playerControl && !chatFocused && !pendingDecoy) {
             const EntityId me = active;
             const int spellCount = static_cast<int>(source->battle().unit(me).spells.size());
             for (int k = 0; k < spellCount && k < 9; ++k)
@@ -571,14 +740,22 @@ int main() {
                 if (auto s = source->submit(net::Intent::move(hovered))) status = *s;
             }
             if (hoveredValid && IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
-                if (auto s = source->submit(net::Intent::cast(selectedSpell, hovered))) status = *s;
+                const net::Intent in = net::Intent::cast(selectedSpell, hovered);
+                // A decoy cast commits to a hidden choice up-front (CR.6) — prompt
+                // for it instead of submitting straight away.
+                if (source->needsDecoyChoice(in)) {
+                    pendingDecoy = in;
+                    status = "Decoy: commit your secret — stay the ORIGINAL or swap to the TWIN.";
+                } else if (auto s = source->submit(in)) {
+                    status = *s;
+                }
             }
             if (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER)) {
                 source->submit(net::Intent::endTurn());
             }
         }
 
-        if (finished && !replay) {
+        if (finished && !replay && !spectating) {
             // update() (pumped above) let a correspondence source finalize + submit;
             // keep its result message, else show win/loss/draw from the local seat's
             // view (a remote player may be the Enemy seat; a forfeit sets the winner).
@@ -596,13 +773,20 @@ int main() {
         view.windowW = GetScreenWidth();
         view.windowH = GetScreenHeight();
         view.logScroll = logScroll;
-        // Two-clock strip atop the log column (timed matches): my time ticks on my
-        // turn, the opponent's on theirs; the idle side shows the full window.
-        view.showClock = clockSec > 0 && !finished;
+        // Two-clock strip atop the log column (timed matches): per-move, my time
+        // ticks on my turn and the idle side shows the full window; a chess clock
+        // shows both seats' authoritative remaining banks.
+        view.showClock = (clockSec > 0 || chessClock) && !finished;
         if (view.showClock) {
             view.myTurnActive = playerControl;
-            view.myClock = playerControl ? turnClock : static_cast<float>(clockSec);
-            view.oppClock = playerControl ? static_cast<float>(clockSec) : turnClock;
+            if (chessClock) {
+                const Faction mySeat = source->localSeat();
+                view.myClock = source->bankSeconds(mySeat);
+                view.oppClock = source->bankSeconds(opposing(mySeat));
+            } else {
+                view.myClock = playerControl ? turnClock : static_cast<float>(clockSec);
+                view.oppClock = playerControl ? static_cast<float>(clockSec) : turnClock;
+            }
         }
         view.showChat = source->chatEnabled();
         if (view.showChat) {
@@ -635,14 +819,47 @@ int main() {
         BeginDrawing();
         render::drawFrame(layout, source->battle(), view, pack ? &*pack : nullptr, &animator);
 
+        // Decoy commitment prompt (correspondence, CR.6): pick the hidden member.
+        // The choice is hashed into the move — the opponent sees only the commit.
+        if (pendingDecoy) {
+            const int W = GetScreenWidth(), H = GetScreenHeight();
+            DrawRectangle(0, 0, W, H, Color{0, 0, 0, 170});
+            const char* title = "DECOY COMMITMENT";
+            const int titleW = MeasureText(title, 34);
+            DrawText(title, (W - titleW) / 2, H / 2 - 110, 34, render::ui::kAccent);
+            const char* sub = "Commit (secretly) to which member will be the real one.";
+            const int subW = MeasureText(sub, 16);
+            DrawText(sub, (W - subW) / 2, H / 2 - 62, 16, render::ui::kText);
+            const Vector2 mp = GetMousePosition();
+            Rectangle a{static_cast<float>(W) / 2 - 290, static_cast<float>(H) / 2 - 20, 280, 46};
+            Rectangle b{static_cast<float>(W) / 2 + 10, static_cast<float>(H) / 2 - 20, 280, 46};
+            Rectangle c{static_cast<float>(W) / 2 - 90, static_cast<float>(H) / 2 + 44, 180, 36};
+            std::optional<char> choice;
+            if (render::ui::button(a, "A — stay the ORIGINAL", mp, render::ui::kPanel)) choice = 'a';
+            if (render::ui::button(b, "B — swap to the TWIN", mp, render::ui::kPanel)) choice = 'b';
+            if (choice) {
+                if (auto s = source->submitWithChoice(*pendingDecoy, *choice)) status = *s;
+                else status = "Decoy committed — your choice stays hidden until the reveal.";
+                pendingDecoy.reset();
+            } else if (render::ui::button(c, "Cancel", mp, render::ui::kPanel)) {
+                pendingDecoy.reset();
+                status = "Decoy cast cancelled.";
+            }
+        }
+
         // End-of-match screen for an ONLINE game: clear result + return to the lobby
         // (a local match keeps the Tab=editor / R=rematch status instead).
         if (finished && onlineMatch) {
             const int W = GetScreenWidth(), H = GetScreenHeight();
             DrawRectangle(0, 0, W, H, Color{0, 0, 0, 190});
             const std::optional<Faction> w = source->winner();
-            const char* title = !w ? "DRAW" : (*w == source->localSeat()) ? "VICTORY" : "DEFEAT";
+            // A spectator has no seat — name the winner neutrally instead.
+            const char* title = !w                       ? "DRAW"
+                                : spectating             ? (*w == Faction::Player ? "PLAYER WINS" : "ENEMY WINS")
+                                : (*w == source->localSeat()) ? "VICTORY"
+                                                              : "DEFEAT";
             const Color tc = !w ? render::ui::kMuted
+                             : spectating ? render::ui::kAccent
                                 : (*w == source->localSeat()) ? render::ui::kGood : render::ui::kBad;
             const int titleW = MeasureText(title, 64);
             DrawText(title, (W - titleW) / 2, H / 2 - 90, 64, tc);
@@ -655,6 +872,7 @@ int main() {
         if (returnToLobby) {
             source.reset();
             onlineMatch = false;
+            spectating = false;
             state = lobby ? AppState::Lobby : AppState::Menu;
         }
     }

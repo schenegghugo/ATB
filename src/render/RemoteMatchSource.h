@@ -48,6 +48,8 @@ public:
     }
     [[nodiscard]] Faction localSeat() const override { return session_->seat(); }
     [[nodiscard]] int clockSeconds() const override { return session_->clockSec(); }
+    [[nodiscard]] bool chessClock() const override { return session_->chessClock(); }
+    [[nodiscard]] float bankSeconds(Faction f) const override { return session_->bankSeconds(f); }
 
     [[nodiscard]] bool chatEnabled() const override { return true; }
     [[nodiscard]] const std::vector<net::ChatLine>& chatLog() const override { return session_->chat(); }

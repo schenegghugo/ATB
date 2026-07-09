@@ -55,6 +55,25 @@ struct LobbyConfig {
     std::string contentHash;          // catalog pin clients must match (contentHashOf)
     AccountStore* accounts = nullptr; // required for rated play / non-guest login
     int readyCheckSec = 30;           // per-pairing ready-check window (both must READY)
+
+    // Chat safety levers (4.6), applied to lobby AND correspondence chat:
+    int chatMaxLen = 200;             // longer messages are rejected
+    float chatMinIntervalSec = 1.0f;  // per-user minimum seconds between messages
+    std::vector<std::string> chatMuted; // usernames whose sends are rejected (operator lever)
+
+    // Quick-match queue: the acceptable Elo gap between two queued players starts
+    // at queueBandStart and widens by queueBandPerSec for every second the
+    // longer-waiting side has queued, so a lonely player eventually matches anyone
+    // queued in the same format.
+    int queueBandStart = 100;
+    int queueBandPerSec = 10;
+
+    // Persistence: a directory (created if absent) holding the correspondence state
+    // — the game registry (corrgames.json) and the Mailbox journal (mailbox.jsonl)
+    // — so open correspondence games survive a server restart and clients can
+    // cold-resume them (myCorrGames + CorrespondenceSession::resume). Empty =
+    // in-memory only (tests / throwaway servers).
+    std::string persistDir;
 };
 
 // Serve the lobby. Accepts up to `maxConns` connections total — sessions and match
@@ -93,6 +112,14 @@ struct PairedInfo {
     std::string game;   // relay/lobby game id
     unsigned seed = 0;  // regenerates the arena
     CharacterBuild player, enemy; // both builds (seat Player / Enemy)
+    std::string opponent; // the other seat's username (myCorrGames listings)
+};
+
+// A live match in progress on the server, watchable via watchPoll (Phase 5.2).
+struct LiveGameInfo {
+    std::string id;           // hand to watchPoll()
+    std::string userP, userE; // the two players (Player / Enemy seats)
+    bool rated = false;       // mirror under the ranked ruleset, like playing one
 };
 
 // The outcome of submitting a finished correspondence scoresheet to the lobby.
@@ -154,6 +181,13 @@ public:
     // Accept an open seek → a ready check (the seek's owner learns via poll()).
     [[nodiscard]] std::optional<ReadyCheckInfo> acceptSeek(int seekId, std::string* error = nullptr);
 
+    // Quick-match queue: auto-pair with anyone queued in the same format whose
+    // rating fits the (time-widening) band — no manual accept. The resulting ready
+    // check arrives via poll(), exactly like an accepted seek. One queue slot per
+    // session (re-join replaces it).
+    bool queueJoin(const MatchFormat& fmt, std::string* error = nullptr);
+    bool queueLeave();
+
     // Directed challenges (to a specific username).
     bool challenge(const std::string& toUser, const MatchFormat& fmt, std::string* error = nullptr);
     [[nodiscard]] std::optional<std::vector<ChallengeInfo>> listChallenges(); // incoming
@@ -171,6 +205,33 @@ public:
     // One async event, if any (a ready check appeared, both readied, or one was
     // cancelled). Call every frame / poll tick.
     [[nodiscard]] LobbyEvent poll();
+
+    // --- cold resume (persistence) --------------------------------------------
+    // My open correspondence games on this server, as full pairings — everything
+    // needed to rebuild a CorrespondenceSession after a client (or server) restart
+    // and resume() it against the persistent move log.
+    [[nodiscard]] std::optional<std::vector<PairedInfo>> myCorrGames();
+
+    // --- chat (4.6) ----------------------------------------------------------
+    // Lobby-wide chat: send a line (subject to the server's length / rate / mute
+    // levers — false + *error on rejection), and poll the rolling log from an
+    // absolute cursor (the log is capped, so the first poll may start past 0).
+    bool chatSend(const std::string& text, std::string* error = nullptr);
+    [[nodiscard]] std::optional<ChannelPoll> chatPoll(std::size_t from);
+    // Per-correspondence-game chat, kept in a side log so the MOVE log stays pure.
+    // Participants only (either seat of the game).
+    bool corrChatSend(const std::string& game, const std::string& text,
+                      std::string* error = nullptr);
+    [[nodiscard]] std::optional<ChannelPoll> corrChatPoll(const std::string& game,
+                                                          std::size_t from);
+
+    // --- spectate (Phase 5.2) ------------------------------------------------
+    // Live matches in progress on this server (finished games are delisted).
+    [[nodiscard]] std::optional<std::vector<LiveGameInfo>> listGames();
+    // Poll a live game's logged broadcast stream from `from` — the (Player-seat)
+    // `welcome`, each `applied` intent, and the final `end`. Feed the entries to a
+    // SpectatorMirror (net/Spectate.h) to watch as another deterministic mirror.
+    [[nodiscard]] std::optional<ChannelPoll> watchPoll(const std::string& game, std::size_t from);
 
     // --- correspondence move transport (used by LobbyChannel) ---------------
     // Post one move-string to a correspondence game's server-side log; returns the

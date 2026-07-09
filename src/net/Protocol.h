@@ -49,7 +49,8 @@ inline std::string hello(const std::string& contentHash, const std::string& buil
     return json::dump(o, false);
 }
 inline std::string welcome(Faction seat, int seed, const std::string& playerBuild,
-                           const std::string& enemyBuild, int clockSec = 0) {
+                           const std::string& enemyBuild, int clockSec = 0, int mainSec = 0,
+                           int incSec = 0) {
     json::Value o = json::Value::makeObject();
     o.set("type", "welcome");
     o.set("seat", factionName(seat));
@@ -57,6 +58,8 @@ inline std::string welcome(Faction seat, int seed, const std::string& playerBuil
     o.set("playerBuild", playerBuild);
     o.set("enemyBuild", enemyBuild);
     o.set("clockSec", clockSec); // per-move idle window (0 = no clock, e.g. correspondence)
+    o.set("mainSec", mainSec);   // chess bank per seat (0 = not a chess clock)
+    o.set("incSec", incSec);     // chess increment per completed turn
     return json::dump(o, false);
 }
 inline std::string error(const std::string& message) {
@@ -70,6 +73,17 @@ inline std::string applied(Faction seat, const Intent& in) {
     o.set("type", "applied");
     o.set("seat", factionName(seat));
     o.set("intent", serializeIntent(in));
+    return json::dump(o, false);
+}
+// Chess-clock variant: every applied intent also carries both seats' authoritative
+// remaining banks (seconds, fractional), so the mirrors' clocks never drift.
+inline std::string applied(Faction seat, const Intent& in, double clockP, double clockE) {
+    json::Value o = json::Value::makeObject();
+    o.set("type", "applied");
+    o.set("seat", factionName(seat));
+    o.set("intent", serializeIntent(in));
+    o.set("clockP", clockP);
+    o.set("clockE", clockE);
     return json::dump(o, false);
 }
 // Match over. A normal end (someone died) carries no winner — the mirror derives it
@@ -110,6 +124,11 @@ struct Msg {
         const json::Value* v = body.find(key);
         return (v && v->isNumber()) ? static_cast<int>(v->asNumber()) : def;
     }
+    [[nodiscard]] double numField(const char* key, double def = 0.0) const {
+        const json::Value* v = body.find(key);
+        return (v && v->isNumber()) ? v->asNumber() : def;
+    }
+    [[nodiscard]] bool has(const char* key) const { return body.find(key) != nullptr; }
 };
 
 inline std::optional<Msg> parse(const std::string& text) {

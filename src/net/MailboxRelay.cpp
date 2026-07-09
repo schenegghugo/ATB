@@ -5,6 +5,7 @@
 
 #include "data/Json.h"
 
+#include <fstream>
 #include <thread>
 
 namespace tb::net {
@@ -70,11 +71,39 @@ void handleConn(Connection conn, Mailbox& box) {
 } // namespace
 
 // --- Mailbox ----------------------------------------------------------------
+bool Mailbox::openJournal(const std::string& path) {
+    std::lock_guard<std::mutex> lock(mu_);
+    // Replay: one JSON object per line {g, s, m}; skip anything unparseable.
+    std::ifstream in(path);
+    std::string line;
+    while (std::getline(in, line)) {
+        const json::ParseResult pr = json::parse(line);
+        if (!pr.ok || !pr.value.isObject()) continue;
+        const std::string game = strField(pr.value, "g");
+        if (game.empty()) continue;
+        logs_[game].push_back({strField(pr.value, "s"), strField(pr.value, "m")});
+    }
+    in.close();
+    // Verify the file is appendable before committing to journal mode.
+    std::ofstream probe(path, std::ios::app);
+    if (!probe) return false;
+    journalPath_ = path;
+    return true;
+}
+
 std::size_t Mailbox::post(const std::string& game, const std::string& sender,
                           const std::string& msg) {
     std::lock_guard<std::mutex> lock(mu_);
     std::vector<MailEntry>& log = logs_[game];
     log.push_back({sender, msg});
+    if (!journalPath_.empty()) {
+        json::Value o = json::Value::makeObject();
+        o.set("g", game);
+        o.set("s", sender);
+        o.set("m", msg);
+        std::ofstream out(journalPath_, std::ios::app);
+        out << json::dump(o, false) << '\n';
+    }
     return log.size();
 }
 

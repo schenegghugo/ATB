@@ -77,8 +77,15 @@ Admit handshake(Connection& c, const MatchConfig& cfg) {
 
 // Run one already-admitted match to completion over the two connections.
 ServeResult runAdmittedMatch(Connection c0, Connection c1, const CharacterBuild& b0,
-                             const CharacterBuild& b1, const MatchConfig& cfg, int clockSec) {
+                             const CharacterBuild& b1, const MatchConfig& cfg,
+                             const MatchClock& clock,
+                             const std::function<void(const std::string&)>& spectate) {
     ServeResult res;
+    auto toWatchers = [&](const std::string& msg) { if (spectate) spectate(msg); };
+    // Chess mode: each seat's remaining bank (seconds). Ticks only while that seat
+    // decides; +incSec when its turn passes; empty = forfeit (flag fall).
+    auto idx = [](Faction f) { return f == Faction::Player ? 0 : 1; };
+    double bank[2] = {static_cast<double>(clock.mainSec), static_cast<double>(clock.mainSec)};
 
     // A concrete NON-ZERO seed, chosen once and sent to both clients so the server
     // and both mirrors generate the *same* arena. (generateArena treats seed 0 as
@@ -90,8 +97,12 @@ ServeResult runAdmittedMatch(Connection c0, Connection c1, const CharacterBuild&
     // an identical deterministic mirror (both builds + the arena seed).
     const std::string pBuild = serializeBuild(b0);
     const std::string eBuild = serializeBuild(b1);
-    c0.send(proto::welcome(Faction::Player, static_cast<int>(seed), pBuild, eBuild, clockSec));
-    c1.send(proto::welcome(Faction::Enemy, static_cast<int>(seed), pBuild, eBuild, clockSec));
+    const std::string pWelcome = proto::welcome(Faction::Player, static_cast<int>(seed), pBuild,
+                                                eBuild, clock.perMoveSec, clock.mainSec, clock.incSec);
+    c0.send(pWelcome);
+    c1.send(proto::welcome(Faction::Enemy, static_cast<int>(seed), pBuild, eBuild,
+                           clock.perMoveSec, clock.mainSec, clock.incSec));
+    toWatchers(pWelcome); // spectators mirror from the Player-seat setup
 
     Battle battle = buildMatch(cfg.ruleset, {b0}, {b1}, cfg.catalog, seed, cfg.creatures);
     MatchRunner runner(std::move(battle), Seat::Human, Seat::Human);
@@ -104,7 +115,9 @@ ServeResult runAdmittedMatch(Connection c0, Connection c1, const CharacterBuild&
         res.winner = winner;
         res.ok = true;
         res.error = "forfeit (idle clock / disconnect)";
-        broadcast(proto::endMsg(winner, /*forfeit=*/true));
+        const std::string end = proto::endMsg(winner, /*forfeit=*/true);
+        broadcast(end);
+        toWatchers(end);
         res.finalSnapshot = serializeSnapshot(runner.snapshot());
     };
     // Relay one pending chat message from `c` (tagged with `from`); false if the
@@ -119,13 +132,20 @@ ServeResult runAdmittedMatch(Connection c0, Connection c1, const CharacterBuild&
     using Clock = std::chrono::steady_clock;
     // Drive one human decision at a time. Chat may arrive from EITHER seat at any
     // moment, so poll both connections; the active seat's move advances the turn,
-    // while the idle-forfeit deadline (chat does NOT reset it) guards the clock.
+    // while the forfeit deadline (chat does NOT reset it) guards the clock — a fixed
+    // per-move window, or the seat's remaining chess bank.
     for (int guard = 0; guard < 20000 && !runner.finished(); ++guard) {
         const std::optional<Faction> awaiting = runner.awaitingSeat();
         if (!awaiting) { res.error = "no seat awaited but match not finished"; return res; }
         Connection& active = connFor(*awaiting);
         Connection& other = connFor(opposing(*awaiting));
-        const auto deadline = Clock::now() + std::chrono::seconds(clockSec > 0 ? clockSec : 36000);
+        const auto turnStart = Clock::now();
+        const double windowSec = clock.chess()          ? bank[idx(*awaiting)]
+                                 : clock.perMoveSec > 0 ? clock.perMoveSec
+                                                        : 36000.0;
+        const auto deadline =
+            turnStart + std::chrono::duration_cast<Clock::duration>(
+                            std::chrono::duration<double>(windowSec));
 
         bool moved = false;
         while (!moved && !runner.finished()) {
@@ -151,14 +171,25 @@ ServeResult runAdmittedMatch(Connection c0, Connection c1, const CharacterBuild&
             // (never trust the client's outcome). Broadcast the applied intent so both
             // mirrors advance in lockstep with the authoritative Battle.
             runner.submit(*awaiting, in.value);
-            const std::string msg = proto::applied(*awaiting, in.value);
+            std::string msg;
+            if (clock.chess()) {
+                // Bill the decision to the mover's bank; the increment lands only
+                // when the turn actually passed to the opponent (endTurn or forced).
+                double& b = bank[idx(*awaiting)];
+                b = std::max(0.0, b - std::chrono::duration<double>(Clock::now() - turnStart).count());
+                if (runner.awaitingSeat() != awaiting) b += clock.incSec;
+                msg = proto::applied(*awaiting, in.value, bank[0], bank[1]);
+            } else {
+                msg = proto::applied(*awaiting, in.value);
+            }
             if (!c0.send(msg) || !c1.send(msg)) { res.error = "broadcast failed (disconnect)"; return res; }
+            toWatchers(msg);
             moved = true;
         }
     }
 
-    c0.send(proto::endMsg());
-    c1.send(proto::endMsg());
+    broadcast(proto::endMsg());
+    toWatchers(proto::endMsg());
     res.ok = runner.finished();
     res.winner = runner.battle().winner();
     res.finalSnapshot = serializeSnapshot(runner.snapshot());
@@ -180,7 +211,9 @@ ServeResult serveOneMatch(Listener& listener, const MatchConfig& cfg, int readTi
     if (!a0.ok || !a1.ok)
         return {false, std::nullopt, {}, !a0.ok ? ("player: " + a0.error) : ("enemy: " + a1.error)};
 
-    return runAdmittedMatch(std::move(*c0), std::move(*c1), a0.build, a1.build, cfg, readTimeoutSec);
+    MatchClock clock;
+    clock.perMoveSec = readTimeoutSec;
+    return runAdmittedMatch(std::move(*c0), std::move(*c1), a0.build, a1.build, cfg, clock);
 }
 
 int serveMatches(Listener& listener, const MatchConfig& cfg, int maxMatches, int readTimeoutSec) {
@@ -201,8 +234,10 @@ int serveMatches(Listener& listener, const MatchConfig& cfg, int maxMatches, int
         std::thread t([&cfg, c0 = std::move(x.conn), b0 = std::move(x.build), u0 = std::move(x.user),
                        c1 = std::move(y.conn), b1 = std::move(y.build), u1 = std::move(y.user), rated,
                        readTimeoutSec]() mutable {
+            MatchClock clock;
+            clock.perMoveSec = readTimeoutSec;
             const ServeResult r =
-                runAdmittedMatch(std::move(c0), std::move(c1), b0, b1, cfg, readTimeoutSec);
+                runAdmittedMatch(std::move(c0), std::move(c1), b0, b1, cfg, clock);
             if (rated && cfg.accounts && r.ok && r.winner) {
                 const bool playerWon = *r.winner == Faction::Player;
                 cfg.accounts->recordResult(playerWon ? u0 : u1, playerWon ? u1 : u0);

@@ -62,6 +62,11 @@ jobs:
           ./build/tb_lobby_forfeit_demo
           ./build/tb_ready_check_demo
           ./build/tb_chat_demo
+          ./build/tb_spectate_demo
+          ./build/tb_chess_clock_demo
+          ./build/tb_lobby_chat_demo
+          ./build/tb_lobby_persist_demo
+          ./build/tb_queue_demo
 
       - name: Balance sanity (fixed seed, fast)
         run: ./build/tb_balance 200 1

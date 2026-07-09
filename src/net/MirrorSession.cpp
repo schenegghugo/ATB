@@ -6,6 +6,8 @@
 #include "Protocol.h"
 #include "core/Match.h" // buildMatch
 
+#include <algorithm>
+
 namespace tb::net {
 
 std::string MirrorSession::proto_intent(const Intent& in) { return proto::intentMsg(in); }
@@ -36,8 +38,22 @@ MirrorSession::fromWelcome(Connection conn, const Ruleset& ruleset, const SpellC
     Battle battle =
         buildMatch(ruleset, {*pB}, {*eB}, catalog, static_cast<unsigned>(seed), creatures);
     MatchRunner runner(std::move(battle), Seat::Human, Seat::Human);
-    return std::unique_ptr<MirrorSession>(
+    std::unique_ptr<MirrorSession> s(
         new MirrorSession(std::move(conn), std::move(runner), *seat, m->intField("clockSec", 0)));
+    s->mainSec_ = m->intField("mainSec", 0);
+    s->incSec_ = m->intField("incSec", 0);
+    s->bankP_ = s->bankE_ = static_cast<float>(s->mainSec_);
+    s->bankStamp_ = std::chrono::steady_clock::now();
+    return s;
+}
+
+float MirrorSession::bankSeconds(Faction f) const {
+    float v = f == Faction::Player ? bankP_ : bankE_;
+    // Only the seat currently deciding burns time; the server refreshes both banks
+    // on every applied intent, so this local tick never drifts far.
+    if (!ended_ && !runner_.finished() && runner_.awaitingSeat() == f)
+        v -= std::chrono::duration<float>(std::chrono::steady_clock::now() - bankStamp_).count();
+    return std::max(0.0f, v);
 }
 
 std::unique_ptr<MirrorSession>
@@ -96,6 +112,11 @@ bool MirrorSession::pump(int timeoutMs) {
             const std::optional<Faction> seat = proto::factionParse(m->field("seat"));
             const Parse<Intent> in = parseIntent(m->field("intent"));
             if (seat && in.ok) runner_.submit(*seat, in.value); // authoritative replay
+            if (m->has("clockP")) { // chess mode: adopt the authoritative banks
+                bankP_ = static_cast<float>(m->numField("clockP"));
+                bankE_ = static_cast<float>(m->numField("clockE"));
+                bankStamp_ = std::chrono::steady_clock::now();
+            }
         }
         if (m->type == "chat") {
             const std::optional<Faction> seat = proto::factionParse(m->field("seat"));

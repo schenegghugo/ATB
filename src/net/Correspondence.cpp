@@ -74,6 +74,87 @@ bool CorrespondenceSession::submitLocal(const Intent& in, std::optional<char> de
     return true;
 }
 
+std::string serializeDecoySecrets(const std::vector<DecoySecret>& secrets) {
+    std::string out;
+    for (const DecoySecret& s : secrets) out += s.choice + ' ' + s.nonce + '\n';
+    return out;
+}
+
+std::vector<DecoySecret> parseDecoySecrets(const std::string& text) {
+    std::vector<DecoySecret> out;
+    std::istringstream is(text);
+    std::string choice, nonce;
+    while (is >> choice >> nonce) out.push_back({choice, nonce});
+    return out;
+}
+
+std::vector<DecoySecret> CorrespondenceSession::mySecrets() const {
+    std::vector<DecoySecret> out;
+    for (const std::size_t idx : myCommits_)
+        out.push_back({rec_.commits[idx].choice, rec_.commits[idx].nonce});
+    return out;
+}
+
+bool CorrespondenceSession::resume(const std::vector<DecoySecret>& mySecrets, std::string* error) {
+    auto fail = [&](const char* m) {
+        if (error) *error = m;
+        return false;
+    };
+    if (pollCursor_ != 0 || !rec_.intents.empty()) return fail("resume needs a fresh session");
+    const std::optional<ChannelPoll> res = channel_->poll(game_, 0);
+    if (!res) return fail("could not fetch the move log");
+
+    std::size_t nextSecret = 0;
+    for (const MailEntry& e : res->entries) {
+        if (e.msg.rfind("R ", 0) == 0) {
+            // A reveal (the game finished before the restart): fold it in like
+            // finalize() would, so a resumed-finished game can still produce the
+            // full scoresheet.
+            std::istringstream is(e.msg);
+            std::string tag, choice, nonce;
+            std::size_t idx = 0;
+            is >> tag >> idx >> choice >> nonce;
+            if (idx < rec_.commits.size() && rec_.commits[idx].choice.empty()) {
+                rec_.commits[idx].choice = choice;
+                rec_.commits[idx].nonce = nonce;
+            }
+            if (e.sender == user_) revealsPosted_ = true;
+            continue;
+        }
+
+        // "<token>" or "<token> C<commit>" — the same wire shape sync() reads.
+        std::string token = e.msg, wireCommit;
+        const std::size_t sp = e.msg.find(' ');
+        if (sp != std::string::npos) {
+            token = e.msg.substr(0, sp);
+            const std::string rest = e.msg.substr(sp + 1);
+            if (rest.size() > 1 && rest[0] == 'C') wireCommit = rest.substr(1);
+        }
+        Intent in;
+        if (!replay::parseIntentToken(token, in)) continue;
+        const std::optional<Faction> seat = runner_.awaitingSeat();
+        if (!seat) continue; // battle finished — skip stray moves, but keep reading reveals
+        if (!runner_.submit(*seat, in)) continue;
+        rec_.intents.push_back(in);
+
+        const std::size_t now = runner_.battle().cloakPairs().size();
+        if (now > seenCloaks_) {
+            const bool mine = e.sender == user_;
+            std::string choice, nonce;
+            if (mine && nextSecret < mySecrets.size()) {
+                choice = mySecrets[nextSecret].choice;
+                nonce = mySecrets[nextSecret].nonce;
+                ++nextSecret;
+            }
+            if (mine) myCommits_.push_back(rec_.commits.size());
+            rec_.commits.push_back({wireCommit, choice, nonce});
+            seenCloaks_ = now;
+        }
+    }
+    pollCursor_ = res->next;
+    return true;
+}
+
 bool CorrespondenceSession::sync() {
     if (finished()) return false; // reveals (post-finish) are finalize()'s job
     const std::optional<ChannelPoll> res = channel_->poll(game_, pollCursor_);
