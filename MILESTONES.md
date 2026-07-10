@@ -1,228 +1,158 @@
 # Milestones
 
-Execution ledger for ATB — **what we did** and **what's left**, one line each.
-Design rationale lives in [`ARCHITECTURE.md`](ARCHITECTURE.md); this file is the
-*checklist*. Legend: **☑ done · ◐ in progress · ☐ todo**.
-
-**Where we are:** the single-player game, content pipeline (data-driven catalog /
-creatures / rulesets, all hash-pinned), pluggable AI, sprite packs, and the full
-**networked PvP + Online Home** are built and playtest-confirmed — lobby daemon,
-seek board + directed challenges + quick-match **queue**, per-match ready check,
-live *and* correspondence matches with a true **chess clock**, **spectate**,
-lobby / in-match / correspondence **chat**, correspondence **persistence +
-cold-resume**, async connect + waiting screen, and the "verify-don't-host"
-correspondence-ranked arc (determinism → notation/verifier → relay → arbiter →
-ranked ruleset → decoy hidden-info, now with a GUI commit prompt). What remains
-is hardening (TLS, SQLite), reach (Web/WASM), and depth (self-teaching AI) —
-see below.
+Execution ledger for ATB — phases broken into one-line steps.
+Design rationale lives in [`ARCHITECTURE.md`](ARCHITECTURE.md).
+Legend: **☑ done · ◐ in progress · ☐ todo**.
 
 ---
 
 ## What's left (quick view)
 
-- **Online hardening (4.5/4.6/6 follow-ups)** — the tier that makes ranked
-  publicly deployable:
-  - ☐ **TLS / transport encryption** — *the* gate before any public, non-VPN launch
-    (passwords cross the wire in the clear today; fine behind LAN/VPN).
-  - ☑ **Persistence** — corr-game registry + `Mailbox` journal to disk
-    (`LobbyConfig.persistDir`, on by default in `tb_lobby`) + **cold-resume**
-    (`myCorrGames` + `CorrespondenceSession::resume`, decoy secrets persisted
-    client-side; GUI "My correspondence games — Resume"; `tb_lobby_persist_demo`).
-  - ☐ **SQLite** behind the account/store seam + match-history rows.
-  - ☑ Widening-band **queue** — quick-match auto-pairing (`queueJoin`, band =
-    start + rate×wait; GUI Quick-match; `tb_queue_demo`).
-  - ☑ GUI **decoy-choice prompt** — modal 'stay original / swap to twin' commit at
-    cast (`wouldCastDecoy` / `needsDecoyChoice` seam).
-  - ☑ **Async connect + "waiting for opponent" screen** — lobby login and match
-    join run off-thread; a cancellable Waiting state covers the parked join.
-- **Parallel / depth (off the critical path)**
-  - ☐ **Web/WASM build** (W.1–W.5) — browser-playable on itch.io.
-  - ☐ **Self-teaching AI** (3.5.1–3.5.7) — NNUE-style learned evaluator.
-  - ◐ **CR.6 deeper hidden-info** — commit-reveal movement / ZK (slices 1–3 done).
-- **Polish / content**
-  - ◐ **0.6** — file 2–3 good-first-issues (CONTRIBUTING.md done).
-  - ☐ **Balance backlog** (5.3) — fireball radius; teach AI to cast
-    Portal/Blind/Surge/Flux (unused); synergy tuning via `tb_balance`.
-  - ☐ Sprite-pack ground-effect/status art. (Initiative `±` and the GUI replay
-    viewer shipped with BE.2 / 5.1.)
+- ☐ TLS transport encryption — the gate before public launch.
+- ☐ SQLite behind the account-store seam; match-history rows.
+- ◐ W.5 itch.io release — web bundle built + browser-verified; upload pending.
+- ☐ Self-teaching AI (3.5.1–3.5.7) — NNUE-style learned evaluator.
+- ◐ CR.6d deeper hidden info — commit-reveal movement, ZK (parked).
+- ☐ 5.3 balance backlog — fireball radius, unused-spell AI, synergies.
+- ☐ Sprite art: ground effects, status markers, editor skill icons.
+- ☐ Roster follow-ups: enemy-only Pull; summon `duration`.
 
 ---
 
 ## Phase 0 — Contributor-safe public repo
 
-- ☑ **0.1** `TB_BUILD_GUI` CMake option — headless core builds without Raylib.
-- ☑ **0.2** Every test fails loudly (non-zero exit gates CI).
-- ☑ **0.3** CI workflow (`.github/workflows/ci.yml`) — headless build + all demos.
-- ☑ **0.4** GUI compile job (Linux, compile-only).
-- ☑ **0.5** Branch protection ruleset on `main` (PR + green CI required).
-- ◐ **0.6** `CONTRIBUTING.md` ☑ (build/test, `core/` rules, WASM "help wanted");
-  ☐ file 2–3 good-first-issues on GitHub.
+- ☑ **0.1** `TB_BUILD_GUI` option — headless core builds without Raylib.
+- ☑ **0.2** Every test exits non-zero on failure, gating CI.
+- ☑ **0.3** CI workflow: headless build plus every demo binary.
+- ☑ **0.4** GUI compile-only job on Linux.
+- ☑ **0.5** Branch protection on `main`: PR plus green CI.
 
-## Phase 1 — Catalog loader (data-driven content)
+## Phase 1 — Data-driven catalog
 
-- ☑ **1.1** `data/Json.{h,cpp}` — hand-rolled JSON reader/writer (`tb_json_demo`).
-- ☑ **1.2** `data/SpellEnums.h` — enum↔string tables, compile-time-checked.
-- ☑ **1.3** `data/CatalogJson.{h,cpp}` — strict JSON ↔ `SpellCatalog`, all-errors.
-- ☑ **1.4** `makeDefaultCatalog()` → generator (`tb_catalog_gen`) + `data/Sha256`
-  (the PvP trust anchor); `data/catalog.json` is canonical.
-- ☑ **1.5** Round-trip + validation tests + CI validity gate (`tb_catalog_demo`).
-- ☑ **1.6** App loads `data/catalog.json` via `render/ContentPaths` with a safe
-  valid/absent/malformed policy.
+- ☑ **1.1** Hand-rolled JSON reader/writer (`data/Json`, `tb_json_demo`).
+- ☑ **1.2** Enum↔string tables, compile-time-checked (`data/SpellEnums.h`).
+- ☑ **1.3** Strict JSON ↔ `SpellCatalog`, all errors reported (`tb_catalog_demo`).
+- ☑ **1.4** Catalog generator plus SHA-256 pin; `data/catalog.json` canonical.
+- ☑ **1.5** Round-trip and validation tests; CI validity gate.
+- ☑ **1.6** App loads catalog under a valid/absent/malformed policy.
 
-## Spells & economy (alongside Phase 1)
+## Spells & economy
 
-- ☑ **S.1** Rewind spell (snapshot → restore at 2nd turn; no-revive).
-- ☑ **S.2** Initiative as a build buy (`bonusInitiative`); `±` exposed in the editor
-  (the BE.2 `+INIT` stepper).
+- ☑ **S.1** Rewind spell — snapshot, restore two turns later, no-revive.
+- ☑ **S.2** Initiative as a build buy; editor `±` stepper.
 
-## Roster entities — bombs & summons
+## Roster — bombs & summons
 
-- ☑ Foundation: `EntityKind`, mid-battle `spawnEntity`, `Control`, `onDeath`,
-  victory = no living Champion (`tb_roster_demo`).
-- ☑ **Bombs** — `Object` template, fuse/ignition/blast, cast via `bomb` spell.
-- ☑ **Summons** — blocker / healer / brute, single-purpose AI, per-team cap 2.
-- ☑ **Creatures datafied** — `data/creatures.json` + `data/CreatureJson`, shared
-  `data/SpellJson` mapping (`tb_creature_demo`).
-- ☐ AI never casts Blind/Surge/Flux/Portal; enemy-only Pull; summon `duration`.
+- ☑ Entity foundation: kinds, mid-battle spawns, victory rule (`tb_roster_demo`).
+- ☑ Bombs — fuse, ignition, blast; cast via `bomb` spell.
+- ☑ Summons — blocker/healer/brute, single-purpose AI, per-team cap two.
+- ☑ Creatures datafied in `data/creatures.json` (`tb_creature_demo`).
+- ☐ Enemy-only Pull; summon `duration`. (Unused-spell AI: see 5.3.)
 
-## Build editor revamp
+## Build editor
 
 - ☑ **BE.0** Balance-sim crash fix (catalog-sized vectors).
-- ☑ **BE.1** Free-form spell `tags` + consistency test.
-- ☑ **BE.2** Bigger resizable window, filterable card grid, `+INIT` stepper.
+- ☑ **BE.1** Free-form spell `tags` plus a consistency test.
+- ☑ **BE.2** Resizable window, filterable card grid, `+INIT` stepper.
 
 ## Core split
 
-- ☑ **CS.1** Split `Battle.h` → `core/Combat.h` / `Entity.h` / `Battle.h`
-  (behaviour-preserving).
+- ☑ **CS.1** `Battle.h` split into Combat/Entity/Battle, behaviour-preserving.
 
 ## Match rulesets (datafied)
 
-- ☑ **R.1** `core/Ruleset.h` + `data/rules.json` (`tb_ruleset_demo`); `StormConfig`
-  → `core/Storm.h`.
-- ☑ **R.2** Unified `core/Match.buildMatch()` — game + balance sim build matches
-  the same way.
-- ☑ **R.3** Team formats 2v2 / 3v3 (editor slot tabs + enemy pickers).
-- ☑ **R.4** Static maps (`data/MapJson`, `data/maps/duel.json`, reachability gate).
-- ☑ **R.5** Ban enforcement (editor greys banned; sim drops them); ranked/custom
-  trust tie-in.
+- ☑ **R.1** `core/Ruleset` plus `data/rules.json`; storm config datafied.
+- ☑ **R.2** Unified `buildMatch()` for game and balance sim.
+- ☑ **R.3** Team formats 2v2 / 3v3 in the editor.
+- ☑ **R.4** Static maps (`data/maps/`) with a reachability gate.
+- ☑ **R.5** Ban enforcement in editor and sim; ranked tie-in.
 
-## Phase 2 — Spell bar + sprite/asset packs
+## Phase 2 — Spell bar + sprite packs
 
-- ☑ **2.1** Clickable spell bar (`spellSlotRect`, visual states).
-- ☑ **2.2** Atlas-based sprite-pack seam (`render/PackManifest` + `SpritePack`,
-  `ATB_PACK`, `tb_pack_demo`).
-- ☑ **2.3** Structured engine event stream + GUI combat log (`core/Event.h`,
-  `tb_event_demo`).
-- ☑ **2.4** Animations — clip data model + event-driven cast flash.
-- ☑ **2.5** `packs/default/` + `example_upscaled` + palette-only `example/` +
-  `docs/sprite-packs.md`.
-- ☐ Ground-effect + status-marker art wiring; editor skill icons.
+- ☑ **2.1** Clickable spell bar with visual states.
+- ☑ **2.2** Atlas-based sprite-pack seam (`ATB_PACK`, `tb_pack_demo`).
+- ☑ **2.3** Structured event stream plus GUI combat log (`tb_event_demo`).
+- ☑ **2.4** Animation clip model; event-driven cast flash.
+- ☑ **2.5** Default and example packs; `docs/sprite-packs.md`.
+- ☐ Ground-effect and status-marker art; editor skill icons.
 
 ## Phase 3 — Pluggable AI
 
-- ☑ **3.1** `core/AI.h` `Brain` interface; beam search = `BeamSearchBrain` /
-  `defaultBrain()`.
-- ☑ **3.2** Registry + by-name selection (`beam` / `greedy`, `ATB_BRAIN`).
+- ☑ **3.1** `Brain` interface; beam search is the default.
+- ☑ **3.2** Brain registry with by-name selection (`ATB_BRAIN`).
 
-## Phase 3.5 — Self-teaching AI (NNUE-style) ☐
+## Phase 3.5 — Self-teaching AI ☐
 
-- ☐ **3.5.1** Split `Evaluator` seam under `Brain` (`HandcraftedEvaluator`).
-- ☐ **3.5.2** Versioned `featurize(Battle, Faction)`.
-- ☐ **3.5.3** Self-play data export from the sim.
-- ☐ **3.5.4** Offline PyTorch training → versioned, hash-pinned weights artifact.
+- ☐ **3.5.1** `Evaluator` seam under `Brain` (`HandcraftedEvaluator`).
+- ☐ **3.5.2** Versioned `featurize(Battle, Faction)` feature extraction.
+- ☐ **3.5.3** Self-play training-data export from the sim.
+- ☐ **3.5.4** Offline PyTorch training; hash-pinned weights artifact.
 - ☐ **3.5.5** Dependency-free C++ `LearnedEvaluator` inference.
-- ☐ **3.5.6** Improvement loop + gating (promote only if >~55% vs prev).
-- ☐ **3.5.7** (Optional) NNUE-grade incremental accumulator + int8.
+- ☐ **3.5.6** Gated improvement loop — promote above ~55% win-rate.
+- ☐ **3.5.7** Optional NNUE incremental accumulator; int8 quantization.
 
 ## Phase 4 — Networked PvP
 
-- ☑ **4.1** Wire formats — `Intent` / `Snapshot` / build, round-trip + determinism
-  (`data/Net`, `tb_net_demo`).
-- ☑ **4.2** `render/MatchSource` seam — UI ↔ who-drives-the-Battle
-  (`tb_matchsource_demo`).
-- ☑ **4.3** In-process authoritative `net/MatchRunner` (`tb_loopback_demo`).
-- ☑ **4.4** Real TCP transport (`net/Socket` + `Protocol` + `GameServer`), `tb_server`,
-  deterministic-mirror client (`net/MirrorSession` → `render/RemoteMatchSource`),
-  `ATB_CONNECT`.
+- ☑ **4.1** Wire formats: Intent/Snapshot/build round-trips (`tb_net_demo`).
+- ☑ **4.2** `MatchSource` seam between UI and battle driver.
+- ☑ **4.3** In-process authoritative `MatchRunner` (`tb_loopback_demo`).
+- ☑ **4.4** TCP transport, `tb_server`, deterministic-mirror client, `ATB_CONNECT`.
 
-### Phase 4.5 — Lobby, accounts, Online Home ◐
+### Phase 4.5 — Lobby, accounts, Online Home
 
-- ☑ **Slice 1** Persistent multi-match server (`serveMatches`, FIFO pairing,
-  configurable bind).
-- ☑ **Slice 2** Accounts — username+password (PBKDF2, `data/Password`) + Elo,
-  JSON-backed `net/AccountStore`; ranked vs custom.
-- ☑ **Slice 3** Private lobbies via join codes.
-- ☑ **Slice 4** GUI networking screen (`render/ConnectScreen`) — *superseded by 6.1*
-  (now the lobby login).
-- ☑ **Slice 5** Online Home: `net/Lobby` seek board + directed challenges, format
-  (rated + clock), live routing (`tb_lobby_challenge_demo`).
-- ☑ **Slice 5b** Unlimited → correspondence played + ranked over the lobby
-  (`MoveChannel` seam, embedded `Mailbox` + `Arbiter`, reconnect resume;
-  `tb_lobby_correspondence_demo`).
-- ☑ **Slice 5c** GUI lobby + correspondence play (`render/LobbyScreen`,
-  `CorrespondenceMatchSource`).
-- ☑ **Slice 5d** `tb_lobby` daemon (self-hosted Online Home).
-- ☑ Correspondence **persistence + cold-resume** (persistDir registry + Mailbox
-  journal; `myCorrGames` / `resume`; `tb_lobby_persist_demo`).
-- ☑ Widening-band **queue** (quick match; `tb_queue_demo`).
-- ☑ Async connect + "waiting for opponent" screen.
-- ☐ **Remaining:** **SQLite** + match history; **TLS**.
-
-### Phase 4.5 Slice 6 — Online UX pass (playtest feedback)
-
-- ☑ **6.1** Flow: menu → **login → lobby** (no forced pre-lobby editor); "Edit build"
-  in lobby.
-- ☑ **6.2** Per-match **ready check** (all games): build chosen at ready → READY,
-  else cancel; server-validated; `tb_ready_check_demo` + `render/ReadyCheckScreen`.
-- ☑ **6.3** Idle-clock **forfeit** (per-move; `tb_lobby_forfeit_demo`) + **visible
-  two-clock HUD** + **true chess time bank** — server-enforced main+increment
-  (`MatchClock`, banks on every `applied`; `tb_chess_clock_demo`).
-- ☑ **6.4** In-match **chat** (async relay, split log column, `tb_chat_demo`);
-  lobby + correspondence chat landed as 4.6.
-- ☑ **6.5** BUG fix — online moves now register (pump every frame).
-- ☑ **6.6** `tb_lobby` warns when run without `./data`.
-- ☑ **6.7** End-of-match VICTORY/DEFEAT/DRAW screen → return to lobby; editor
-  ‹Menu returns to where it was opened.
+- ☑ Multi-match server: FIFO pairing, configurable bind address.
+- ☑ Accounts: PBKDF2 passwords, Elo, JSON store; ranked/custom.
+- ☑ Private lobbies via shared join codes.
+- ☑ GUI connect screen — now the lobby login.
+- ☑ Seek board plus directed challenges, live routing (`tb_lobby_challenge_demo`).
+- ☑ Correspondence over the lobby: Mailbox, Arbiter, reconnect resume.
+- ☑ GUI lobby and correspondence play (`render/LobbyScreen`).
+- ☑ `tb_lobby` daemon — the self-hosted Online Home.
+- ☑ Persistence: game registry and Mailbox journal survive restarts.
+- ☑ Cold resume: `myCorrGames`, log replay, client-side decoy secrets.
+- ☑ Quick-match queue on a widening Elo band (`tb_queue_demo`).
+- ☑ Async connect; cancellable waiting-for-opponent screen.
+- ☐ SQLite store plus match-history rows.
+- ☐ TLS transport encryption.
+- ☑ **UX** Menu → login → lobby; "Edit build" inside the lobby.
+- ☑ **UX** Server-validated per-match ready check (`tb_ready_check_demo`).
+- ☑ **UX** Idle forfeit, two-clock HUD, true chess bank (`tb_chess_clock_demo`).
+- ☑ **UX** In-match chat: async relay, split log column (`tb_chat_demo`).
+- ☑ Bug fix — pump every frame so moves register.
+- ☑ **UX** `tb_lobby` warns when started without `./data`.
+- ☑ **UX* End-of-match screen; editor ‹Menu returns where opened.
 
 ### Phase 4.6 — Chat ☑
 
-- ☑ In-match live chat (6.4); **lobby chat** (capped rolling log + GUI panel) +
-  correspondence-game chat (per-game side log, participants only — the move log
-  stays pure) + safety levers (rate-limit / mute / length cap; `tb_lobby_chat_demo`).
+- ☑ Lobby-wide chat: capped rolling log plus GUI panel.
+- ☑ Correspondence chat in a side log — move log stays pure.
+- ☑ Safety levers: rate limit, mute, length cap (`tb_lobby_chat_demo`).
 
 ## Correspondence ranked — "verify, don't host"
 
-- ☑ **CR.1** Cross-platform determinism lock-down (hand-rolled arena RNG,
-  `tb_determinism_demo` KAT).
-- ☑ **CR.2** Game notation + verifier = replays §5.1 (`net/Replay`, `tb_replay_demo`).
-- ☑ **CR.3** Mailbox relay (`net/MailboxRelay`, NAT-immune, `tb_mailbox_demo`).
-- ☑ **CR.4** Submit-to-arbiter + double-attestation + Elo (`net/Arbiter`,
-  `tb_arbiter_demo`).
-- ☑ **CR.5** Perfect-info ranked ruleset (`data/rules.ranked.json`, bans invisible,
-  content-addressed hash; `tb_ranked_rules_demo`).
-- ◐ **CR.6** Hidden info in trustless ranked:
-  - ☑ Slice 1 — decoy mechanic (`Effect::Decoy`, cloak pairs, `decoy` spell;
-    `tb_decoy_demo`) + `blind`/`surge`/`flux`.
-  - ☑ Slice 2 — commitment layer in notation + verifier (`tb_commit_demo`).
-  - ☑ Slice 3 — correspondence session generates commitments at cast
-    (`net/Correspondence`, `MoveChannel`, `tb_correspondence_demo`).
-  - ☐ Deeper options: commit-reveal movement / ZK proofs (parked R&D).
+- ☑ **CR.1** Cross-platform determinism lock-down (`tb_determinism_demo` KAT).
+- ☑ **CR.2** Game notation plus verifier — replays by re-simulation.
+- ☑ **CR.3** NAT-immune store-and-forward mailbox relay (`tb_mailbox_demo`).
+- ☑ **CR.4** Arbiter: double-attestation submits move Elo (`tb_arbiter_demo`).
+- ☑ **CR.5** Perfect-info ranked ruleset, content-addressed hash (`tb_ranked_rules_demo`).
+- ☑ **CR.6a** Decoy mechanic: cloak pairs, blind/surge/flux (`tb_decoy_demo`).
+- ☑ **CR.6b** Commitment layer in notation and verifier (`tb_commit_demo`).
+- ☑ **CR.6c** Commitments minted at cast; GUI choice prompt (`tb_correspondence_demo`).
+- ☐ **CR.6d** Deeper: commit-reveal movement, ZK proofs (parked R&D).
 
 ## Phase 5 — Replays & spectate
 
-- ☑ **5.1** Persist `seed + intents`, re-simulate = replay/scoresheet/shareable
-  (done as CR.2); ☐ GUI replay viewer.
-- ☑ **5.2** Spectate — the lobby logs each live match's broadcast stream; a watcher
-  replays it as another mirror (`net/Spectate`, `listGames`/`watch`, GUI "Live
-  games" list; `tb_spectate_demo`).
-- ☐ **5.3** Balance backlog — fireball radius, portal/Blind/Surge/Flux AI, synergy
-  tuning via `tb_balance`.
+- ☑ **5.1** Replays: seed plus intents re-simulated; GUI viewer.
+- ☑ **5.2** Spectate: watchers mirror the logged stream (`tb_spectate_demo`).
 
-## Parallel track — Web / WASM ☐
+## Parallel track — Web / WASM ◐
 
-- ☐ **W.1** Emscripten toolchain + web Raylib (`-DPLATFORM=Web`).
-- ☐ **W.2** Adapt the frontend loop (`emscripten_set_main_loop`).
-- ☐ **W.3** Package assets (`--preload-file`; the atlas format helps).
-- ☐ **W.4** Web build path in CMake + CI job.
-- ☐ **W.5** Publish `.html/.wasm/.js` to itch.io.
+- ☑ **W.1** Emscripten toolchain (emsdk 6.0.2); web Raylib (`PLATFORM=Web`).
+- ☑ **W.2** Frontend loop → `emscripten_set_main_loop_arg`; fixed-size canvas
+  (raylib's resizable-canvas path skews mouse coords on web).
+- ☑ **W.3** `--preload-file` bakes `data/` + `packs/default` into the bundle.
+- ☑ **W.4** `emcmake` CMake path (online play compiled out — no TCP in browsers);
+  `web-build` CI job packages the itch.io zip artifact.
+- ◐ **W.5** itch.io publish: `build-web/tactical-battler-web.zip` built and
+  verified playable headless (menu → editor → battle vs AI). Upload pending —
+  HTML5 project, viewport 1180×720.
