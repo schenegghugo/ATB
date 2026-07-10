@@ -1,0 +1,54 @@
+<!doctype html>
+<!--
+  web/shell.html — Emscripten shell for the itch.io / browser build (W.5).
+  emcc replaces {{{ SCRIPT }}} with the generated loader; everything else is
+  a plain dark page centring the game canvas.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tactical Battler</title>
+  <style>
+    html, body {
+      margin: 0; padding: 0; height: 100%;
+      background: #10141a; color: #9fb2c8;
+      font: 14px/1.4 monospace;
+      overflow: hidden;
+    }
+    body { display: flex; align-items: center; justify-content: center; }
+    /* The canvas keeps the exact size the game sets (raylib InitWindow) — no
+       CSS scaling, ever: a stretched canvas skews mouse coordinates. Size the
+       itch.io viewport to the game (1180x720) instead. */
+    canvas { display: block; background: #000; }
+    #status {
+      position: absolute; left: 0; right: 0; top: 45%;
+      text-align: center; pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="status">Loading…</div>
+  <!-- Right-click casts spells — keep the browser context menu off the board. -->
+  <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+  <script>
+    var statusElement = document.getElementById('status');
+    var Module = {
+      canvas: (function () {
+        var c = document.getElementById('canvas');
+        c.addEventListener('webglcontextlost', function (e) {
+          Module.setStatus('WebGL context lost — please reload the page.');
+          e.preventDefault();
+        }, false);
+        return c;
+      })(),
+      setStatus: function (text) {
+        statusElement.textContent = text;
+        statusElement.style.display = text ? 'block' : 'none';
+      },
+    };
+    window.onerror = function (msg) { Module.setStatus('Error: ' + msg); };
+  </script>
+  {{{ SCRIPT }}}
+</body>
+</html>

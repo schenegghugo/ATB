@@ -46,7 +46,11 @@ target_compile_options(tb_core PRIVATE
 
 # ---------------------------------------------------------------------------
 # Headless demos / smoke tests (no window required).
+# Skipped for the Web/WASM build (W.4): the demos are native dev tools, and the
+# transport further down is POSIX TCP — browsers only speak WebSockets, so
+# online play stays out of the web bundle (a future WebSocket transport).
 # ---------------------------------------------------------------------------
+if(NOT EMSCRIPTEN)
 add_executable(tb_headless tests/headless_demo.cpp)
 target_link_libraries(tb_headless PRIVATE tb_core)
 
@@ -237,13 +241,21 @@ target_link_libraries(tb_lobby_demo PRIVATE tb_transport Threads::Threads)
 # is exercised headless here against the real server.
 add_executable(tb_remote_demo tests/remote_demo.cpp)
 target_link_libraries(tb_remote_demo PRIVATE tb_transport Threads::Threads)
+endif() # NOT EMSCRIPTEN
 
 # ---------------------------------------------------------------------------
 # Raylib (graphical frontend). Use a system install if present, otherwise fetch.
 # Skipped entirely when TB_BUILD_GUI is OFF (headless/server/CI builds).
 # ---------------------------------------------------------------------------
 if(TB_BUILD_GUI)
-find_package(raylib 4.5 QUIET)
+if(EMSCRIPTEN)
+    # emcmake configures the Emscripten toolchain; raylib still needs to be told
+    # to target the browser (GLES2 over WebGL, no GLFW desktop backends).
+    set(PLATFORM "Web" CACHE STRING "" FORCE)
+endif()
+if(NOT EMSCRIPTEN)
+    find_package(raylib 4.5 QUIET)
+endif()
 if(NOT raylib_FOUND)
     include(FetchContent)
     FetchContent_Declare(
@@ -259,42 +271,77 @@ if(NOT raylib_FOUND)
     # runtime. The Wayland backend needs `wayland-protocols` at build time
     # (Arch: `sudo pacman -S wayland-protocols`). Enable it only when present so
     # configuration never hard-fails; otherwise we fall back to X11/XWayland.
-    find_package(PkgConfig QUIET)
+    # (Web builds have no GLFW at all — skip the probe.)
     set(_tb_wayland OFF)
-    if(PkgConfig_FOUND)
-        pkg_check_modules(WAYLAND_PROTOCOLS QUIET wayland-protocols)
-        if(WAYLAND_PROTOCOLS_FOUND)
-            set(_tb_wayland ON)
+    if(NOT EMSCRIPTEN)
+        find_package(PkgConfig QUIET)
+        if(PkgConfig_FOUND)
+            pkg_check_modules(WAYLAND_PROTOCOLS QUIET wayland-protocols)
+            if(WAYLAND_PROTOCOLS_FOUND)
+                set(_tb_wayland ON)
+            endif()
         endif()
-    endif()
-    if(_tb_wayland)
-        message(STATUS "Raylib: enabling Wayland + X11 GLFW backends")
-    else()
-        message(STATUS "Raylib: X11 backend only (install 'wayland-protocols' for native Wayland)")
+        if(_tb_wayland)
+            message(STATUS "Raylib: enabling Wayland + X11 GLFW backends")
+        else()
+            message(STATUS "Raylib: X11 backend only (install 'wayland-protocols' for native Wayland)")
+        endif()
     endif()
     set(GLFW_BUILD_WAYLAND ${_tb_wayland} CACHE BOOL "" FORCE)
     set(GLFW_BUILD_X11 ON CACHE BOOL "" FORCE)
     FetchContent_MakeAvailable(raylib)
 endif()
 
+# The online screens drive the TCP lobby (tb_transport) — native-only; the web
+# client compiles them out (main.cpp guards the matching flow with __EMSCRIPTEN__).
+set(_tb_online_screens
+    src/render/ConnectScreen.cpp
+    src/render/LobbyScreen.cpp
+    src/render/ReadyCheckScreen.cpp
+)
+if(EMSCRIPTEN)
+    set(_tb_online_screens "")
+endif()
+
 add_executable(tactical_battler
     src/main.cpp
     src/render/Renderer.cpp
     src/render/BuildEditorScreen.cpp
-    src/render/ConnectScreen.cpp
     src/render/ContentPaths.cpp
-    src/render/LobbyScreen.cpp
     src/render/MainMenuScreen.cpp
     src/render/MatchSource.cpp
     src/render/PackManifest.cpp
-    src/render/ReadyCheckScreen.cpp
     src/render/SettingsScreen.cpp
     src/render/SpritePack.cpp
+    ${_tb_online_screens}
 )
-target_link_libraries(tactical_battler PRIVATE tb_core tb_transport raylib)
+target_link_libraries(tactical_battler PRIVATE tb_core raylib)
+if(NOT EMSCRIPTEN)
+    target_link_libraries(tactical_battler PRIVATE tb_transport)
+endif()
+
+if(EMSCRIPTEN)
+    # W.3/W.4 — browser bundle: game content baked into the MEMFS image (mounted
+    # at /, where ContentPaths' "data" fallback finds it), our HTML shell, and a
+    # roomy stack (the AI search keeps working sets on it).
+    set_target_properties(tactical_battler PROPERTIES OUTPUT_NAME "index" SUFFIX ".html")
+    target_link_options(tactical_battler PRIVATE
+        "-sUSE_GLFW=3"
+        "-sALLOW_MEMORY_GROWTH=1"
+        # Growth must use the legacy re-alloc path: Chrome's texImage2D rejects
+        # views over the resizable ArrayBuffer emscripten 6 defaults to.
+        "-sGROWABLE_ARRAYBUFFERS=0"
+        "-sSTACK_SIZE=4194304"
+        "--preload-file=${CMAKE_SOURCE_DIR}/data@/data"
+        "--preload-file=${CMAKE_SOURCE_DIR}/packs/default@/packs/default"
+        "--shell-file=${CMAKE_SOURCE_DIR}/web/shell.html"
+    )
+    set_property(TARGET tactical_battler APPEND PROPERTY LINK_DEPENDS
+        "${CMAKE_SOURCE_DIR}/web/shell.html")
+endif()
 
 # On Linux, Raylib needs these system libs when built statically.
-if(UNIX AND NOT APPLE)
+if(UNIX AND NOT APPLE AND NOT EMSCRIPTEN)
     target_link_libraries(tactical_battler PRIVATE m pthread dl)
 endif()
 endif() # TB_BUILD_GUI

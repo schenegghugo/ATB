@@ -30,39 +30,52 @@
 #include "data/MapJson.h"
 #include "data/Net.h"
 #include "data/RulesetJson.h"
-#include "net/GameServer.h"   // contentHashOf
-#include "net/Lobby.h"
-#include "net/MirrorSession.h"
 #include "render/Animator.h"
 #include "render/BuildEditorScreen.h"
-#include "render/ConnectScreen.h"
 #include "render/ContentPaths.h"
-#include "render/CorrespondenceMatchSource.h"
-#include "render/LobbyScreen.h"
 #include "render/MainMenuScreen.h"
 #include "render/MatchSource.h"
-#include "render/ReadyCheckScreen.h"
-#include "render/RemoteMatchSource.h"
 #include "render/Renderer.h"
 #include "render/ReplayMatchSource.h"
 #include "net/Replay.h"
 #include "render/SettingsScreen.h"
-#include "render/SpectateMatchSource.h"
 #include "render/SpritePack.h"
 #include "render/Ui.h"
 
+// Online play rides the POSIX TCP transport (tb_transport) — native-only. The
+// web/WASM client (W.2) compiles the whole flow out: browsers can't open raw
+// sockets, so "Play Online" waits on a future WebSocket transport.
+#ifndef __EMSCRIPTEN__
+#include "net/GameServer.h" // contentHashOf
+#include "net/Lobby.h"
+#include "net/MirrorSession.h"
+#include "render/ConnectScreen.h"
+#include "render/CorrespondenceMatchSource.h"
+#include "render/LobbyScreen.h"
+#include "render/ReadyCheckScreen.h"
+#include "render/RemoteMatchSource.h"
+#include "render/SpectateMatchSource.h"
+#endif
+
 #include "raylib.h"
+
+#ifdef __EMSCRIPTEN__
+#include <emscripten/emscripten.h>
+#endif
 
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
 #include <memory>
-#include <mutex>
 #include <optional>
 #include <string>
-#include <thread>
 #include <vector>
+
+#ifndef __EMSCRIPTEN__
+#include <mutex>
+#include <thread>
+#endif
 
 using namespace tb;
 
@@ -70,6 +83,7 @@ namespace {
 
 enum class AppState { Menu, Editor, Connect, Lobby, ReadyCheck, Waiting, Battle, Settings };
 
+#ifndef __EMSCRIPTEN__
 // A blocking network call moved off the render thread (async connect / join). The
 // worker fills the result under `mu` and flips `done`; the UI polls each frame.
 // Cancel = drop the owning shared_ptr — the detached worker keeps its own ref and
@@ -86,6 +100,7 @@ struct PendingJoin {
     std::unique_ptr<tb::net::MirrorSession> mirror;
     std::string error;
 };
+#endif
 
 struct Session {
     SpellCatalog catalog = makeDefaultCatalog();
@@ -229,7 +244,15 @@ int main() {
     const int sw = std::max(arenaW, 1180);
     const int sh = std::max(arenaH, 720);
 
+#ifdef __EMSCRIPTEN__
+    // Fixed-size canvas on web: FLAG_WINDOW_RESIZABLE makes raylib chase
+    // window.innerWidth and fight emscripten's canvas management, leaving the
+    // canvas CSS-scaled against the framebuffer — every click lands offset.
+    // The itch.io embed is sized to the canvas instead.
+    SetConfigFlags(FLAG_MSAA_4X_HINT);
+#else
     SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE);
+#endif
     InitWindow(sw, sh, "Tactical Battler — POC");
     if (!IsWindowReady()) {
         // No display/GL context (e.g. headless, or Wayland without the Wayland
@@ -244,7 +267,13 @@ int main() {
     // holding pack.json; absent or unloadable → the built-in primitives (identical
     // to before). A pack is client-side cosmetic only — it never touches rules.
     std::optional<render::SpritePack> pack;
-    if (const char* pk = std::getenv("ATB_PACK"); pk && *pk) {
+    const char* pk = std::getenv("ATB_PACK");
+#ifdef __EMSCRIPTEN__
+    // No env vars in a browser — the default pack is baked into the bundle's
+    // filesystem image (W.3), so ship the itch.io build with art on.
+    if (!pk || !*pk) pk = "packs/default";
+#endif
+    if (pk && *pk) {
         pack.emplace();
         std::vector<std::string> errs;
         if (pack->load(pk, errs)) {
@@ -259,11 +288,13 @@ int main() {
     render::BuildEditorScreen editor(session.catalog, *session.repo, session.ruleset);
     render::MainMenuScreen menu;
     render::SettingsScreen settings;
+#ifndef __EMSCRIPTEN__
     render::LobbyScreen lobbyScreen;
     render::ReadyCheckScreen readyScreen;
     std::unique_ptr<net::LobbySession> lobby; // live lobby connection (Online Home)
     std::string lobbyHost = "127.0.0.1";      // parsed from the connect form on join
     uint16_t lobbyPort = 5555;
+#endif
     AppState editorReturn = AppState::Menu;   // where the build editor returns to
 
     AppState state = AppState::Menu;
@@ -286,6 +317,7 @@ int main() {
     render::ReplayMatchSource* replay = nullptr; // non-null when `source` is a replay
     bool spectating = false;       // `source` watches someone else's live match (5.2)
     std::optional<net::Intent> pendingDecoy; // a decoy cast awaiting its 'a'/'b' commitment
+#ifndef __EMSCRIPTEN__
     std::shared_ptr<PendingConnect> pendingConnect; // async lobby login in flight
     std::shared_ptr<PendingJoin> pendingJoin;       // async match join in flight (Waiting)
 
@@ -297,6 +329,17 @@ int main() {
     if (const char* p = std::getenv("ATB_PASS"); p) netDefaults.pass = p;
     if (const char* l = std::getenv("ATB_LOBBY"); l) netDefaults.lobby = l;
     render::ConnectScreen connect(netDefaults);
+#endif
+
+    // Where leaving a match/stream lands: back in the lobby when one is live
+    // (native online play), else the main menu. The web client has no lobby.
+    auto backState = [&]() -> AppState {
+#ifdef __EMSCRIPTEN__
+        return AppState::Menu;
+#else
+        return lobby ? AppState::Lobby : AppState::Menu;
+#endif
+    };
 
     // A local, in-process match (LocalMatchSource drives the Battle directly).
     auto newLocalMatch = [&]() -> std::unique_ptr<render::MatchSource> {
@@ -306,6 +349,7 @@ int main() {
                        session.staticArena ? &*session.staticArena : nullptr));
     };
 
+#ifndef __EMSCRIPTEN__
     // Split "host:port" (default port 5555).
     auto parseHostPort = [](const std::string& s, std::string& host, uint16_t& port) {
         const auto colon = s.find(':');
@@ -313,6 +357,7 @@ int main() {
         port = static_cast<uint16_t>(colon == std::string::npos ? 5555
                                                                 : std::atoi(s.substr(colon + 1).c_str()));
     };
+#endif
 
     auto enterBattleWith = [&](std::unique_ptr<render::MatchSource> src) {
         source = std::move(src);
@@ -326,6 +371,7 @@ int main() {
         state = AppState::Battle;
     };
 
+#ifndef __EMSCRIPTEN__
     // Turn a lobby pairing into a playable MatchSource: a live token → a mirror
     // (RemoteMatchSource) over a fresh match conn; a correspondence handle → a
     // CorrespondenceSession over this lobby connection. A rated game mirrors under
@@ -377,6 +423,7 @@ int main() {
                 secretsPath));
         }
     };
+#endif // !__EMSCRIPTEN__
 
     using EMode = render::BuildEditorScreen::Mode;
 
@@ -401,22 +448,38 @@ int main() {
         }
     }
 
-    while (!WindowShouldClose() && !quit) {
+    // W.2 — one frame of the top-level state machine. Native builds drive it
+    // from a classic while loop; the web build registers it as the browser's
+    // animation-frame callback (emscripten_set_main_loop_arg), which must give
+    // control back to the event loop after every frame.
+    auto frame = [&]() {
         const float dt = GetFrameTime();
 
         if (state == AppState::Menu) {
+            // The web build hides "Play Online" (no TCP in a browser) and "Quit"
+            // (a browser tab has no meaningful exit).
+#ifdef __EMSCRIPTEN__
+            constexpr bool kOnlineAndQuit = false;
+#else
+            constexpr bool kOnlineAndQuit = true;
+#endif
             BeginDrawing();
-            const auto r = menu.runFrame(GetScreenWidth(), GetScreenHeight());
+            const auto r = menu.runFrame(GetScreenWidth(), GetScreenHeight(),
+                                         /*showOnline=*/kOnlineAndQuit, /*showQuit=*/kOnlineAndQuit);
             EndDrawing();
             switch (r) {
                 case render::MainMenuScreen::Result::LocalMatch:  editorMode = EMode::Local; editorReturn = AppState::Menu; state = AppState::Editor; break;
-                case render::MainMenuScreen::Result::PlayOnline:  state = AppState::Connect; break; // → login → lobby
+                case render::MainMenuScreen::Result::PlayOnline:
+#ifndef __EMSCRIPTEN__
+                    state = AppState::Connect; // → login → lobby
+#endif
+                    break;
                 case render::MainMenuScreen::Result::BuildEditor: editorMode = EMode::Edit; editorReturn = AppState::Menu; state = AppState::Editor; break;
                 case render::MainMenuScreen::Result::Settings:    state = AppState::Settings; break;
                 case render::MainMenuScreen::Result::Quit:        quit = true; break;
                 case render::MainMenuScreen::Result::None: break;
             }
-            continue;
+            return;
         }
 
         if (state == AppState::Settings) {
@@ -425,13 +488,15 @@ int main() {
                 {"Ruleset", TextFormat("teamSize %d, budget %d pts", session.ruleset.teamSize,
                                        session.ruleset.economy.pointBudget)},
                 {"Sprite pack", pack ? pack->name() : std::string("(built-in primitives)")},
+#ifndef __EMSCRIPTEN__
                 {"Default server", connect.params().host},
+#endif
             };
             BeginDrawing();
             const auto r = settings.runFrame(GetScreenWidth(), GetScreenHeight(), rows);
             EndDrawing();
             if (r == render::SettingsScreen::Result::Back) state = AppState::Menu;
-            continue;
+            return;
         }
 
         if (state == AppState::Editor) {
@@ -443,9 +508,10 @@ int main() {
             // opened from (the lobby or a ready check when editing an online build).
             else if (r == render::BuildEditorScreen::Result::PlayOnline) state = editorReturn;
             else if (r == render::BuildEditorScreen::Result::Menu) state = editorReturn;
-            continue;
+            return;
         }
 
+#ifndef __EMSCRIPTEN__ // ---- online flow: Connect / Waiting / Lobby / ReadyCheck ----
         if (state == AppState::Connect) {
             // An async login finished? Adopt (or report) it before drawing.
             if (pendingConnect) {
@@ -468,7 +534,7 @@ int main() {
                                                   ? ""
                                                   : "Rated online disabled (no ranked ruleset).");
                         state = AppState::Lobby;
-                        continue;
+                        return;
                     }
                     connect.setStatus("Lobby connect failed: " + err);
                 }
@@ -499,7 +565,7 @@ int main() {
                 }).detach();
                 pendingConnect = std::move(pc);
             }
-            continue;
+            return;
         }
 
         if (state == AppState::Waiting) {
@@ -524,7 +590,7 @@ int main() {
                     lobbyScreen.setStatus("Join failed: " + (err.empty() ? "abandoned" : err));
                     state = lobby ? AppState::Lobby : AppState::Menu;
                 }
-                continue;
+                return;
             }
             const int W = GetScreenWidth(), H = GetScreenHeight();
             BeginDrawing();
@@ -545,7 +611,7 @@ int main() {
                 lobbyScreen.setStatus("Join abandoned.");
                 state = lobby ? AppState::Lobby : AppState::Menu;
             }
-            continue;
+            return;
         }
 
         if (state == AppState::Lobby) {
@@ -593,7 +659,7 @@ int main() {
                     }
                 }
             }
-            continue;
+            return;
         }
 
         if (state == AppState::ReadyCheck) {
@@ -610,8 +676,9 @@ int main() {
                 editorReturn = AppState::ReadyCheck; // resume the ready check afterwards
                 state = AppState::Editor;
             }
-            continue;
+            return;
         }
+#endif // !__EMSCRIPTEN__ (online flow)
 
         // -------------------------- Battle state -----------------------------
         Vec2i hovered = render::screenToGrid(layout, GetMouseX(), GetMouseY());
@@ -622,7 +689,7 @@ int main() {
 
         // Replay playback controls (read-only viewer): Space pause, →/. step, ↑↓ speed.
         if (replay) {
-            if (IsKeyPressed(KEY_TAB)) { source.reset(); replay = nullptr; state = AppState::Menu; continue; }
+            if (IsKeyPressed(KEY_TAB)) { source.reset(); replay = nullptr; state = AppState::Menu; return; }
             if (IsKeyPressed(KEY_SPACE)) replay->togglePause();
             if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_PERIOD)) replay->step();
             if (IsKeyPressed(KEY_UP)) replay->faster();
@@ -639,11 +706,11 @@ int main() {
             source.reset();
             spectating = false;
             onlineMatch = false;
-            state = lobby ? AppState::Lobby : AppState::Menu;
-            continue;
+            state = backState();
+            return;
         }
 
-        if (!replay && !spectating && !chatFocused && IsKeyPressed(KEY_TAB)) { state = AppState::Editor; continue; }
+        if (!replay && !spectating && !chatFocused && IsKeyPressed(KEY_TAB)) { state = AppState::Editor; return; }
         // R starts a fresh LOCAL arena. (In a networked match the server owns the
         // arena, so this just drops you into a local rematch — Tab returns to editor.)
         if (!replay && !spectating && !chatFocused && IsKeyPressed(KEY_R)) {
@@ -873,9 +940,19 @@ int main() {
             source.reset();
             onlineMatch = false;
             spectating = false;
-            state = lobby ? AppState::Lobby : AppState::Menu;
+            state = backState();
         }
-    }
+    };
+
+#ifdef __EMSCRIPTEN__
+    // simulate_infinite_loop=1 never returns: it unwinds out of main() with
+    // main's stack frame intentionally leaked, so `frame` and every local it
+    // captures stay alive for the lifetime of the page.
+    emscripten_set_main_loop_arg([](void* f) { (*static_cast<decltype(&frame)>(f))(); },
+                                 &frame, /*fps=*/0, /*simulate_infinite_loop=*/1);
+#else
+    while (!WindowShouldClose() && !quit) frame();
+#endif
 
     if (pack) pack->unload(); // free textures while the GL context is still alive
     CloseWindow();

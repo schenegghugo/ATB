@@ -96,3 +96,35 @@ jobs:
         run: |
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
           cmake --build build --target tactical_battler -j
+
+  web-build:
+    name: Web/WASM bundle (itch.io)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build
+
+      # Pinned to the version the bundle is verified against (see W.4 in
+      # MILESTONES.md) — -sGROWABLE_ARRAYBUFFERS is emscripten-6-specific.
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 6.0.2
+          actions-cache-folder: emsdk-cache
+
+      - name: Configure + build web bundle
+        run: |
+          emcmake cmake -S . -B build-web -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-web -j
+
+      - name: Package itch.io zip (index.html at the root)
+        run: |
+          mkdir -p dist
+          cp build-web/index.html build-web/index.js build-web/index.wasm build-web/index.data dist/
+          cd dist && zip -9 ../tactical-battler-web.zip ./*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tactical-battler-web
+          path: tactical-battler-web.zip

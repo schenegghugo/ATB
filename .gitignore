@@ -9,3 +9,5 @@ tactical_battler
 accounts.json
 tb_account_test.json
 tb_ranked_test.json
+/build-web/
+/build-web-dbg/

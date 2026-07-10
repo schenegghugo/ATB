@@ -5,7 +5,8 @@
 
 namespace tb::render {
 
-MainMenuScreen::Result MainMenuScreen::runFrame(int screenW, int screenH) {
+MainMenuScreen::Result MainMenuScreen::runFrame(int screenW, int screenH, bool showOnline,
+                                                bool showQuit) {
     const Vector2 m = GetMousePosition();
     ClearBackground(ui::kBg);
 
@@ -41,6 +42,8 @@ MainMenuScreen::Result MainMenuScreen::runFrame(int screenW, int screenH) {
 
     Result result = Result::None;
     for (const Item& it : items) {
+        if (it.result == Result::PlayOnline && !showOnline) continue;
+        if (it.result == Result::Quit && !showQuit) continue;
         if (ui::button({bx, by, bw, bh}, it.label, m, it.base)) result = it.result;
         by += bh + gap;
     }
