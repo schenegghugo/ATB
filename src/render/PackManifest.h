@@ -23,6 +23,11 @@ struct RGBA {
     unsigned char r = 0, g = 0, b = 0, a = 255;
 };
 
+// "#RRGGBB" or "#RRGGBBAA" → RGBA. Returns false (recording an error under
+// `ctx`) otherwise. Shared by the pack manifest and the UI theme loader.
+bool parseHexColor(const std::string& s, const std::string& ctx, RGBA& out,
+                   std::vector<std::string>& e);
+
 // An animation clip: ordered atlas sub-rects played at `fps` on the sprite's
 // atlas (§2.4). Two flavours live on a SpriteDef: `anim` (ambient, loops) and
 // `cast` (event clip, played once when the matching engine event arrives). Each

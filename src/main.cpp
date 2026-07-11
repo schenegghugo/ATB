@@ -30,6 +30,7 @@
 #include "data/MapJson.h"
 #include "data/Net.h"
 #include "data/RulesetJson.h"
+#include "data/Prefs.h"
 #include "net/GameServer.h"   // contentHashOf
 #include "net/Lobby.h"
 #include "net/MirrorSession.h"
@@ -40,6 +41,7 @@
 #include "render/CorrespondenceMatchSource.h"
 #include "render/LobbyScreen.h"
 #include "render/MainMenuScreen.h"
+#include "render/Theme.h"
 #include "render/MatchSource.h"
 #include "render/ReadyCheckScreen.h"
 #include "render/RemoteMatchSource.h"
@@ -220,6 +222,51 @@ int main() {
     session.repo->save(pyromancerBuild()); // seed the store (stands in for the DB)
     session.repo->save(bruiserBuild());
 
+    // Player preferences (settings.json beside the app, hand-editable): the
+    // picked UI theme + sprite pack. Absent file = defaults; a malformed one is
+    // reported and ignored (never guessed at).
+    Prefs prefs;
+    if (PrefsLoad pl = loadPrefsFromFile("settings.json"); pl.ok) {
+        prefs = pl.prefs;
+    } else {
+        TraceLog(LOG_WARNING, "settings.json is invalid — using defaults:");
+        for (const std::string& e : pl.errors) TraceLog(LOG_WARNING, "  - %s", e.c_str());
+    }
+#ifdef __EMSCRIPTEN__
+    // First run in a browser: no settings.json in the bundle — default to the
+    // baked-in pack so the itch.io build ships with art on.
+    if (prefs.pack.empty() && prefs.theme.empty() && !std::getenv("ATB_PACK"))
+        prefs.pack = "default";
+#endif
+
+    // Apply the picked theme (themes/<name>.json) to the chrome + battle
+    // palettes; "" or a broken file → the built-in defaults. Returns false
+    // (with a status message) so the Settings screen can surface a bad pick.
+    std::string settingsStatus;
+    auto applyThemeByName = [&settingsStatus](const std::string& name) -> bool {
+        if (name.empty()) {
+            const render::Theme defaults;
+            render::ui::applyTheme(defaults);
+            render::applyBattleTheme(defaults);
+            return true;
+        }
+        const std::string dir = render::siblingDir("themes");
+        const std::string path = dir + "/" + name + ".json";
+        const render::ThemeLoad tl =
+            dir.empty() ? render::ThemeLoad{} : render::loadThemeFromFile(path);
+        if (!tl.ok) {
+            settingsStatus = "Theme '" + name + "' failed to load — see the log.";
+            TraceLog(LOG_WARNING, "Theme '%s' is invalid — palette unchanged:", path.c_str());
+            for (const std::string& e : tl.errors) TraceLog(LOG_WARNING, "  - %s", e.c_str());
+            return false;
+        }
+        render::ui::applyTheme(tl.theme);
+        render::applyBattleTheme(tl.theme);
+        TraceLog(LOG_INFO, "Applied theme '%s' (%s)", name.c_str(), tl.name.c_str());
+        return true;
+    };
+    if (!applyThemeByName(prefs.theme)) prefs.theme.clear(); // bad pref → defaults
+
     render::Layout layout;
     // Open large enough for both the arena (sized from the ruleset) and the
     // (responsive) build editor; the editor reads the live window size each frame,
@@ -240,25 +287,48 @@ int main() {
     }
     SetTargetFPS(60);
 
-    // Optional presentation pack (art/palette). ATB_PACK=<dir> points at a folder
-    // holding pack.json; absent or unloadable → the built-in primitives (identical
-    // to before). A pack is client-side cosmetic only — it never touches rules.
+    // Optional presentation pack (art/palette). A pack is client-side cosmetic
+    // only — it never touches rules. Sources, first hit wins:
+    //   1. ATB_PACK=<dir> (dev override: a directory path holding pack.json)
+    //   2. settings.json's "pack" (a name under packs/, picked in Settings)
+    //   3. none → the built-in primitives.
     std::optional<render::SpritePack> pack;
-    if (const char* pk = std::getenv("ATB_PACK"); pk && *pk) {
+    auto loadPackFromDir = [&pack](const std::string& dir) -> bool {
+        if (pack) pack->unload(); // needs the GL context — swapped in-frame only
         pack.emplace();
         std::vector<std::string> errs;
-        if (pack->load(pk, errs)) {
-            TraceLog(LOG_INFO, "Loaded sprite pack '%s' (%s)", pk, pack->name().c_str());
-        } else {
-            TraceLog(LOG_WARNING, "Sprite pack '%s' failed to load — using primitives:", pk);
-            for (const std::string& e : errs) TraceLog(LOG_WARNING, "  - %s", e.c_str());
-            pack.reset();
+        if (pack->load(dir, errs)) {
+            TraceLog(LOG_INFO, "Loaded sprite pack '%s' (%s)", dir.c_str(), pack->name().c_str());
+            return true;
         }
+        TraceLog(LOG_WARNING, "Sprite pack '%s' failed to load — using primitives:", dir.c_str());
+        for (const std::string& e : errs) TraceLog(LOG_WARNING, "  - %s", e.c_str());
+        pack.reset();
+        return false;
+    };
+    // Swap to packs/<name> ("" = drop to primitives); false + status on failure.
+    auto loadPackByName = [&](const std::string& name) -> bool {
+        if (name.empty()) {
+            if (pack) { pack->unload(); pack.reset(); }
+            return true;
+        }
+        const std::string dir = render::siblingDir("packs");
+        if (dir.empty() || !loadPackFromDir(dir + "/" + name)) {
+            settingsStatus = "Pack '" + name + "' failed to load — see the log.";
+            return false;
+        }
+        return true;
+    };
+    if (const char* pk = std::getenv("ATB_PACK"); pk && *pk) {
+        loadPackFromDir(pk);
+    } else if (!loadPackByName(prefs.pack)) {
+        prefs.pack.clear(); // bad pref → primitives
     }
 
     render::BuildEditorScreen editor(session.catalog, *session.repo, session.ruleset);
     render::MainMenuScreen menu;
     render::SettingsScreen settings;
+    std::vector<std::string> themesList, packsList; // rescanned on entering Settings
     render::LobbyScreen lobbyScreen;
     render::ReadyCheckScreen readyScreen;
     std::unique_ptr<net::LobbySession> lobby; // live lobby connection (Online Home)
@@ -412,7 +482,13 @@ int main() {
                 case render::MainMenuScreen::Result::LocalMatch:  editorMode = EMode::Local; editorReturn = AppState::Menu; state = AppState::Editor; break;
                 case render::MainMenuScreen::Result::PlayOnline:  state = AppState::Connect; break; // → login → lobby
                 case render::MainMenuScreen::Result::BuildEditor: editorMode = EMode::Edit; editorReturn = AppState::Menu; state = AppState::Editor; break;
-                case render::MainMenuScreen::Result::Settings:    state = AppState::Settings; break;
+                case render::MainMenuScreen::Result::Settings:
+                    // Rescan on entry so a pack/theme dropped in while the game
+                    // runs shows up without a restart (ricing-friendly).
+                    themesList = listThemes(render::siblingDir("themes"));
+                    packsList = listPacks(render::siblingDir("packs"));
+                    state = AppState::Settings;
+                    break;
                 case render::MainMenuScreen::Result::Quit:        quit = true; break;
                 case render::MainMenuScreen::Result::None: break;
             }
@@ -420,17 +496,44 @@ int main() {
         }
 
         if (state == AppState::Settings) {
-            std::vector<std::pair<std::string, std::string>> rows = {
+            render::SettingsScreen::View sv;
+            sv.rows = {
                 {"Content dir", session.staticArena ? "data/ (static map)" : "data/"},
                 {"Ruleset", TextFormat("teamSize %d, budget %d pts", session.ruleset.teamSize,
                                        session.ruleset.economy.pointBudget)},
                 {"Sprite pack", pack ? pack->name() : std::string("(built-in primitives)")},
                 {"Default server", connect.params().host},
             };
+            sv.themes = themesList;
+            sv.packs = packsList;
+            sv.curTheme = prefs.theme;
+            sv.curPack = prefs.pack;
+            sv.status = settingsStatus;
             BeginDrawing();
-            const auto r = settings.runFrame(GetScreenWidth(), GetScreenHeight(), rows);
+            const auto r = settings.runFrame(GetScreenWidth(), GetScreenHeight(), sv);
             EndDrawing();
-            if (r == render::SettingsScreen::Result::Back) state = AppState::Menu;
+            // Apply + persist a pick. A failed load keeps the previous pref (and
+            // palette/pack) and reports via settingsStatus.
+            using SR = render::SettingsScreen::Result;
+            if (r == SR::Back) {
+                state = AppState::Menu;
+            } else if (r == SR::SetTheme) {
+                if (applyThemeByName(settings.picked())) {
+                    prefs.theme = settings.picked();
+                    settingsStatus = savePrefsToFile(prefs, "settings.json")
+                                         ? "Theme applied + saved."
+                                         : "Theme applied (couldn't write settings.json).";
+                }
+            } else if (r == SR::ReloadTheme) {
+                if (applyThemeByName(prefs.theme)) settingsStatus = "Theme file reloaded.";
+            } else if (r == SR::SetPack) {
+                if (loadPackByName(settings.picked())) {
+                    prefs.pack = settings.picked();
+                    settingsStatus = savePrefsToFile(prefs, "settings.json")
+                                         ? "Pack applied + saved."
+                                         : "Pack applied (couldn't write settings.json).";
+                }
+            }
             continue;
         }
 

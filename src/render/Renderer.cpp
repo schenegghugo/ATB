@@ -26,31 +26,33 @@ TileKeys tileKeys(TileType t) {
     return {"tiles.floor", "floor"};
 }
 
-// Tactical-mode palette.
-constexpr Color kBackground{18, 20, 28, 255};
-constexpr Color kGridLine{40, 46, 60, 255};
-constexpr Color kFloor{30, 34, 46, 255};
-constexpr Color kWall{70, 78, 96, 255};
-constexpr Color kObstacle{120, 96, 60, 255};
-constexpr Color kReach{60, 110, 200, 90};
-constexpr Color kHover{230, 230, 240, 110};
-constexpr Color kZoneOk{230, 140, 50, 120};   // selected spell would land
-constexpr Color kZoneBad{120, 60, 60, 110};    // selected spell can't be cast
-constexpr Color kStatusDot{230, 90, 200, 255}; // status-effect marker
-constexpr Color kGroundWall{110, 120, 140, 255}; // Shelter walls
-constexpr Color kGlyphZone{150, 70, 200, 80};    // Glyph trap area
-constexpr Color kPortal{70, 200, 220, 255};      // Portal entry/exit
-constexpr Color kStorm{200, 40, 50, 110};        // collapsed (closing-ring) tiles
-constexpr Color kPlayer{70, 170, 110, 255};
-constexpr Color kEnemy{200, 80, 80, 255};
-constexpr Color kLos{240, 220, 120, 200};
-constexpr Color kText{220, 224, 235, 255};
-constexpr Color kTextDim{150, 156, 172, 255};    // greyed button label (cd / unaffordable)
-constexpr Color kBtnReady{54, 62, 84, 255};      // castable now
-constexpr Color kBtnCooldown{38, 42, 52, 255};   // recharging
-constexpr Color kBtnPoor{72, 48, 52, 255};       // not enough AP
-constexpr Color kBtnSelected{235, 200, 90, 255}; // selected-button border
-constexpr Color kBtnCdText{232, 150, 80, 255};   // cooldown counter
+// Tactical-mode palette. Mutable on purpose: applyBattleTheme() reassigns it
+// from a loaded theme (themes/*.json); the initialisers are the defaults and
+// match Theme's defaults field-for-field.
+Color kBackground{18, 20, 28, 255};
+Color kGridLine{40, 46, 60, 255};
+Color kFloor{30, 34, 46, 255};
+Color kWall{70, 78, 96, 255};
+Color kObstacle{120, 96, 60, 255};
+Color kReach{60, 110, 200, 90};
+Color kHover{230, 230, 240, 110};
+Color kZoneOk{230, 140, 50, 120};   // selected spell would land
+Color kZoneBad{120, 60, 60, 110};    // selected spell can't be cast
+Color kStatusDot{230, 90, 200, 255}; // status-effect marker
+Color kGroundWall{110, 120, 140, 255}; // Shelter walls
+Color kGlyphZone{150, 70, 200, 80};    // Glyph trap area
+Color kPortal{70, 200, 220, 255};      // Portal entry/exit
+Color kStorm{200, 40, 50, 110};        // collapsed (closing-ring) tiles
+Color kPlayer{70, 170, 110, 255};
+Color kEnemy{200, 80, 80, 255};
+Color kLos{240, 220, 120, 200};
+Color kText{220, 224, 235, 255};
+Color kTextDim{150, 156, 172, 255};    // greyed button label (cd / unaffordable)
+Color kBtnReady{54, 62, 84, 255};      // castable now
+Color kBtnCooldown{38, 42, 52, 255};   // recharging
+Color kBtnPoor{72, 48, 52, 255};       // not enough AP
+Color kBtnSelected{235, 200, 90, 255}; // selected-button border
+Color kBtnCdText{232, 150, 80, 255};   // cooldown counter
 
 Rectangle tileRect(const Layout& l, Vec2i p) {
     return Rectangle{static_cast<float>(l.originX + p.x * l.tileSize),
@@ -459,6 +461,34 @@ void drawFrame(const Layout& l, const Battle& battle, const ViewState& view,
         DrawText(view.spellLabel.c_str(), l.screenWidth(g) - l.originX - w, 4, 16,
                  view.spellCastable ? kZoneOk : kText);
     }
+}
+
+void applyBattleTheme(const Theme& t) {
+    auto c = [](RGBA v) { return Color{v.r, v.g, v.b, v.a}; };
+    kBackground = c(t.bg);
+    kGridLine = c(t.gridLine);
+    kFloor = c(t.floor);
+    kWall = c(t.wall);
+    kObstacle = c(t.obstacle);
+    kReach = c(t.reach);
+    kHover = c(t.hover);
+    kZoneOk = c(t.zoneOk);
+    kZoneBad = c(t.zoneBad);
+    kStatusDot = c(t.statusDot);
+    kGroundWall = c(t.groundWall);
+    kGlyphZone = c(t.glyphZone);
+    kPortal = c(t.portal);
+    kStorm = c(t.storm);
+    kPlayer = c(t.player);
+    kEnemy = c(t.enemy);
+    kLos = c(t.los);
+    kText = c(t.text);
+    kTextDim = c(t.textDim);
+    kBtnReady = c(t.btnReady);
+    kBtnCooldown = c(t.btnCooldown);
+    kBtnPoor = c(t.btnPoor);
+    kBtnSelected = c(t.btnSelected);
+    kBtnCdText = c(t.btnCdText);
 }
 
 } // namespace tb::render

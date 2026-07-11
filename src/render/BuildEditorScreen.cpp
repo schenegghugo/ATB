@@ -1,5 +1,7 @@
 #include "BuildEditorScreen.h"
 
+#include "Ui.h"
+
 #include "raylib.h"
 
 #include <algorithm>
@@ -8,17 +10,19 @@ namespace tb::render {
 
 namespace {
 
-constexpr Color kBg{18, 20, 28, 255};
-constexpr Color kPanel{30, 34, 46, 255};
-constexpr Color kPanelHot{44, 50, 66, 255};
-constexpr Color kPicked{40, 90, 60, 255};
-constexpr Color kPickedHot{52, 116, 78, 255};
-constexpr Color kText{220, 224, 235, 255};
-constexpr Color kMuted{150, 156, 170, 255};
-constexpr Color kAccent{230, 140, 50, 255};
-constexpr Color kGood{90, 200, 130, 255};
-constexpr Color kBad{210, 90, 90, 255};
-constexpr Color kLine{0, 0, 0, 160};
+// Palette comes from the shared, theme-driven ui:: globals (this file predates
+// Ui.h and used to keep its own copies).
+using ui::kBg;
+using ui::kPanel;
+using ui::kPanelHot;
+using ui::kPicked;
+using ui::kPickedHot;
+using ui::kText;
+using ui::kMuted;
+using ui::kAccent;
+using ui::kGood;
+using ui::kBad;
+using ui::kLine;
 
 bool hovered(Rectangle r, Vector2 m) { return CheckCollisionPointRec(m, r); }
 bool pressed(Rectangle r, Vector2 m) {

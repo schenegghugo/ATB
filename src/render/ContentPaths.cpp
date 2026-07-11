@@ -33,4 +33,12 @@ std::optional<std::string> findContent(const std::string& name) {
     return std::nullopt;
 }
 
+std::string siblingDir(const std::string& name) {
+    const std::string app = GetApplicationDirectory();
+    const std::string candidates[] = {app + name, app + "../" + name, app + "../../" + name, name};
+    for (const std::string& dir : candidates)
+        if (DirectoryExists(dir.c_str())) return dir;
+    return {};
+}
+
 } // namespace tb::render

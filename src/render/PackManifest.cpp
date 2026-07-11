@@ -7,12 +7,9 @@
 
 namespace tb::render {
 
-namespace {
-
-using jsonread::Errors;
-
 // "#RRGGBB" or "#RRGGBBAA" → RGBA. Returns false (with an error) otherwise.
-bool parseHexColor(const std::string& s, const std::string& ctx, RGBA& out, Errors& e) {
+bool parseHexColor(const std::string& s, const std::string& ctx, RGBA& out,
+                   std::vector<std::string>& e) {
     if ((s.size() != 7 && s.size() != 9) || s[0] != '#') {
         e.push_back(ctx + ": colour must be \"#RRGGBB\" or \"#RRGGBBAA\"");
         return false;
@@ -38,6 +35,10 @@ bool parseHexColor(const std::string& s, const std::string& ctx, RGBA& out, Erro
     out = c;
     return true;
 }
+
+namespace {
+
+using jsonread::Errors;
 
 // Parse an `anim`/`cast` clip: { "rects": [[x,y,w,h], ...], "fps"?, "loop"? }.
 // `defaultLoop` differs per flavour (ambient loops; a one-shot doesn't).

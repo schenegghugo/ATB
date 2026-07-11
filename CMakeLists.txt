@@ -36,6 +36,7 @@ add_library(tb_core STATIC
     src/data/Net.cpp
     src/data/Sha256.cpp
     src/data/Password.cpp
+    src/data/Prefs.cpp
     src/net/MatchRunner.cpp
     src/net/Replay.cpp
 )
@@ -127,6 +128,15 @@ target_link_libraries(tb_team_balance PRIVATE tb_core)
 # texture/draw half (render/SpritePack) is GUI-only and verified in-game.
 add_executable(tb_pack_demo tests/pack_demo.cpp src/render/PackManifest.cpp)
 target_link_libraries(tb_pack_demo PRIVATE tb_core)
+
+# UI theme loader (render/Theme) — raylib-free like the pack manifest; also
+# validates every shipped themes/*.json when run from the repo root (CI gate).
+add_executable(tb_theme_demo tests/theme_demo.cpp src/render/Theme.cpp src/render/PackManifest.cpp)
+target_link_libraries(tb_theme_demo PRIVATE tb_core)
+
+# Player prefs (settings.json) round-trip + theme/pack discovery scans.
+add_executable(tb_prefs_demo tests/prefs_demo.cpp)
+target_link_libraries(tb_prefs_demo PRIVATE tb_core)
 
 # The frontend match-driver seam (render/MatchSource) is raylib-free too, so the
 # turn-driving logic the GUI runs behind it is verified headless here.
@@ -290,6 +300,7 @@ add_executable(tactical_battler
     src/render/ReadyCheckScreen.cpp
     src/render/SettingsScreen.cpp
     src/render/SpritePack.cpp
+    src/render/Theme.cpp
 )
 target_link_libraries(tactical_battler PRIVATE tb_core tb_transport raylib)
 

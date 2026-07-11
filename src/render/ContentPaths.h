@@ -25,4 +25,8 @@ namespace tb::render {
 // isn't present in the resolved content directory.
 [[nodiscard]] std::optional<std::string> findContent(const std::string& name);
 
+// A content directory that lives BESIDE data/ (same ladder, minus the env
+// override): "themes", "packs". "" if none of the candidates exist.
+[[nodiscard]] std::string siblingDir(const std::string& name);
+
 } // namespace tb::render

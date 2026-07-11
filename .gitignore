@@ -9,3 +9,7 @@ tactical_battler
 accounts.json
 tb_account_test.json
 tb_ranked_test.json
+# Player prefs written beside the app at runtime
+/settings.json
+/build-web/
+/build-web-dbg/

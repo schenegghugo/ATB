@@ -44,6 +44,8 @@ jobs:
           ./build/tb_roster_demo
           ./build/tb_event_demo
           ./build/tb_pack_demo
+          ./build/tb_theme_demo
+          ./build/tb_prefs_demo
           ./build/tb_net_demo
           ./build/tb_matchsource_demo
           ./build/tb_loopback_demo

@@ -8,6 +8,7 @@
 //
 #include "../core/Battle.h"
 #include "../data/Net.h" // net::ChatLine
+#include "Theme.h"
 
 #include <string>
 #include <vector>
@@ -92,5 +93,9 @@ class Animator;
 
 void drawFrame(const Layout& l, const Battle& battle, const ViewState& view,
                const SpritePack* pack = nullptr, const Animator* anim = nullptr);
+
+// Re-skin the battle board + HUD from a loaded theme (themes/*.json). The
+// chrome half lives in ui::applyTheme (Ui.h); main.cpp calls both together.
+void applyBattleTheme(const Theme& t);
 
 } // namespace tb::render
