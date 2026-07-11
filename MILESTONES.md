@@ -107,6 +107,18 @@ see below.
 - ☑ **R.5** Ban enforcement (editor greys banned; sim drops them); ranked/custom
   trust tie-in.
 
+## Customization — themes & pack picker (pre-itch.io gate) ☑
+
+- ☑ **T.1** Riceable UI themes — `themes/*.json` overrides every chrome/board/HUD
+  colour (`render/Theme`, strict loader on the shared hex parser; `tb_theme_demo`
+  validates the shipped files in CI; `docs/theming.md`).
+- ☑ **T.2** Shipped themes: `default` (doubles as the key reference), `gruvbox`,
+  `light`.
+- ☑ **T.3** Settings v2 — live theme + sprite-pack pickers (dirs rescanned on
+  entry) plus "Reload theme file" for the edit-and-look ricing loop.
+- ☑ **T.4** Preferences persist to hand-editable `settings.json` (`data/Prefs`,
+  `tb_prefs_demo`); `ATB_PACK` stays the dev override.
+
 ## Phase 2 — Spell bar + sprite/asset packs
 
 - ☑ **2.1** Clickable spell bar (`spellSlotRect`, visual states).
