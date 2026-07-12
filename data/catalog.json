@@ -258,7 +258,7 @@
       ],
       "name": "Portal",
       "apCost": 3,
-      "minRange": 2,
+      "minRange": 1,
       "maxRange": 8,
       "needsLineOfSight": false,
       "shape": "single",
@@ -270,7 +270,7 @@
           "ground": {
             "kind": "portal",
             "duration": 3,
-            "magnitude": 0
+            "magnitude": 4
           }
         }
       ]

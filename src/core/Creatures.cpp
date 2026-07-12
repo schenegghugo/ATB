@@ -44,7 +44,7 @@ Entity makeSummon(std::string name, int hp, int initiative, Spell ability) {
 // enemy into the open.
 Entity makeBlocker() {
     Spell drag{"Drag", 3, 0, 0, false, TargetShape::Cross, 4, 1,
-               {Effect{Effect::Type::Pull, 4, {}, {}, {}}}};
+               {Effect{Effect::Type::Pull, 2, {}, {}, {}}}};
     return makeSummon("blocker", 45, 4, std::move(drag));
 }
 

@@ -16,6 +16,12 @@ namespace tb {
 // What dealt a lethal blow — lets analysis attribute how matches end.
 enum class DamageSource : std::uint8_t { Spell, Storm, Collision };
 
+// Forced movement (Push/Pull) converts every *blocked* remaining tile into this
+// much damage (see Battle::applyForcedMove). Lives here rather than inside the
+// engine so the evaluator can price displacement threats with the same number
+// the engine deals.
+constexpr int kCollisionDamagePerCell = 5;
+
 // --- Status effects ---------------------------------------------------------
 // Carried per-entity, ticked at the owner's turn start. Buffs feed the AP/MP
 // reset; DamageOverTime applies on tick; Shield absorbs incoming damage;
@@ -35,14 +41,16 @@ struct StatusEffect {
 
 // --- Ground effects (persistent battlefield features) -----------------------
 // Spawned by spells onto tiles, with a turn duration. Walls block movement/LOS;
-// Glyphs repel anyone entering; Portals teleport anyone entering to an exit.
+// Glyphs repel anyone entering; Portals teleport anyone entering — or standing
+// on the entry when the portal is cast — to an exit traced from the caster.
 enum class GroundKind : std::uint8_t { Wall, Glyph, Portal };
 
 // Authoring payload carried by an Effect of type Spawn.
 struct GroundSpec {
     GroundKind kind = GroundKind::Wall;
     int duration = 2;   // turns the feature persists
-    int magnitude = 0;  // Glyph: repel distance
+    int magnitude = 0;  // Glyph: repel distance; Portal: trace length (the exit
+                        // lands this far past the entry along the caster's aim)
 };
 
 // --- Spell / effect data ----------------------------------------------------

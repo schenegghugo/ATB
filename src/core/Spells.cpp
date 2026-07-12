@@ -46,8 +46,8 @@ Effect spawnWall(int duration) {
 Effect spawnGlyph(int duration, int repel) {
     return Effect{Effect::Type::Spawn, 0, {}, GroundSpec{GroundKind::Glyph, duration, repel}};
 }
-Effect spawnPortal(int duration) {
-    return Effect{Effect::Type::Spawn, 0, {}, GroundSpec{GroundKind::Portal, duration, 0}};
+Effect spawnPortal(int duration, int trace) {
+    return Effect{Effect::Type::Spawn, 0, {}, GroundSpec{GroundKind::Portal, duration, trace}};
 }
 Effect rewind(int turns) {
     return Effect{Effect::Type::ApplyStatus, 0,
@@ -139,10 +139,12 @@ SpellCatalog makeDefaultCatalog() {
               Spell{"", 2, 0, 0, false, TargetShape::Single, 0, 5, {invisibility(2)}},
               {"support", "buff", "mobility"}));
 
-    // Portal — place an entry on the caster and an exit at the target; stepping
-    // onto the entry teleports the unit to the exit.
+    // Portal — traced from the caster: the target tile is the ENTRY; the exit
+    // lands 4 tiles further along the caster→entry ray (walls clamp the trace).
+    // Whatever stands on the entry at cast — bomb, ally, enemy — is transported
+    // immediately; walking onto the entry teleports for the portal's lifetime.
     c.add(def(spellid::Portal, "portal", 3,
-              Spell{"", 3, 2, 8, false, TargetShape::Single, 0, 4, {spawnPortal(3)}},
+              Spell{"", 3, 1, 8, false, TargetShape::Single, 0, 4, {spawnPortal(3, 4)}},
               {"support", "mobility", "terrain"}));
 
     // Glyph — lay a radius-3 trap zone; anyone entering is repelled 2 tiles.

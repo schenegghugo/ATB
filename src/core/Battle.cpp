@@ -8,8 +8,7 @@ namespace tb {
 
 namespace {
 
-constexpr int kCollisionDamagePerCell = 5; // forced-move into a blocker
-constexpr int kSummonCap = 2;              // max living summons per team
+constexpr int kSummonCap = 2; // max living summons per team
 
 // Reduce an arbitrary delta to a single cardinal step (axis with larger span).
 Vec2i cardinalStep(Vec2i from, Vec2i to) {
@@ -429,11 +428,36 @@ void Battle::spawnGround(const GroundSpec& spec, Faction owner, Vec2i casterPos,
             for (Vec2i t : zone)
                 if (grid_.isWalkable(t)) g.tiles.push_back(t);
             break;
-        case GroundKind::Portal:
+        case GroundKind::Portal: {
             g.kind = GroundKind::Portal;
-            g.tiles = {casterPos}; // entry sits on the caster's tile
-            g.exit = target;       // exit at the targeted tile
+            // Traced from the caster: the targeted tile is the ENTRY, and the
+            // exit sits `magnitude` tiles further along the caster→entry ray,
+            // clamped to the last unblocked tile (walls end the trace). Units
+            // don't block the trace — occupancy is checked at teleport time.
+            g.tiles = {target};
+            const Vec2i dir = cardinalStep(casterPos, target);
+            const std::vector<Vec2i> walls = wallTiles();
+            Vec2i exit = target;
+            for (int i = 0; i < spec.magnitude; ++i) {
+                const Vec2i next{exit.x + dir.x, exit.y + dir.y};
+                bool blocked = !grid_.isWalkable(next);
+                for (Vec2i w : walls)
+                    if (w == next) blocked = true;
+                if (blocked) break;
+                exit = next;
+            }
+            g.exit = exit;
             break;
+        }
+    }
+    // A portal snaps shut around whatever stands on the entry at creation —
+    // units (enemies too) and objects (a bomb) are sent straight to the exit,
+    // no walk-in needed. Same rules as walk-in: the exit must be free, and the
+    // arrival doesn't chain into further ground effects.
+    if (g.kind == GroundKind::Portal) {
+        if (auto rider = unitAt(target);
+            rider && grid_.isWalkable(g.exit) && !unitAt(g.exit))
+            units_[*rider].pos = g.exit;
     }
     if (!g.tiles.empty()) ground_.push_back(std::move(g));
 }

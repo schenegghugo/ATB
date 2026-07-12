@@ -65,8 +65,10 @@ enforces:
 
 - **Fireball radius buff** — it's the weakest attack (~43% win rate); tune it in
   the catalog and confirm the shift with `tb_balance`.
-- **Teach the AI to use Portal** — currently unused; its step-on-entry mechanic
-  needs deeper planning than the beam search reaches (`AI.cpp`).
+- **Tune Portal's trace** — the entry is the targeted tile and the exit is traced
+  along the caster's aim (`ground.magnitude` tiles further); anything standing on
+  the entry is transported at cast. The AI offers it on foes and bombs (`AI.cpp`);
+  length/range/cost balance is open.
 - **Add a new spell** from existing effects — pure catalog data, no engine change.
 
 ## Pull request process

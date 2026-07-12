@@ -25,7 +25,7 @@
         "maxRange": 0,
         "needsLineOfSight": false,
         "shape": "circle",
-        "radius": 1,
+        "radius": 4,
         "cooldown": 0,
         "effects": [
           {
@@ -40,7 +40,7 @@
       "kind": "summon",
       "hp": 18,
       "ap": 3,
-      "mp": 2,
+      "mp": 4,
       "initiative": 4,
       "fuse": 0,
       "statuses": [],
@@ -52,12 +52,12 @@
           "maxRange": 0,
           "needsLineOfSight": true,
           "shape": "cross",
-          "radius": 2,
+          "radius": 1,
           "cooldown": 2,
           "effects": [
             {
               "type": "pull",
-              "amount": 4
+              "amount": 2
             }
           ]
         }
@@ -113,7 +113,7 @@
           "effects": [
             {
               "type": "damage",
-              "amount": 8
+              "amount": 5
             }
           ]
         }

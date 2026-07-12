@@ -99,15 +99,34 @@ int main() {
         check(!b.stepTo(P, {3, 3}), "cannot step onto a wall tile");
     }
 
-    // --- Portal: teleport on enter -----------------------------------------
-    std::printf("Portal (teleport on enter):\n");
+    // --- Portal: traced entry -> exit, teleport on enter ---------------------
+    std::printf("Portal (traced entry -> exit):\n");
     {
         Battle b = makeArena({1, 3}, {12, 1}, {spellid::Portal}); // enemy out of the way
         int po = slotOf(b, P, spellid::Portal);
-        b.cast(P, po, {8, 3});                // entry on (1,3), exit at (8,3); Manhattan 7 <= 8
-        b.stepTo(P, {1, 2});                  // step off the entry
-        b.stepTo(P, {1, 3});                  // step back on -> teleport
-        check(b.unit(P).pos == Vec2i{8, 3}, "stepping onto entry teleports to exit");
+        b.cast(P, po, {4, 3});                // entry (4,3); trace continues east 4 -> exit (8,3)
+        b.stepTo(P, {2, 3});
+        b.stepTo(P, {3, 3});
+        b.stepTo(P, {4, 3});                  // walk onto the entry -> teleport
+        check(b.unit(P).pos == Vec2i{8, 3}, "entering the entry teleports to the traced exit");
+    }
+    std::printf("Portal (spawn-time transport):\n");
+    {
+        Battle b = makeArena({1, 3}, {5, 3}, {spellid::Portal});
+        int po = slotOf(b, P, spellid::Portal);
+        b.cast(P, po, {5, 3});                // entry under the enemy; trace east -> exit (9,3)
+        check(b.unit(E).pos == Vec2i{9, 3}, "unit standing on the entry is transported at cast");
+    }
+    std::printf("Portal (trace clamps at the arena edge):\n");
+    {
+        Battle b = makeArena({8, 3}, {1, 1}, {spellid::Portal});
+        int po = slotOf(b, P, spellid::Portal);
+        b.cast(P, po, {12, 3});               // trace wants (16,3) — grid is only 14 wide
+        b.stepTo(P, {9, 3});
+        b.stepTo(P, {10, 3});
+        b.stepTo(P, {11, 3});
+        b.stepTo(P, {12, 3});
+        check(b.unit(P).pos == Vec2i{13, 3}, "exit clamps to the last walkable tile");
     }
 
     // --- Invisible: hidden from AI target acquisition -----------------------

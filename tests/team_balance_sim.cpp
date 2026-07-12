@@ -195,6 +195,7 @@ void genComps(int start, int remaining, std::vector<int>& cur, Comps& out) {
 struct Outcome {
     int result = 0;
     int length = 0;
+    std::vector<long> casts; // champion casts per catalog spell id (see balance_sim)
 };
 
 Outcome runMatch(const Ruleset& ruleset, const SpellCatalog& catalog,
@@ -206,6 +207,19 @@ Outcome runMatch(const Ruleset& ruleset, const SpellCatalog& catalog,
     for (; o.length < kHalfTurnCap && battle.phase() != Phase::Finished; ++o.length)
         runEnemyTurn(battle, /*autoEndTurn=*/true, brain);
     if (auto w = battle.winner()) o.result = (*w == Faction::Player) ? 1 : -1;
+    // Fold the event stream into per-spell cast counts (champions only; slots
+    // map to catalog ids by spell name — same scheme as balance_sim).
+    int maxId = 0;
+    for (const SpellDef& d : catalog.all()) maxId = std::max(maxId, d.id);
+    o.casts.assign(maxId + 1, 0);
+    for (const BattleEvent& ev : battle.events()) {
+        if (ev.type != EventType::Cast) continue;
+        const Entity& u = battle.unit(ev.actor);
+        if (!u.isChampion()) continue;
+        if (ev.spellSlot < 0 || ev.spellSlot >= static_cast<int>(u.spells.size())) continue;
+        for (const SpellDef& d : catalog.all())
+            if (d.spell.name == u.spells[ev.spellSlot].name) { ++o.casts[d.id]; break; }
+    }
     return o;
 }
 
@@ -392,8 +406,13 @@ int main(int argc, char** argv) {
     }
 
     // Phase 3 — aggregate in match order (the serial loop of old, minus the sim).
+    int maxSpellId = 0;
+    for (const SpellDef& d : catalog.all()) maxSpellId = std::max(maxSpellId, d.id);
+    std::vector<long> casts(maxSpellId + 1, 0);
     for (int m = 0; m < matches; ++m) {
         const Outcome& o = outcomes[m];
+        for (std::size_t id = 0; id < o.casts.size() && id < casts.size(); ++id)
+            casts[id] += o.casts[id];
         const int ca = inputs[m].ca, cb = inputs[m].cb;
         lengths.push_back(o.length);
         totalLen += o.length;
@@ -700,6 +719,41 @@ int main(int argc, char** argv) {
         } else {
             h << "<p class=\"meta\">" << C << " compositions — matrix too large to draw legibly; see "
               << esc(base) << ".matchups.csv (and TOP MATCHUPS in the text report).</p>\n";
+        }
+
+        // Spell usage: how often the AI actually cast each spell across the
+        // study — low-cast spells make weak evidence in any archetype verdict.
+        h << "<h2>Spell usage (casts)</h2>\n";
+        h << "<p class=\"meta\">Total champion casts per spell across all " << matches
+          << " matches. A spell the AI rarely casts contributes little beyond its "
+             "build-point cost to the archetype results above.</p>\n";
+        {
+            struct SC { std::string key; long n; };
+            std::vector<SC> sc;
+            long mx = 1;
+            for (const SpellDef& d : catalog.all()) {
+                const long n = (d.id >= 0 && d.id < static_cast<int>(casts.size()))
+                                   ? casts[d.id] : 0;
+                sc.push_back({d.key, n});
+                mx = std::max(mx, n);
+            }
+            std::sort(sc.begin(), sc.end(),
+                      [](const SC& a, const SC& b) { return a.n > b.n; });
+            const int x0 = 130, barW = 520, rh = 20, top = 8, W = x0 + barW + 70,
+                      H = top + static_cast<int>(sc.size()) * rh + 6;
+            h << "<svg width=\"" << W << "\" height=\"" << H << "\" viewBox=\"0 0 " << W << " "
+              << H << "\">\n";
+            for (std::size_t i = 0; i < sc.size(); ++i) {
+                const double yc = top + i * rh + rh / 2.0;
+                const double w = double(sc[i].n) / mx * barW;
+                h << "<text x=\"8\" y=\"" << yc + 4 << "\" font-size=\"11\">" << esc(sc[i].key)
+                  << "</text>"
+                  << "<rect x=\"" << x0 << "\" y=\"" << top + i * rh + 3 << "\" width=\"" << w
+                  << "\" height=\"" << rh - 6 << "\" fill=\"#5b8def\" rx=\"2\"/>"
+                  << "<text x=\"" << x0 + w + 6 << "\" y=\"" << yc + 4 << "\" font-size=\"11\">"
+                  << sc[i].n << "</text>\n";
+            }
+            h << "</svg>\n";
         }
 
         h << "<p class=\"meta\">Full text detail: " << esc(outfile)

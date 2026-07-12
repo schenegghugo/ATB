@@ -19,8 +19,9 @@
 //          sides play; default 'beam'), ATB_JOBS (worker threads; default all
 //          cores — reports are bit-identical whatever the thread count)
 //
-// NOTE: the planner casts every spell except Portal (its step-on-entry teleport
-// needs deeper lookahead), so Portal's numbers reflect point opportunity-cost.
+// NOTE: per-spell cast counts are measured from each match's event stream; a
+// spell that was picked into builds but never cast is flagged AI-unused and its
+// winrate row reflects point opportunity-cost, not balance data.
 //
 #include "core/AI.h"
 #include "core/Battle.h"
@@ -120,6 +121,9 @@ struct Outcome {
     int result = 0; // +1 A (first actor), -1 B, 0 draw
     int length = 0;
     DamageSource source = DamageSource::Spell;
+    std::vector<long> casts; // champion casts per catalog spell id — feeds the
+                             // measured AI-unused verdict (a spell the planner
+                             // never casts is dead build weight, not balance data)
 };
 
 Outcome runMatch(const Ruleset& ruleset, const SpellCatalog& catalog,
@@ -135,6 +139,20 @@ Outcome runMatch(const Ruleset& ruleset, const SpellCatalog& catalog,
     if (w) {
         o.result = (*w == Faction::Player) ? 1 : -1;
         o.source = battle.lastDeathSource();
+    }
+    // Fold the event stream into per-spell cast counts (champions only —
+    // summon-script casts aren't catalog picks). Slots map to catalog ids by
+    // spell name; the instantiated Spell carries its SpellDef's name.
+    int maxId = 0;
+    for (const SpellDef& d : catalog.all()) maxId = std::max(maxId, d.id);
+    o.casts.assign(maxId + 1, 0);
+    for (const BattleEvent& ev : battle.events()) {
+        if (ev.type != EventType::Cast) continue;
+        const Entity& u = battle.unit(ev.actor);
+        if (!u.isChampion()) continue;
+        if (ev.spellSlot < 0 || ev.spellSlot >= static_cast<int>(u.spells.size())) continue;
+        for (const SpellDef& d : catalog.all())
+            if (d.spell.name == u.spells[ev.spellSlot].name) { ++o.casts[d.id]; break; }
     }
     return o;
 }
@@ -370,8 +388,11 @@ int main(int argc, char** argv) {
     }
 
     // Phase 3 — aggregate in match order (the serial loop of old, minus the sim).
+    std::vector<long> casts(maxSpellId + 1, 0);
     for (int m = 0; m < matches; ++m) {
         const Outcome& o = outcomes[m];
+        for (std::size_t id = 0; id < o.casts.size() && id < casts.size(); ++id)
+            casts[id] += o.casts[id];
         lengths.push_back(o.length);
         totalLen += o.length;
         if (o.result > 0) ++aWins;
@@ -403,7 +424,11 @@ int main(int argc, char** argv) {
 
     // Plain-language classification: 0 ok, 1 strong, 2 weak, 3 niche, 4 AI-unused.
     auto classify = [&](const Row& rw) -> int {
-        if (rw.id == spellid::Portal) return 4;
+        // Measured, not asserted: picked into builds yet never cast by any
+        // brain — its winrate is pure point opportunity-cost, not balance data.
+        if (rw.n > 0 && rw.id >= 0 && rw.id < static_cast<int>(casts.size()) &&
+            casts[rw.id] == 0)
+            return 4;
         if (rw.pick < 0.08) return 3;          // <8% pick — niche / too costly
         if (pct(rw.lo) > 50.0) return 1;        // CI entirely above 50% — likely OP
         if (pct(rw.hi) < 50.0) return 2;        // CI entirely below 50% — likely weak
@@ -611,7 +636,8 @@ int main(int argc, char** argv) {
     line("  - 'vs solo-avg' > 0 means the pair wins more than its two spells do alone");
     line("    (emergent synergy, e.g. poison + invisible).");
     line("  - Non-overlapping CIs between two spells => a real difference, not noise.");
-    line("  - Portal is AI-unused; treat its row as a point opportunity-cost baseline.");
+    line("  - An AI-unused spell was picked into builds but never cast (measured from match");
+    line("    events); treat its row as a point opportunity-cost baseline, not balance data.");
     line("  - Build generator fills spells first, stats with leftover points, so the stat");
     line("    section compares lean+stats builds against spell-crammed ones (a real signal:");
     line("    extra spells you're too AP-starved to cast lose to durability).");
@@ -629,13 +655,15 @@ int main(int argc, char** argv) {
     // ---- CSV tables (clean numeric columns, no formatting — open in a spreadsheet) ---
     {
         std::ofstream c(base + ".spells.csv");
-        c << "spell,cost,pick_pct,winrate_pct,ci_lo_pct,ci_hi_pct,lift,val_per_pt,n,verdict\n";
+        c << "spell,cost,pick_pct,winrate_pct,ci_lo_pct,ci_hi_pct,lift,val_per_pt,n,verdict,casts\n";
         for (const Row& row : rows) {
             const SpellDef* d = catalog.find(row.id);
             double lift = pct(row.wr) - 50.0, vpp = d->buildCost ? lift / d->buildCost : 0.0;
+            const long nCasts = (row.id >= 0 && row.id < static_cast<int>(casts.size()))
+                                    ? casts[row.id] : 0;
             c << d->key << ',' << d->buildCost << ',' << f1(pct(row.pick)) << ',' << f1(pct(row.wr))
               << ',' << f1(pct(row.lo)) << ',' << f1(pct(row.hi)) << ',' << f1(lift) << ','
-              << f2(vpp) << ',' << row.n << ',' << kFlagTag[classify(row)] << "\n";
+              << f2(vpp) << ',' << row.n << ',' << kFlagTag[classify(row)] << ',' << nCasts << "\n";
         }
     }
     {
@@ -726,10 +754,11 @@ int main(int argc, char** argv) {
         h << "<p class=\"meta\">Each bar = the share of games won by builds that include that spell "
              "(50% = neutral). The black line is the <b>confidence range</b>: where the true win rate "
              "most likely sits &mdash; a wider line means fewer games, so less certainty. "
-             "Bar colour = verdict (see key above).</p>\n";
+             "Bar colour = verdict (see key above). The cast count says how often the AI actually "
+             "used the spell &mdash; a low-cast row is opportunity-cost data, not spell strength.</p>\n";
         {
             const int n = static_cast<int>(rows.size());
-            const int x0 = 130, barW = 560, rh = 22, top = 26, W = x0 + barW + 70, H = top + n * rh + 10;
+            const int x0 = 130, barW = 560, rh = 22, top = 26, W = x0 + barW + 160, H = top + n * rh + 10;
             auto X = [&](double p) { return x0 + (p / 100.0) * barW; };
             h << "<svg width=\"" << W << "\" height=\"" << H << "\" viewBox=\"0 0 " << W << " " << H << "\">\n";
             for (int p = 0; p <= 100; p += 25) {
@@ -757,7 +786,9 @@ int main(int argc, char** argv) {
                   << "<line x1=\"" << xh << "\" y1=\"" << yc - 4 << "\" x2=\"" << xh << "\" y2=\"" << yc + 4
                   << "\" stroke=\"#333\"/>"
                   << "<text x=\"" << x0 + barW + 6 << "\" y=\"" << yc + 4 << "\" font-size=\"11\">"
-                  << f1(pct(row.wr)) << "%</text>\n";
+                  << f1(pct(row.wr)) << "% &middot; "
+                  << ((row.id >= 0 && row.id < static_cast<int>(casts.size())) ? casts[row.id] : 0)
+                  << " casts</text>\n";
             }
             h << "</svg>\n";
         }

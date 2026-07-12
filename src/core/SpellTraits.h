@@ -24,6 +24,20 @@ namespace tb {
     return d;
 }
 
+// Worst-case collision damage a single cast's forced movement (Push/Pull) can
+// convert into: the fully-blocked slam, amount × kCollisionDamagePerCell. For a
+// pull this is realised whenever the victim starts adjacent — the caster's own
+// body is the backstop; a push needs terrain behind the victim. Threat-side
+// pricing only (Evaluator's expectedIncoming is a worst-case model by
+// contract); the acting side needs no proxy — simulation deals the real thing.
+[[nodiscard]] inline int spellForcedMoveThreat(const Spell& s) {
+    int d = 0;
+    for (const Effect& fx : s.effects)
+        if (fx.type == Effect::Type::Push || fx.type == Effect::Type::Pull)
+            d += fx.amount * kCollisionDamagePerCell;
+    return d;
+}
+
 [[nodiscard]] inline bool hasEffect(const Spell& s, Effect::Type t) {
     for (const Effect& fx : s.effects)
         if (fx.type == t) return true;

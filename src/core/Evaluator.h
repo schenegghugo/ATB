@@ -58,8 +58,16 @@ public:
 struct EvalWeights {
     double dotWeight = 0.9;   // banked damage-over-time, counted as near-dealt
     double riskWeight = 0.85; // fear of incoming damage next turn
+    // Death bounties are kind-aware. Champions carry the full amounts — only
+    // they decide victory. A summon is worth its body (effHp) and its remaining
+    // output (the risk term), so its bounty is a nudge, not a verdict: a summon
+    // that dies after soaking an enemy turn was a won trade. Objects (bombs)
+    // get no bounty at all — detonating is their job, and their menace is
+    // already priced by expectedBlast.
     double killBonus = 45.0;
     double lossPenalty = 70.0;
+    double summonKillBonus = 10.0;
+    double summonLossPenalty = 10.0;
     double aggression = 0.35; // reward closing on foes (breaks the standoff;
                               // threat terms alone are symmetric so wouldn't)
     double stormWeight = 1.1; // flee the closing ring (slightly > taking the hit)

@@ -42,10 +42,12 @@ std::vector<PlannedAction> enumerateActions(const Battle& b, EntityId self,
     const Entity& me = b.unit(self);
     std::vector<PlannedAction> acts;
 
-    std::vector<Vec2i> foeTiles, allyTiles;
+    std::vector<Vec2i> foeTiles, allyTiles, objectTiles;
     for (EntityId i = 0; i < b.unitCount(); ++i) {
         const Entity& u = b.unit(i);
-        if (!u.alive() || u.kind == EntityKind::Object) continue; // don't target inert bombs
+        if (!u.alive()) continue;
+        if (u.kind == EntityKind::Object) { objectTiles.push_back(u.pos); continue; } // bombs:
+        // not attack targets, but portals can deliver them (see below)
         if (u.team == me.team) allyTiles.push_back(u.pos);
         else if (!u.invisible()) foeTiles.push_back(u.pos); // can't target hidden foes
     }
@@ -69,6 +71,11 @@ std::vector<PlannedAction> enumerateActions(const Battle& b, EntityId self,
                     if (fx.polarized || st.magnitude < 0) statusVsFoe = true;
                     if (st.magnitude > 0) statusVsAlly = true;
                 }
+                // Rewind is insurance on an ally (snapshot now, restore in N
+                // turns). Its payoff is invisible to a static eval — only the
+                // minimax brains see the revert fire inside the search — but it
+                // must be offered here or no brain can ever consider it.
+                if (st.kind == StatusEffect::Kind::Rewind) statusVsAlly = true;
             }
             const bool offensive = spellDamage(sp) > 0 || hasEffect(sp, Effect::Type::Push) ||
                                    hasEffect(sp, Effect::Type::Pull) || statusVsFoe;
@@ -77,19 +84,52 @@ std::vector<PlannedAction> enumerateActions(const Battle& b, EntityId self,
                                     statusVsAlly;
             const bool selfBuff = hasStatusEffect(sp, StatusEffect::Kind::Invisible);
             const bool placement = hasEffect(sp, Effect::Type::Spawn);
+            // A portal transports whatever stands on its entry (enemies too)
+            // straight to the traced exit, so the entry tile is a *target*:
+            // offer foes (8-tile displacement) and objects (bomb delivery) and
+            // let the simulation show where everyone lands.
+            bool portalSpawn = false;
+            for (const Effect& fx : sp.effects)
+                if (fx.type == Effect::Type::Spawn && fx.ground.kind == GroundKind::Portal)
+                    portalSpawn = true;
             // Summons and decoys both want a free tile to spawn onto.
             const bool summon = hasEffect(sp, Effect::Type::Summon) ||
                                 hasEffect(sp, Effect::Type::Decoy);
 
             std::vector<Vec2i> targets;
-            if (offensive) targets.insert(targets.end(), foeTiles.begin(), foeTiles.end());
+            if (offensive) {
+                targets.insert(targets.end(), foeTiles.begin(), foeTiles.end());
+                // Objects too: a bomb detonates on death, so shooting or
+                // poisoning one is fuse control — place a bomb and blow it the
+                // same turn, or pre-detonate a foe's. The simulation shows the
+                // blast; bad detonations refute themselves in the eval.
+                targets.insert(targets.end(), objectTiles.begin(), objectTiles.end());
+            }
             if (supportive) targets.insert(targets.end(), allyTiles.begin(), allyTiles.end());
             if (selfBuff) targets.push_back(me.pos);
-            if (placement && !foeTiles.empty()) {
-                const Vec2i fp = foeTiles.front();
-                const Vec2i dir = cardinalToward(me.pos, fp);
-                const int step = std::min(sp.maxRange, std::max(1, manhattan(me.pos, fp) - 1));
-                targets.push_back(Vec2i{me.pos.x + dir.x * step, me.pos.y + dir.y * step});
+            if (portalSpawn) {
+                targets.insert(targets.end(), foeTiles.begin(), foeTiles.end());
+                targets.insert(targets.end(), objectTiles.begin(), objectTiles.end());
+            }
+            if (placement) {
+                // Ground features are position plays; a single hardcoded offer
+                // starves the search (shelter/glyph verdicts were built on one
+                // toward-foe candidate). Per foe, offer: as far as range allows
+                // toward them (cut LOS mid-approach / lay a corridor), their own
+                // tile (a glyph's movement tax; walls box their free neighbours),
+                // and the caster's next tile toward them (a defensive wall/moat).
+                auto offerPlacement = [&](Vec2i t) {
+                    for (Vec2i o : targets)
+                        if (o == t) return; // skip duplicates — clones cost budget
+                    targets.push_back(t);
+                };
+                for (Vec2i fp : foeTiles) {
+                    const Vec2i dir = cardinalToward(me.pos, fp);
+                    const int step = std::min(sp.maxRange, std::max(1, manhattan(me.pos, fp) - 1));
+                    offerPlacement(Vec2i{me.pos.x + dir.x * step, me.pos.y + dir.y * step});
+                    offerPlacement(fp);
+                    offerPlacement(Vec2i{me.pos.x + dir.x, me.pos.y + dir.y});
+                }
             }
             // Summons spawn onto their target tile, which must be free and walkable
             // (an occupied tile silently no-ops the spawn but still spends AP). Offer
@@ -138,6 +178,15 @@ std::vector<PlannedAction> enumerateActions(const Battle& b, EntityId self,
             }
             if (!(best == me.pos))
                 acts.push_back({PlannedAction::Kind::Move, -1, best});
+        }
+        // Ride a live portal: step onto its entry and the engine teleports you
+        // to the exit — an escape/reposition verb the toward-foe and retreat
+        // macros can't express. The teleport ends the move (later path steps
+        // stop matching), so the plan is re-evaluated from the far side.
+        for (const GroundEffect& ge : b.groundEffects()) {
+            if (ge.kind != GroundKind::Portal || ge.tiles.empty()) continue;
+            auto path = findPath(b.grid(), me.pos, ge.tiles[0], b.pathBlockers(self));
+            if (path.size() >= 2) acts.push_back({PlannedAction::Kind::Move, -1, ge.tiles[0]});
         }
     }
     return acts;

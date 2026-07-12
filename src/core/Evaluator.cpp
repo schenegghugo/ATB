@@ -49,11 +49,11 @@ int nextTurnMp(const Entity& attacker) {
     return std::max(0, attacker.maxMp + bonus);
 }
 
-// Worst single hit any foe could land on `victim` next turn — range, movement,
-// LOS, and the attacker's range/movement debuffs aware (a Blinded or Flux-slowed
-// attacker projects a genuinely smaller envelope; that's what makes those spells
-// worth casting). An *invisible* victim can't be targeted, so its incoming
-// damage is zero — the lever the planner uses to value cloaking.
+// Damage menacing `victim` next turn — range, movement, LOS, and the
+// attacker's range/movement debuffs aware (a Blinded or Flux-slowed attacker
+// projects a genuinely smaller envelope; that's what makes those spells worth
+// casting). An *invisible* victim can't be targeted, so its incoming damage is
+// zero — the lever the planner uses to value cloaking.
 //
 // `nextTurnOnly` decides how cooldowns are read. For MY units' risk we want the
 // accurate next-turn view: a spell threatens only if its cooldown will have
@@ -67,11 +67,17 @@ int nextTurnMp(const Entity& attacker) {
 // what they might still be hiding (see EvalWeights::unknownThreatBase). The
 // prior's range envelope honours the attacker's debuffs too — Blind also
 // shrinks what an unknown spell could reach.
+// Champions contribute their worst single hit (max — one champion acts once);
+// summons contribute a *sum* of their hits on top. Without the sum a swarm of
+// chip-damage summons registers as one chip hit — or as nothing at all when a
+// bigger champion threat already dominates the max — and the planner neither
+// fears being surrounded nor values killing a summon as removing its output.
 int expectedIncoming(const Battle& b, EntityId victimId, bool nextTurnOnly, const Intel* intel,
                      const EvalWeights& w) {
     const Entity& v = b.unit(victimId);
     if (!v.alive() || v.invisible()) return 0;
-    int worst = 0;
+    int worst = 0;      // worst single champion hit
+    int summonSum = 0;  // summon hits stack
     for (EntityId i = 0; i < b.unitCount(); ++i) {
         const Entity& f = b.unit(i);
         if (!f.alive() || f.team == v.team) continue; // a foe's own invisibility doesn't blind it
@@ -82,17 +88,27 @@ int expectedIncoming(const Battle& b, EntityId victimId, bool nextTurnOnly, cons
         // — public templates, never intel-tracked.
         const FoeIntel* fi =
             (intel && i < intel->byId.size() && intel->tracks(b, i)) ? &intel->byId[i] : nullptr;
+        int hit = 0; // this foe's worst castable hit
         for (std::size_t slot = 0; slot < f.spells.size(); ++slot) {
             if (fi && !fi->revealed(slot)) continue; // unseen — priced by the prior below
             const Spell& sp = f.spells[slot];
-            const int dmg = spellDamage(sp);
+            // Direct damage plus the fully-blocked collision slam a Push/Pull
+            // can convert into (a pull's worst case is guaranteed at adjacency
+            // — the caster's own body is the backstop). This is what makes a
+            // zero-damage puller register as the threat it is.
+            const int dmg = spellDamage(sp) + spellForcedMoveThreat(sp);
             if (dmg <= 0) continue;
             if (nextTurnOnly && slot < f.spellCooldowns.size() && f.spellCooldowns[slot] > 1)
                 continue;
-            if (dist > effectiveMaxRange(f, sp) + mp) continue;
+            // Reach = cast range + AoE extent + movement: a cross/circle spell
+            // menaces `radius` beyond its cast tile (Drag's arms, a fireball's
+            // splash), which the bare maxRange check used to miss entirely.
+            if (dist > effectiveMaxRange(f, sp) + sp.radius + mp) continue;
             if (sp.needsLineOfSight && !los) continue;
-            worst = std::max(worst, dmg);
+            hit = std::max(hit, dmg);
         }
+        if (f.kind == EntityKind::Summon) summonSum += hit;
+        else worst = std::max(worst, hit);
         if (fi) {
             double base = w.unknownThreatBase;
             for (int t = 0; t < fi->turnsObserved; ++t) base *= w.unknownThreatDecay;
@@ -102,7 +118,7 @@ int expectedIncoming(const Battle& b, EntityId victimId, bool nextTurnOnly, cons
                 worst = std::max(worst, static_cast<int>(base));
         }
     }
-    return worst;
+    return worst + summonSum;
 }
 
 // Discounted value of a unit's banked AP/MP buffs (see EvalWeights::apValue).
@@ -178,8 +194,19 @@ double HandcraftedEvaluator::evaluate(const Battle& b, const EvalContext& ctx) c
     double score = 0.0;
     for (EntityId i = 0; i < b.unitCount(); ++i) {
         const Entity& u = b.unit(i);
+        // Objects (bombs) aren't material: their whole battlefield meaning is
+        // the blast they project, and that is priced on their potential victims
+        // via expectedBlast. Counting them as bodies made a bomb fear its own
+        // detonation footprint — cancelling the enemy's fear of it, so no brain
+        // would ever place one. (Their death bounty is likewise zero.)
+        if (u.kind == EntityKind::Object) continue;
         if (u.alive()) {
-            const double effHp = u.hp + shieldPool(u) - w_.dotWeight * pendingDoT(u) +
+            // Banked DoT can't deliver more than the HP (+shield) that exists —
+            // uncapped it turns a bomb (a 4×99 self-DoT fuse on 12 HP) into a
+            // −344 own-goal no brain would ever place, and overprices poison
+            // stacked on a dying target.
+            const int dot = std::min(pendingDoT(u), u.hp + shieldPool(u));
+            const double effHp = u.hp + shieldPool(u) - w_.dotWeight * dot +
                                  statusEconomy(u, w_);
             // Intel only shapes MY units' risk — my own loadout is no secret to
             // me, so the menace-to-foes side stays fully informed either way.
@@ -198,7 +225,15 @@ double HandcraftedEvaluator::evaluate(const Battle& b, const EvalContext& ctx) c
                 if (b.inStorm(u.pos)) score -= w_.stormWeight * b.stormDamage(); // flee the ring
             }
         } else {
-            score += (u.team == me) ? -w_.lossPenalty : w_.killBonus;
+            double kill = 0.0, loss = 0.0; // objects: no bounty (see EvalWeights)
+            if (u.kind == EntityKind::Champion) {
+                kill = w_.killBonus;
+                loss = w_.lossPenalty;
+            } else if (u.kind == EntityKind::Summon) {
+                kill = w_.summonKillBonus;
+                loss = w_.summonLossPenalty;
+            }
+            score += (u.team == me) ? -loss : kill;
         }
     }
     return score;
