@@ -194,7 +194,7 @@ int main() {
     // ---- Identity swap, choice "b": act from the twin ------------------------
     std::printf("Identity swap \"b\" (become the twin)\n");
     {
-        Scripted s = scripted(9002);
+        Scripted s = scripted(9004);
         s.toActive(P);
         CHECK(s.castFromActive(kDecoySlot), "decoy cast is scripted in");
         s.toActive(Twin);

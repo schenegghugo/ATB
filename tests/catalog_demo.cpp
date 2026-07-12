@@ -58,8 +58,8 @@ int main() {
             CHECK(poison->id == spellid::Poison, "id preserved");
             CHECK(poison->buildCost == 3 && sp.apCost == 3, "costs preserved");
             CHECK(sp.effects.size() == 2, "two effects");
-            CHECK(sp.effects[0].type == Effect::Type::Damage && sp.effects[0].amount == 4,
-                  "effect[0] = damage 4");
+            CHECK(sp.effects[0].type == Effect::Type::Damage && sp.effects[0].amount == 8,
+                  "effect[0] = damage 8");
             CHECK(sp.effects[1].type == Effect::Type::ApplyStatus &&
                       sp.effects[1].status.kind == StatusEffect::Kind::DamageOverTime &&
                       sp.effects[1].status.magnitude == 7 && sp.effects[1].status.remainingTurns == 3,

@@ -130,6 +130,7 @@ int main() {
     cfg.contentHash = contentHashOf(catalog);
     cfg.accounts = &accounts;
     cfg.persistDir = stateDir;
+    cfg.rngSeed = 424242; // pin the match seed: the scripted decoy needs a stable arena
 
     CharacterBuild aliceBuild; // {Attack, Decoy} — the hidden-info case
     aliceBuild.name = "Feint";

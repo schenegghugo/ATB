@@ -1,0 +1,171 @@
+name: Release
+
+# Rolling release: every green push to main rebuilds the Windows + Linux
+# bundles and republishes them under the "latest" tag, so friends who
+# re-download (or a future in-game updater) are always on main. Manual runs
+# via workflow_dispatch republish the current main.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release-main
+  cancel-in-progress: true
+
+jobs:
+  # The same gate as CI — a broken commit must never ship.
+  test:
+    name: Headless core + tests (gate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: sudo apt-get update && sudo apt-get install -y cmake g++ ninja-build
+
+      - name: Configure + build (no GUI)
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DTB_BUILD_GUI=OFF
+          cmake --build build -j
+
+      - name: Smoke + assertion tests + data checks
+        run: ./scripts/run_ci_checks.sh build
+
+  build-linux:
+    name: Linux x64 bundle
+    needs: test
+    # Build on the OLDEST supported Ubuntu: binaries built against its glibc
+    # run on every newer distro; the reverse does not hold.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install GUI deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ ninja-build \
+            libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev \
+            libxcursor-dev libxi-dev libwayland-dev libxkbcommon-dev \
+            wayland-protocols
+
+      - name: Configure + build client
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target tactical_battler -j
+
+      - name: Stage bundle
+        run: |
+          mkdir -p stage/ATB
+          cp build/tactical_battler stage/ATB/
+          cp -r data packs themes stage/ATB/
+          cp LICENSE README.md stage/ATB/
+          printf '%s %s\n' "${GITHUB_SHA::7}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > stage/ATB/VERSION.txt
+          tar -C stage -czf ATB-linux-x64.tar.gz ATB
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ATB-linux-x64
+          path: ATB-linux-x64.tar.gz
+
+  build-windows:
+    name: Windows x64 bundle
+    needs: test
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      # MinGW (GCC) rather than MSVC: the project is developed and tested
+      # against GCC, so this sidesteps compiler-dialect surprises. -static
+      # bakes in libstdc++/libgcc so the exe has no MinGW runtime DLLs.
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: >-
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            zip
+
+      - name: Configure + build client
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_EXE_LINKER_FLAGS="-static"
+          cmake --build build --target tactical_battler -j
+
+      - name: Stage bundle
+        run: |
+          mkdir -p stage/ATB
+          cp build/tactical_battler.exe stage/ATB/
+          cp -r data packs themes stage/ATB/
+          cp LICENSE README.md stage/ATB/
+          printf '%s %s\n' "${GITHUB_SHA::7}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > stage/ATB/VERSION.txt
+          cd stage && zip -r ../ATB-windows-x64.zip ATB
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ATB-windows-x64
+          path: ATB-windows-x64.zip
+
+  publish:
+    name: Publish rolling "latest" release
+    needs: [build-linux, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      # Recreate the release so the "latest" tag always points at the shipped
+      # commit (updating assets alone would leave the tag on an old commit).
+      - name: Recreate release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --cleanup-tag --yes || true
+          gh release create latest \
+            --title "Latest build (${GITHUB_SHA::7})" \
+            --notes "Automated rolling build of \`main\` @ ${GITHUB_SHA}. Unzip and run \`tactical_battler\` — re-download this same link to update." \
+            --latest \
+            ATB-linux-x64.tar.gz ATB-windows-x64.zip
+
+  # Optional: push the same bundles to itch.io channels. The itch desktop app
+  # then auto-updates installed copies (delta patches) — zero updater code.
+  # Enable by setting the repo *variable* ITCH_PROJECT (e.g. "hugo/atb") and
+  # the *secret* BUTLER_API_KEY (from https://itch.io/user/settings/api-keys).
+  itch:
+    name: Push to itch.io channels
+    needs: [build-linux, build-windows]
+    if: vars.ITCH_PROJECT != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Install butler
+        run: |
+          curl -L -o butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
+          unzip butler.zip butler && chmod +x butler
+
+      - name: Push channels
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+        run: |
+          VERSION="${GITHUB_SHA::7}"
+          mkdir -p win linux
+          (cd win && unzip -q ../ATB-windows-x64.zip)
+          (cd linux && tar -xzf ../ATB-linux-x64.tar.gz)
+          ./butler push win/ATB   "${{ vars.ITCH_PROJECT }}:windows" --userversion "$VERSION"
+          ./butler push linux/ATB "${{ vars.ITCH_PROJECT }}:linux"   --userversion "$VERSION"

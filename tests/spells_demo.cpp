@@ -64,16 +64,16 @@ int main() {
     // --- Cooldowns ----------------------------------------------------------
     std::printf("Cooldowns:\n");
     {
-        Battle b = makeArena({1, 3}, {6, 3}, {spellid::Attack, spellid::Fireball});
-        int fb = slotOf(b, P, spellid::Fireball);
-        const Vec2i tgt{6, 3}; // Manhattan 5, within Fireball's range 2-6
-        check(b.canCast(P, fb, tgt), "fireball castable initially");
-        b.cast(P, fb, tgt);
-        check(!b.canCast(P, fb, tgt), "fireball blocked right after cast (cd 2)");
+        Battle b = makeArena({1, 3}, {6, 3}, {spellid::Attack, spellid::Bulwark});
+        int bw = slotOf(b, P, spellid::Bulwark);
+        const Vec2i tgt{1, 3}; // self-cast (Bulwark range 0-2, no LOS needed)
+        check(b.canCast(P, bw, tgt), "bulwark castable initially");
+        b.cast(P, bw, tgt);
+        check(!b.canCast(P, bw, tgt), "bulwark blocked right after cast (cd 2)");
         b.endTurn(); b.endTurn(); // back to player: cd 2 -> 1
-        check(!b.canCast(P, fb, tgt), "still on cooldown after 1 turn");
+        check(!b.canCast(P, bw, tgt), "still on cooldown after 1 turn");
         b.endTurn(); b.endTurn(); // back to player: cd 1 -> 0
-        check(b.canCast(P, fb, tgt), "castable again after 2 turns");
+        check(b.canCast(P, bw, tgt), "castable again after 2 turns");
     }
 
     // --- Glyph: repel on enter ---------------------------------------------

@@ -34,7 +34,7 @@ int main() {
         CHECK(load.version == "1.0.0", "version round-trips");
         CHECK(a == serializeRuleset(load.ruleset, "1.0.0"), "serialize -> load -> serialize identical");
         CHECK(load.ruleset.teamSize == 1, "default teamSize = 1");
-        CHECK(load.ruleset.economy.baseHp == 30 && load.ruleset.economy.pointBudget == 12,
+        CHECK(load.ruleset.economy.baseHp == 30 && load.ruleset.economy.pointBudget == 20,
               "default economy preserved");
         CHECK(load.ruleset.closingRing.enabled && load.ruleset.closingRing.startRound == 5,
               "default closing ring preserved");

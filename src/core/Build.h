@@ -21,7 +21,7 @@ namespace tb {
 // Economy / baseline knobs. In production these live in config or a `rulesets`
 // table; here they are defaulted so a build is meaningful on its own.
 struct BuildRules {
-    int pointBudget = 12;
+    int pointBudget = 20;
 
     int baseHp = 30;
     int baseAp = 4;
@@ -30,7 +30,7 @@ struct BuildRules {
 
     // Stat upgrade economy (the creative tradeoff vs. buying more spells).
     int hpStep = 5;   // HP granted per purchase
-    int hpCost = 1;   // points per +hpStep HP
+    int hpCost = 3;   // points per +hpStep HP
     int apCost = 3;   // points per +1 AP
     int mpCost = 2;   // points per +1 MP
     int initCost = 1; // points per +1 initiative (act earlier)

@@ -1,14 +1,14 @@
 {
   "schema": 1,
-  "version": "1.0.1",
+  "version": "1.0.2",
   "format": {
     "teamSize": 1
   },
   "economy": {
-    "pointBudget": 12,
+    "pointBudget": 20,
     "baseHp": 30,
     "hpStep": 5,
-    "hpCost": 2,
+    "hpCost": 3,
     "baseAp": 4,
     "apCost": 3,
     "baseMp": 3,
@@ -23,7 +23,7 @@
     "damage": 8
   },
   "arena": {
-    "width": 20,
+    "width": 21,
     "height": 15,
     "coverage": 0.18
   }

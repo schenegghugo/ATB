@@ -101,7 +101,7 @@ int main() {
         std::vector<Entity> roster;
         roster.push_back(mk("P", Faction::Player, EntityKind::Champion, {1, 3}, 30, 10));
         roster.push_back(mk("S", Faction::Player, EntityKind::Summon, {1, 4}, 40, 8));
-        roster.push_back(mk("E", Faction::Enemy, EntityKind::Champion, {5, 3}, 30, 5, {attackSpell()}));
+        roster.push_back(mk("E", Faction::Enemy, EntityKind::Champion, {4, 3}, 30, 5, {attackSpell()}));
         Battle b(Grid(14, 7), std::move(roster));
 
         b.cast(2, 0, {1, 3}); // E attacks P (15) — casting doesn't require it to be E's turn
@@ -135,7 +135,7 @@ int main() {
         b.endTurn(); // -> V
         b.endTurn(); // -> bomb's 2nd turn: fuse -> 0, detonates
         check(!b.unit(2).alive(), "bomb detonated on its 2nd turn");
-        check(b.unit(1).hp == 40, "adjacent enemy took the 20 blast (60 -> 40)");
+        check(b.unit(1).hp == 35, "adjacent enemy took the 25 blast (60 -> 35)");
     }
 
     // --- Summons: cap + AI behaviour ---------------------------------------
@@ -163,12 +163,14 @@ int main() {
         check(summons == 2, "no more than 2 living summons per team");
     }
 
-    std::printf("Blocker: self-centred Cross pull (4 straight-line range):\n");
+    std::printf("Blocker: self-centred Cross pull (radius 1 — slams an adjacent foe):\n");
     {
-        // P (champion) far west; a foe 3 tiles east of where the blocker will sit.
+        // P (champion) far west; a foe already adjacent (east) to where the blocker
+        // sits. The short cross-pull can't drag it past the blocker's body, so it
+        // stays put and eats the collision.
         std::vector<Entity> roster;
         roster.push_back(mk("P", Faction::Player, EntityKind::Champion, {1, 6}, 50, 10));
-        roster.push_back(mk("Foe", Faction::Enemy, EntityKind::Champion, {8, 3}, 60, 5));
+        roster.push_back(mk("Foe", Faction::Enemy, EntityKind::Champion, {6, 3}, 60, 5));
         Battle b(Grid(14, 7), std::move(roster));
 
         // Spawn the real blocker prototype (with its Drag ability) at (5,3).
@@ -181,7 +183,7 @@ int main() {
 
         const int foeBefore = b.unit(1).hp;
         (void)enemyTakeOneAction(b, bid); // blocker acts -> self-casts Drag
-        check(b.unit(1).pos == Vec2i{6, 3}, "foe on the east arm yanked from (8,3) to adjacent (6,3)");
+        check(b.unit(1).pos == Vec2i{6, 3}, "adjacent foe pulled into the blocker, not past it");
         check(b.unit(1).hp < foeBefore, "foe took collision damage stopping against the blocker");
     }
 

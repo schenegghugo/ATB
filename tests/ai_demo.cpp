@@ -73,8 +73,9 @@ int main() {
         Grid g(12, 5);
         std::vector<Entity> r;
         r.push_back(makeUnit(Faction::Player, {1, 2}, {spellid::Attack, spellid::Bulwark}));
-        // Foe at distance 7: beyond our attack range (6) but it can close + hit us.
-        r.push_back(makeUnit(Faction::Enemy, {8, 2}, {spellid::Attack}, /*hp=*/60, /*mp=*/4));
+        // Foe at distance 8: past our move+attack reach (mp 4 + range 3 = 7), so we
+        // can't strike back this turn — the best play is to raise a shield.
+        r.push_back(makeUnit(Faction::Enemy, {9, 2}, {spellid::Attack}, /*hp=*/60, /*mp=*/4));
         Battle b(std::move(g), std::move(r));
         (void)enemyTakeOneAction(b, P);
         check(b.unit(P).hasStatus(StatusEffect::Kind::Shield), "AI raised a shield against the threat");
@@ -211,19 +212,20 @@ int main() {
     }
 
     // --- Intel ("scout"): fear what you've SEEN, not the hidden hand ----------
-    // Same board, two minds, storm off. The foe's Fireball (threat radius 10)
+    // Same board, two minds, storm off. The foe's Fireball (threat radius 11)
     // is never revealed. Omniscient "beam" reads the loadout and flees the
     // envelope; "scout" only carries the unknown prior, which has decayed over
     // ten quiet foe turns — so it holds its ground (and lets the aggression
-    // gradient pull it in) where omniscience runs.
+    // gradient pull it in) where omniscience runs. (5 MP so the retreat can
+    // actually clear the Fireball's 7+4 reach.)
     std::printf("Unrevealed artillery, long observed -> scout probes, beam flees:\n");
     {
         auto makeBoard = []() {
             Grid g(16, 5);
             std::vector<Entity> r;
-            r.push_back(makeUnit(Faction::Player, {6, 2}, {}, /*hp=*/30, /*mp=*/4));
+            r.push_back(makeUnit(Faction::Player, {6, 2}, {}, /*hp=*/30, /*mp=*/5));
             r.push_back(makeUnit(Faction::Enemy, {14, 2}, {spellid::Fireball}, /*hp=*/60,
-                                 /*mp=*/4)); // dist 8: inside the true 6+4 envelope
+                                 /*mp=*/4)); // dist 8: inside the true 7+4 envelope
             return Battle(std::move(g), std::move(r), StormConfig{false, 5, 8});
         };
         auto passRounds = [](Battle& b, int rounds) {
@@ -240,7 +242,7 @@ int main() {
         runEnemyTurn(forScout, /*autoEndTurn=*/false, *brainByName("scout"));
         const int scoutDist = nearestFoeDist(forScout, P);
 
-        check(beamDist > 10, "omniscient beam fled beyond the (secretly real) envelope");
+        check(beamDist > 11, "omniscient beam fled beyond the (secretly real) envelope");
         check(scoutDist <= 8, "scout, shown nothing for ten turns, holds or probes");
     }
 
@@ -277,17 +279,17 @@ int main() {
 
     // --- Pure flight: no spells, inside a threat envelope ---------------------
     // Nothing to cast: the only good move is the retreat macro (the toward-foe
-    // macros can't express it). Threat radius 10; fleeing reaches 12.
+    // macros can't express it). Threat radius 7; fleeing reaches 9.
     std::printf("Unarmed + threatened -> flee out of range:\n");
     {
         Grid g(12, 5);
         std::vector<Entity> r;
-        r.push_back(makeUnit(Faction::Player, {3, 2}, {}, /*hp=*/20, /*mp=*/4));
+        r.push_back(makeUnit(Faction::Player, {6, 2}, {}, /*hp=*/20, /*mp=*/4));
         r.push_back(makeUnit(Faction::Enemy, {11, 2}, {spellid::Attack}, /*hp=*/60, /*mp=*/4));
         Battle b(std::move(g), std::move(r));
 
         runEnemyTurn(b, /*autoEndTurn=*/false);
-        check(nearestFoeDist(b, P) > 10, "AI fled beyond the foe's threat range");
+        check(nearestFoeDist(b, P) > 7, "AI fled beyond the foe's threat range");
     }
 
     std::printf("\n%s (%d failure%s)\n", g_fails == 0 ? "ALL PASS" : "FAILURES", g_fails,

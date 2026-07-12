@@ -56,9 +56,9 @@ int main() {
         const Entity* blocker = find(load, "blocker");
         CHECK(blocker && blocker->kind == EntityKind::Summon, "blocker is a Summon");
         CHECK(blocker && blocker->spells.size() == 1 &&
-                  blocker->spells[0].shape == TargetShape::Cross && blocker->spells[0].radius == 4 &&
+                  blocker->spells[0].shape == TargetShape::Cross && blocker->spells[0].radius == 1 &&
                   blocker->spells[0].effects[0].type == Effect::Type::Pull,
-              "blocker keeps its Cross-pull (radius 4)");
+              "blocker keeps its Cross-pull (radius 1)");
     }
 
     std::printf("Strict validation\n");

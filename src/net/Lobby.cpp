@@ -960,6 +960,7 @@ void handleConnection(Connection conn, const LobbyConfig& cfg, LobbyState& st) {
 
 void serveLobby(Listener& listener, const LobbyConfig& cfg, int maxConns, int readTimeoutSec) {
     LobbyState st;
+    if (cfg.rngSeed != 0) st.rng.seed(cfg.rngSeed);
     // Rated correspondence games rank through an embedded arbiter pinned to the
     // ranked ruleset (double-submit + re-simulation; CR.4). Casual servers skip it.
     if (cfg.accounts)

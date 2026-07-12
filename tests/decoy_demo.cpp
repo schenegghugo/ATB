@@ -63,22 +63,21 @@ int main() {
         Grid grid(14, 7);
         std::vector<Entity> roster;
         roster.push_back(makeUnit("P", Faction::Player, {1, 3}, {spellid::Blind}, 10));
-        roster.push_back(makeUnit("E", Faction::Enemy, {7, 3}, {spellid::Attack}, 5));
+        roster.push_back(makeUnit("E", Faction::Enemy, {4, 3}, {spellid::Attack}, 5));
         Battle b(std::move(grid), std::move(roster));
 
-        const int atk = slotOf(b, E, spellid::Attack); // range 1-6
-        check(b.canCast(E, atk, {1, 3}), "attack reaches range 6 before the debuff");
+        const int atk = slotOf(b, E, spellid::Attack); // range 1-3
+        check(b.canCast(E, atk, {1, 3}), "attack reaches range 3 before the debuff");
 
-        b.cast(P, slotOf(b, P, spellid::Blind), {7, 3}); // distance 6, in blind's range
-        // effMax = 6 - (6*60)/100 = 3.
-        check(!b.canCast(E, atk, {1, 3}), "range 6 blocked while blinded");
-        check(!b.canCast(E, atk, {3, 3}), "range 4 blocked while blinded");
-        check(b.canCast(E, atk, {4, 3}), "range 3 (the reduced max) still castable");
+        b.cast(P, slotOf(b, P, spellid::Blind), {4, 3}); // distance 3, in blind's range
+        // effMax = 3 - (3*60)/100 = 2.
+        check(!b.canCast(E, atk, {1, 3}), "range 3 blocked while blinded");
+        check(b.canCast(E, atk, {2, 3}), "range 2 (the reduced max) still castable");
 
         // Stacking past 100% clamps to minRange (attack minRange 1).
         b.unit(E).statuses.push_back({StatusEffect::Kind::RangeDebuff, 60, 3});
-        check(!b.canCast(E, atk, {5, 3}), "range 2 blocked at a stacked 120% (capped 100%)");
-        check(b.canCast(E, atk, {6, 3}), "range 1 (minRange floor) always castable");
+        check(!b.canCast(E, atk, {2, 3}), "range 2 blocked at a stacked 120% (capped 100%)");
+        check(b.canCast(E, atk, {3, 3}), "range 1 (minRange floor) always castable");
 
         // Expiry: turns=3 ages at E's turn starts -> free again on its third turn.
         b.unit(E).statuses.pop_back(); // drop the injected stack, keep the cast one
@@ -148,7 +147,7 @@ int main() {
         std::vector<Entity> roster;
         roster.push_back(makeUnit("P", Faction::Player, {2, 3},
                                   {spellid::Attack, spellid::Decoy}, 10));
-        roster.push_back(makeUnit("E", Faction::Enemy, {6, 3}, {spellid::Attack}, 5));
+        roster.push_back(makeUnit("E", Faction::Enemy, {5, 3}, {spellid::Attack}, 5));
         return Battle(std::move(grid), std::move(roster));
     };
     constexpr EntityId Twin = 2; // spawned third
@@ -171,7 +170,7 @@ int main() {
               "hits on cloaked members defer — no visible HP change");
 
         toTurnOf(b, P);
-        b.cast(P, slotOf(b, P, spellid::Attack), {6, 3}); // acting reveals: P is real
+        b.cast(P, slotOf(b, P, spellid::Attack), {5, 3}); // acting reveals: P is real
         check(!b.isCloaked(P) && b.cloakPairs().empty(), "casting reveals the pair");
         check(!b.unit(Twin).alive(), "the decoy vanishes at reveal");
         check(b.unit(P).hp == 45, "only the real member's deferred damage lands (60-15)");
@@ -183,7 +182,7 @@ int main() {
         Battle b = decoyArena();
         b.cast(P, slotOf(b, P, spellid::Decoy), {3, 3});
         toTurnOf(b, Twin); // twin has its own initiative slot
-        b.cast(Twin, slotOf(b, Twin, spellid::Attack), {6, 3});
+        b.cast(Twin, slotOf(b, Twin, spellid::Attack), {5, 3});
         check(!b.unit(P).alive() && b.unit(Twin).alive(),
               "the twin was declared real — the original body fades");
         check(b.phase() != Phase::Finished, "the team lives on through the twin");
@@ -207,7 +206,7 @@ int main() {
         check(b.unit(P).alive(), "still standing while cloaked (damage deferred)");
         toTurnOf(b, P);
         const int ehp = b.unit(E).hp;
-        b.cast(P, slotOf(b, P, spellid::Attack), {6, 3}); // reveal -> lethal -> fizzle
+        b.cast(P, slotOf(b, P, spellid::Attack), {5, 3}); // reveal -> lethal -> fizzle
         check(!b.unit(P).alive(), "the deferred damage lands lethally at reveal");
         check(b.unit(E).hp == ehp, "the fizzled cast never resolves");
         check(b.phase() == Phase::Finished && b.winner() == Faction::Enemy,

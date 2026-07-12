@@ -1,8 +1,8 @@
 #pragma once
 //
 // Socket.h — Minimal blocking TCP with length-prefixed message framing (Phase
-// 4.4). POSIX-only, and deliberately kept OUT of tb_core so the portable engine
-// never depends on sockets — only the server/client transport links this.
+// 4.4). POSIX + winsock, and deliberately kept OUT of tb_core so the portable
+// engine never depends on sockets — only the server/client transport links this.
 //
 // A message is [uint32 big-endian length][that many bytes]; send()/recv() move
 // whole messages. Dependency-free (Berkeley sockets), matching the project's

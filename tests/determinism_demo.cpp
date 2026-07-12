@@ -31,8 +31,8 @@ static int g_fails = 0;
 namespace {
 
 // Locked fingerprints (x86-64 / libstdc++). See header note.
-constexpr const char* kArenaFp = "6fd60888391ca8402dee80d2435596ac2d797e6f531c4e09a5aaf73811c83025";
-constexpr const char* kMatchFp = "ec39f5c1ef00944ed5133a7e36dd9b2d766e2d53753106279a20e7ff2aaa158e";
+constexpr const char* kArenaFp = "da16b2cb5b21a5637e552f6455d3c8026c0fcde95bf92da77ff569116c5fe4b5";
+constexpr const char* kMatchFp = "6bbe20f0627c04df4b08e6fc3b81f618a58bbebf7a2867e4630182d190cc1e82";
 
 std::string gridString(const Grid& g) {
     std::string s;

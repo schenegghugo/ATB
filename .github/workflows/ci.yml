@@ -21,64 +21,10 @@ jobs:
       - name: Build core + headless binaries
         run: cmake --build build -j
 
-      - name: Smoke + assertion tests
-        run: |
-          set -e
-          ./build/tb_json_demo
-          ./build/tb_enums_demo
-          ./build/tb_sha256_demo
-          ./build/tb_determinism_demo
-          ./build/tb_replay_demo
-          ./build/tb_replay_source_demo
-          ./build/tb_commit_demo
-          ./build/tb_password_demo
-          ./build/tb_catalog_demo
-          ./build/tb_creature_demo
-          ./build/tb_ruleset_demo
-          ./build/tb_map_demo
-          ./build/tb_headless
-          ./build/tb_build_demo
-          ./build/tb_spells_demo
-          ./build/tb_decoy_demo
-          ./build/tb_ai_demo
-          ./build/tb_roster_demo
-          ./build/tb_event_demo
-          ./build/tb_pack_demo
-          ./build/tb_theme_demo
-          ./build/tb_prefs_demo
-          ./build/tb_net_demo
-          ./build/tb_matchsource_demo
-          ./build/tb_loopback_demo
-          ./build/tb_net_transport_demo
-          ./build/tb_remote_demo
-          ./build/tb_account_demo
-          ./build/tb_arbiter_demo
-          ./build/tb_server_demo
-          ./build/tb_ranked_demo
-          ./build/tb_lobby_demo
-          ./build/tb_mailbox_demo
-          ./build/tb_ranked_rules_demo
-          ./build/tb_correspondence_demo
-          ./build/tb_lobby_challenge_demo
-          ./build/tb_lobby_correspondence_demo
-          ./build/tb_lobby_forfeit_demo
-          ./build/tb_ready_check_demo
-          ./build/tb_chat_demo
-          ./build/tb_spectate_demo
-          ./build/tb_chess_clock_demo
-          ./build/tb_lobby_chat_demo
-          ./build/tb_lobby_persist_demo
-          ./build/tb_queue_demo
-
-      - name: Balance sanity (fixed seed, fast)
-        run: ./build/tb_balance 200 1
-
-      - name: Data files load + validate (data is canonical, hand-editable)
-        run: |
-          ./build/tb_catalog_gen --check data/catalog.json
-          ./build/tb_creature_gen --check data/creatures.json
-          ./build/tb_ruleset_gen --check data/rules.json
-          ./build/tb_ruleset_gen --check data/rules.ranked.json
+      # The demo list + balance sanity + data validation live in one script so
+      # CI and the release gate can never drift apart.
+      - name: Smoke + assertion tests + data checks
+        run: ./scripts/run_ci_checks.sh build
 
   gui-build:
     name: GUI compiles (Linux)

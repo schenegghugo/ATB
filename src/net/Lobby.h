@@ -74,6 +74,10 @@ struct LobbyConfig {
     // cold-resume them (myCorrGames + CorrespondenceSession::resume). Empty =
     // in-memory only (tests / throwaway servers).
     std::string persistDir;
+
+    // Nonzero pins the lobby's RNG (match seeds, tokens) so a scripted test sees
+    // the same arenas every run; 0 (production) seeds from std::random_device.
+    unsigned long long rngSeed = 0;
 };
 
 // Serve the lobby. Accepts up to `maxConns` connections total — sessions and match

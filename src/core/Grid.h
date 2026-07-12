@@ -78,12 +78,12 @@ private:
 // ---------------------------------------------------------------------------
 
 struct ArenaConfig {
-    int width = 20;
+    int width = 21;
     int height = 15;
     float coverage = 0.18f;     // fraction of tiles that become wall/obstacle
     float obstacleRatio = 0.4f; // of the covered tiles, how many are see-through obstacles
     Vec2i playerSpawn{1, 7};
-    Vec2i enemySpawn{18, 7};
+    Vec2i enemySpawn{19, 7};
     unsigned int seed = 0;      // 0 => derive from clock
 };
 

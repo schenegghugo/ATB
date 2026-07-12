@@ -176,6 +176,9 @@ add_library(tb_transport STATIC
     src/net/Spectate.cpp
 )
 target_link_libraries(tb_transport PUBLIC tb_core)
+if(WIN32)
+    target_link_libraries(tb_transport PUBLIC ws2_32) # winsock (Socket.cpp)
+endif()
 
 add_executable(tb_mailbox_demo tests/mailbox_demo.cpp)
 target_link_libraries(tb_mailbox_demo PRIVATE tb_transport Threads::Threads)

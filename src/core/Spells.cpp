@@ -93,40 +93,39 @@ SpellDef def(int id, std::string key, int cost, Spell spell, std::vector<std::st
 SpellCatalog makeDefaultCatalog() {
     SpellCatalog c;
 
-    // Attack — the reliable single-target staple, castable every turn.
-    c.add(def(spellid::Attack, "attack", 1,
-              Spell{"", 3, 1, 6, true, TargetShape::Single, 0, 0, {damage(15)}},
+    // Attack — the reliable single-target staple, castable every turn (short reach).
+    c.add(def(spellid::Attack, "attack", 2,
+              Spell{"", 3, 1, 3, true, TargetShape::Single, 0, 0, {damage(15)}},
               {"damage", "single"}));
 
     // Fireball — AoE burst; hits everything in a radius-1 diamond (friendly fire!).
-    // Repriced 4 -> 3 pt after balance sims showed it underperforming its cost.
-    c.add(def(spellid::Fireball, "fireball", 3,
-              Spell{"", 4, 2, 6, true, TargetShape::Circle, 1, 2, {damage(14)}},
+    c.add(def(spellid::Fireball, "fireball", 2,
+              Spell{"", 3, 3, 7, true, TargetShape::Circle, 1, 0, {damage(15)}},
               {"damage", "ranged", "aoe"}));
 
-    // Poison — light hit now, damage-over-time later.
+    // Poison — a hit now, damage-over-time later.
     c.add(def(spellid::Poison, "poison", 3,
-              Spell{"", 3, 1, 5, true, TargetShape::Single, 0, 2, {damage(4), dot(7, 3)}},
+              Spell{"", 3, 1, 5, true, TargetShape::Single, 0, 3, {damage(8), dot(7, 3)}},
               {"damage", "debuff", "dot", "single"}));
 
     // Knockback — short-range shove with collision damage potential.
     c.add(def(spellid::Knockback, "knockback", 2,
-              Spell{"", 2, 1, 2, true, TargetShape::Single, 0, 1, {damage(6), push(2)}},
+              Spell{"", 3, 1, 2, true, TargetShape::Single, 0, 1, {damage(4), push(4)}},
               {"damage", "debuff", "mobility", "melee", "single"}));
 
     // Harpoon — yank a target toward you, softening it up.
     c.add(def(spellid::Harpoon, "harpoon", 2,
-              Spell{"", 3, 2, 6, true, TargetShape::Single, 0, 1, {pull(3), damage(4)}},
+              Spell{"", 3, 2, 6, true, TargetShape::Single, 0, 1, {pull(4), damage(4)}},
               {"damage", "debuff", "mobility", "ranged", "single"}));
 
     // Bulwark — self/ally shield (no LOS needed, range includes self).
     c.add(def(spellid::Bulwark, "bulwark", 2,
-              Spell{"", 2, 0, 2, false, TargetShape::Single, 0, 3, {shield(20, 2)}},
+              Spell{"", 3, 0, 2, false, TargetShape::Single, 0, 2, {shield(10, 2)}},
               {"support", "buff"}));
 
     // Mend — self/ally heal.
-    c.add(def(spellid::Mend, "mend", 2,
-              Spell{"", 2, 0, 3, false, TargetShape::Single, 0, 2, {heal(18)}},
+    c.add(def(spellid::Mend, "mend", 3,
+              Spell{"", 3, 0, 3, false, TargetShape::Single, 0, 3, {heal(15)}},
               {"support", "buff"}));
 
     // Shelter — conjure a line of 5 temporary walls (block movement + LOS).
@@ -136,7 +135,7 @@ SpellCatalog makeDefaultCatalog() {
 
     // Invisible — conceal the caster from enemy AI for two turns (self, no LOS).
     c.add(def(spellid::Invisible, "invisible", 3,
-              Spell{"", 2, 0, 0, false, TargetShape::Single, 0, 5, {invisibility(2)}},
+              Spell{"", 3, 0, 0, false, TargetShape::Single, 0, 4, {invisibility(2)}},
               {"support", "buff", "mobility"}));
 
     // Portal — traced from the caster: the target tile is the ENTRY; the exit
@@ -144,7 +143,7 @@ SpellCatalog makeDefaultCatalog() {
     // Whatever stands on the entry at cast — bomb, ally, enemy — is transported
     // immediately; walking onto the entry teleports for the portal's lifetime.
     c.add(def(spellid::Portal, "portal", 3,
-              Spell{"", 3, 1, 8, false, TargetShape::Single, 0, 4, {spawnPortal(3, 4)}},
+              Spell{"", 3, 1, 8, false, TargetShape::Single, 0, 3, {spawnPortal(3, 4)}},
               {"support", "mobility", "terrain"}));
 
     // Glyph — lay a radius-3 trap zone; anyone entering is repelled 2 tiles.
