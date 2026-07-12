@@ -1,0 +1,21 @@
+{
+  "games": [
+    {
+      "id": "cg4-10847340931857248819",
+      "format": {
+        "time": "unlimited",
+        "perMove": 0,
+        "main": 0,
+        "inc": 0,
+        "rated": false,
+        "team": 1
+      },
+      "seed": 651943656,
+      "userP": "Boris",
+      "userE": "Hugo",
+      "buildP": "name=Pyromancer\nhp=0\nap=1\nmp=0\ninit=0\nspells=1,2,3\n",
+      "buildE": "name=Pyromancer\nhp=0\nap=0\nmp=0\ninit=1\nspells=2,20,18,17,4\n"
+    }
+  ]
+}
+

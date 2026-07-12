@@ -37,12 +37,16 @@ see below.
     join run off-thread; a cancellable Waiting state covers the parked join.
 - **Parallel / depth (off the critical path)**
   - ☐ **Web/WASM build** (W.1–W.5) — browser-playable on itch.io.
-  - ☐ **Self-teaching AI** (3.5.1–3.5.7) — NNUE-style learned evaluator.
+  - ☑ **Heuristic AI overhaul** (3.6 / H.1–H.5) — Evaluator seam, Blind/Surge/
+    Flux + kiting, observed-opponent intel (`scout`), turn-level minimax
+    (`deep` 60% vs `beam`); ☐ H.4 weight tuning next.
+  - ☐ **Self-teaching AI** (3.5.2–3.5.7) — NNUE-style learned evaluator
+    (3.5.1 done as H.1).
   - ◐ **CR.6 deeper hidden-info** — commit-reveal movement / ZK (slices 1–3 done).
 - **Polish / content**
   - ◐ **0.6** — file 2–3 good-first-issues (CONTRIBUTING.md done).
-  - ☐ **Balance backlog** (5.3) — fireball radius; teach AI to cast
-    Portal/Blind/Surge/Flux (unused); synergy tuning via `tb_balance`.
+  - ◐ **Balance backlog** (5.3) — fireball radius; ☑ AI casts Blind/Surge/Flux
+    (H.2); ☐ Portal (teleport-aware pathing); synergy tuning via `tb_balance`.
   - ☐ Sprite-pack ground-effect/status art. (Initiative `±` and the GUI replay
     viewer shipped with BE.2 / 5.1.)
 
@@ -83,7 +87,8 @@ see below.
 - ☑ **Summons** — blocker / healer / brute, single-purpose AI, per-team cap 2.
 - ☑ **Creatures datafied** — `data/creatures.json` + `data/CreatureJson`, shared
   `data/SpellJson` mapping (`tb_creature_demo`).
-- ☐ AI never casts Blind/Surge/Flux/Portal; enemy-only Pull; summon `duration`.
+- ◐ ~~AI never casts Blind/Surge/Flux~~ ☑ (H.2); Portal still AI-unused
+  (teleport-aware pathing); enemy-only Pull; summon `duration`.
 
 ## Build editor revamp
 
@@ -137,9 +142,35 @@ see below.
   `defaultBrain()`.
 - ☑ **3.2** Registry + by-name selection (`beam` / `greedy`, `ATB_BRAIN`).
 
+## Phase 3.6 — Heuristic AI overhaul (H.1–H.5) ☑
+
+Sophisticated-heuristics tier *before* the learned evaluator: fix what the AI
+can see and search, so 3.5 later swaps only the scoring function.
+
+- ☑ **H.1** `Evaluator` seam under `Brain` (`core/Evaluator.h`,
+  `HandcraftedEvaluator`, public tunable `EvalWeights`) — *is* 3.5.1.
+- ☑ **H.2** Coverage: AI now casts **Blind / Surge / Flux** (status-spell
+  enumeration), a **retreat/kiting move macro** (blind-then-disengage works),
+  threat model honours RangeDebuff + MP-debuffs + cooldowns (asymmetric:
+  accurate for own risk, cooldown-blind for projected menace), banked AP/MP
+  buffs priced with per-turn discount, beam dedup by state key. Portal still
+  unused (needs teleport-aware pathing).
+- ☑ **H.3** `core/Intel` — observed-opponent model: revealed slots + turns
+  observed folded from the event stream; unrevealed threats priced by a
+  decaying prior. `scout` brain = intel beam (plays what it has *seen*).
+- ☑ **H.5** Turn-level minimax: `deep` (omniscient) / `adaptive` (intel) —
+  alpha-beta over whole turn-plans along initiative order, diversified root
+  candidates, believed-opponent slot masks, even (whole-exchange) horizons,
+  deterministic clone budget + iterative deepening. Head-to-head (150 games,
+  sides swapped): **deep 60% vs beam** (clears the 3.5.6 bar pre-training),
+  adaptive 54% vs beam under the information handicap, scout = beam 50/50.
+- ☐ **H.4** Weight tuning from self-play (Texel/SPSA on `EvalWeights` via the
+  gauntlet, >55% promotion gate) — the bridge into 3.5.3/3.5.6.
+
 ## Phase 3.5 — Self-teaching AI (NNUE-style) ☐
 
-- ☐ **3.5.1** Split `Evaluator` seam under `Brain` (`HandcraftedEvaluator`).
+- ☑ **3.5.1** Split `Evaluator` seam under `Brain` (`HandcraftedEvaluator`) —
+  done as **H.1**.
 - ☐ **3.5.2** Versioned `featurize(Battle, Faction)`.
 - ☐ **3.5.3** Self-play data export from the sim.
 - ☐ **3.5.4** Offline PyTorch training → versioned, hash-pinned weights artifact.
@@ -228,8 +259,8 @@ see below.
 - ☑ **5.2** Spectate — the lobby logs each live match's broadcast stream; a watcher
   replays it as another mirror (`net/Spectate`, `listGames`/`watch`, GUI "Live
   games" list; `tb_spectate_demo`).
-- ☐ **5.3** Balance backlog — fireball radius, portal/Blind/Surge/Flux AI, synergy
-  tuning via `tb_balance`.
+- ◐ **5.3** Balance backlog — fireball radius; ☑ Blind/Surge/Flux AI (H.2);
+  ☐ Portal AI; synergy tuning via `tb_balance`.
 
 ## Parallel track — Web / WASM ☐
 

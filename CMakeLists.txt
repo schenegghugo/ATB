@@ -22,6 +22,8 @@ add_library(tb_core STATIC
     src/core/Grid.cpp
     src/core/Battle.cpp
     src/core/AI.cpp
+    src/core/Evaluator.cpp
+    src/core/Intel.cpp
     src/core/Spells.cpp
     src/core/Creatures.cpp
     src/core/Match.cpp
@@ -118,6 +120,9 @@ target_link_libraries(tb_creature_gen PRIVATE tb_core)
 add_executable(tb_ruleset_gen tools/ruleset_gen.cpp)
 target_link_libraries(tb_ruleset_gen PRIVATE tb_core)
 
+add_executable(tb_brain_arena tests/brain_arena.cpp)
+target_link_libraries(tb_brain_arena PRIVATE tb_core)
+
 add_executable(tb_balance tests/balance_sim.cpp)
 target_link_libraries(tb_balance PRIVATE tb_core)
 
@@ -153,6 +158,10 @@ target_link_libraries(tb_replay_source_demo PRIVATE tb_core)
 # headless, so it builds and tests in the no-GUI CI job.
 # ---------------------------------------------------------------------------
 find_package(Threads REQUIRED)
+
+# The balance sims fan matches out over a thread pool (ATB_JOBS).
+target_link_libraries(tb_balance PRIVATE Threads::Threads)
+target_link_libraries(tb_team_balance PRIVATE Threads::Threads)
 
 add_library(tb_transport STATIC
     src/net/Socket.cpp

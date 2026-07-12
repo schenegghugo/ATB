@@ -58,7 +58,9 @@ core as data or pulled *out* of it through an accessor.
 | `Battle` | The combat state machine: roster of `Entity`, initiative order, turn lifecycle, the data-driven spell/effect pipeline, ground effects, forced movement, the closing-ring "storm". |
 | `Spells` | The **catalog** (dictionary of skills): `SpellDef` = gameplay `Spell` + stable id + build-point cost. |
 | `Build` | Classless point-buy `CharacterBuild`: a budget spent across catalog skills and stat upgrades, validated, then *hydrated* into a live `Entity`. |
-| `AI` | A headless turn-level planner — beam-searches action sequences within the AP/MP budget, scoring end-of-turn states. |
+| `AI` | Headless turn planners behind the pluggable `Brain` interface: `beam`/`greedy` (within-turn search), `scout` (intel-aware beam) and `deep`/`adaptive` (turn-level alpha-beta minimax — my best turn vs the opponent's best reply, whole turn-plans as branches, clone-budgeted iterative deepening). |
+| `Evaluator` | The Brain's position-scoring seam (Phase 3.5.1): `HandcraftedEvaluator` = the tunable linear eval (threat envelopes honour range/MP debuffs + cooldowns; banked AP/MP buffs priced with a per-turn discount). A learned evaluator drops in behind the same interface. |
+| `Intel` | The observed-opponent model: a fold over the event stream yields each foe's *revealed* spell slots + turns observed; the eval prices unrevealed threats with a decaying prior. Intel-mode brains adjust to what they've been shown instead of reading the opponent's build. |
 | `Combat` / `Entity` | The spell/effect **data model** (`Combat.h`) and the `Entity` + its kind/control/snapshot (`Entity.h`), split out of `Battle.h` so the data types don't drag in the engine. |
 | `Event` | The structured, deterministic **combat event stream** (`Event.h`) — a read-only narration of a turn (see below). |
 | `Ruleset` / `Match` | The datafied match format (`Ruleset.h`, ring config in `Storm.h`) and the single `buildMatch()` construction path (`Match.{h,cpp}`) shared by the game and the balance sim. |
@@ -635,7 +637,7 @@ ever, for casual customs.
 | **Restyle the game with your own sprites/palette** | drop a pack folder + `pack.json` in and point `ATB_PACK` at it; no code, no recompile, no server involvement (§6). Atlas sprites, palette re-themes, and `anim`/`cast` animations all supported. | works now |
 | **Add / change a spell** | the catalog: edit `data/catalog.json` (or `makeDefaultCatalog()`, the compiled fallback). Combine existing `Effect`s. | works now (data + compiled) |
 | **Add a new _mechanic_** (something no `Effect` can express) | extend the `Effect`/`StatusEffect`/`GroundKind` vocabulary in `core/`, then resolve it in `Battle`. This is an *engine* change, reviewed accordingly. | core change |
-| **Write your own AI** | `AI.cpp` today. A pluggable `Brain` strategy interface (so alternatives drop in without forking) is planned. | compiled today; interface planned |
+| **Write your own AI** | implement `Brain` (`core/AI.h`), `registerBrain()` it, select by name (`ATB_BRAIN`). Ship built-ins: `beam`, `greedy`, `scout`, `deep`, `adaptive`. Or keep the search and swap the scoring: implement `Evaluator` (`core/Evaluator.h`). | works now |
 | **Write a whole new frontend** (different engine, web, TUI…) | implement against the `Battle` read API (`grid()`, `units()`, `affectedTiles()`, …) and drive it with intents. `render/` + `main.cpp` are the reference frontend. | API stable |
 | **Change the match format** (team size, banned spells, closing-ring, arena, economy) | edit `data/rules.json` — read by both the game and the balance sim via a shared `buildMatch()`. | works now |
 | **Swap persistence** | implement `BuildRepository` (in-memory and flat-file impls ship; `schema.sql` targets SQLite/Postgres). | seam in place |

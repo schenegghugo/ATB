@@ -50,9 +50,9 @@
           "apCost": 3,
           "minRange": 0,
           "maxRange": 0,
-          "needsLineOfSight": false,
+          "needsLineOfSight": true,
           "shape": "cross",
-          "radius": 3,
+          "radius": 2,
           "cooldown": 2,
           "effects": [
             {

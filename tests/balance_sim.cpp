@@ -15,6 +15,9 @@
 //
 //   usage: tb_balance [matches] [seed] [outfile]
 //          defaults: 4000  12345  output/balance_report.txt
+//   env:   ATB_DATA_DIR, ATB_MAP, ATB_RULES, ATB_TEAM, ATB_BRAIN (AI both
+//          sides play; default 'beam'), ATB_JOBS (worker threads; default all
+//          cores — reports are bit-identical whatever the thread count)
 //
 // NOTE: the planner casts every spell except Portal (its step-on-entry teleport
 // needs deeper lookahead), so Portal's numbers reflect point opportunity-cost.
@@ -36,6 +39,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -46,6 +50,7 @@
 #include <random>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 using namespace tb;
@@ -232,9 +237,13 @@ int main(int argc, char** argv) {
 
     // Unified rules: load data/rules.json (override the dir via ATB_DATA_DIR) so
     // the sim and the game build matches the same way — tune the economy / ring /
-    // arena / team size by editing rules.json. Absent → compiled default;
-    // present-but-invalid → hard error.
-    const std::string rulesPath = dataDir + "/rules.json";
+    // arena / team size by editing rules.json. ATB_RULES swaps the file: a name
+    // inside the data dir (e.g. rules.ranked.json) or a path when it has a '/'.
+    // Absent → compiled default; present-but-invalid → hard error.
+    std::string rulesFile = "rules.json";
+    if (const char* rf = std::getenv("ATB_RULES"); rf && *rf) rulesFile = rf;
+    const std::string rulesPath =
+        rulesFile.find('/') != std::string::npos ? rulesFile : dataDir + "/" + rulesFile;
     Ruleset ruleset;
     std::string rulesetSource;
     if (std::ifstream(rulesPath).good()) {
@@ -320,17 +329,49 @@ int main(int argc, char** argv) {
 
     const int teamSize = ruleset.teamSize;
     const auto t0 = std::chrono::steady_clock::now();
-    for (int m = 0; m < matches; ++m) {
+
+    // Phase 1 — inputs, serially: every build and per-match seed is drawn from
+    // the one RNG in match order, so the stream (and thus every report) is
+    // bit-identical to a serial run no matter how many threads run phase 2.
+    struct MatchInput {
         std::vector<Build> teamA, teamB;
         std::vector<CharacterBuild> defsA, defsB;
+        unsigned matchSeed = 0;
+    };
+    std::vector<MatchInput> inputs(matches);
+    for (MatchInput& in : inputs) {
         for (int t = 0; t < teamSize; ++t) {
-            teamA.push_back(randomBuild(rng, catalog, rules, ruleset.bannedSpells));
-            teamB.push_back(randomBuild(rng, catalog, rules, ruleset.bannedSpells));
-            defsA.push_back(teamA.back().def);
-            defsB.push_back(teamB.back().def);
+            in.teamA.push_back(randomBuild(rng, catalog, rules, ruleset.bannedSpells));
+            in.teamB.push_back(randomBuild(rng, catalog, rules, ruleset.bannedSpells));
+            in.defsA.push_back(in.teamA.back().def);
+            in.defsB.push_back(in.teamB.back().def);
         }
-        Outcome o = runMatch(ruleset, catalog, defsA, defsB, rng(), arenaPtr, creatures, *brain);
+        in.matchSeed = rng();
+    }
 
+    // Phase 2 — matches, in parallel: they're independent (each builds its own
+    // Battle; Brains are stateless), and each outcome lands in its own indexed
+    // slot. ATB_JOBS caps the workers (default: all cores; 1 = serial).
+    int jobs = std::max(1u, std::thread::hardware_concurrency());
+    if (const char* jv = std::getenv("ATB_JOBS"); jv && *jv) jobs = std::max(1, std::atoi(jv));
+    jobs = std::min(jobs, std::max(1, matches));
+    std::vector<Outcome> outcomes(matches);
+    {
+        std::atomic<int> nextMatch{0};
+        auto worker = [&]() {
+            for (int m = nextMatch.fetch_add(1); m < matches; m = nextMatch.fetch_add(1))
+                outcomes[m] = runMatch(ruleset, catalog, inputs[m].defsA, inputs[m].defsB,
+                                       inputs[m].matchSeed, arenaPtr, creatures, *brain);
+        };
+        std::vector<std::thread> pool;
+        for (int j = 1; j < jobs; ++j) pool.emplace_back(worker);
+        worker(); // the main thread works too
+        for (std::thread& t : pool) t.join();
+    }
+
+    // Phase 3 — aggregate in match order (the serial loop of old, minus the sim).
+    for (int m = 0; m < matches; ++m) {
+        const Outcome& o = outcomes[m];
         lengths.push_back(o.length);
         totalLen += o.length;
         if (o.result > 0) ++aWins;
@@ -343,8 +384,8 @@ int main(int argc, char** argv) {
                 case DamageSource::Collision: ++byCollision; break;
             }
         }
-        for (const Build& a : teamA) foldSide(g, a, o.result > 0);
-        for (const Build& b : teamB) foldSide(g, b, o.result < 0);
+        for (const Build& a : inputs[m].teamA) foldSide(g, a, o.result > 0);
+        for (const Build& b : inputs[m].teamB) foldSide(g, b, o.result < 0);
     }
     const double elapsed =
         std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
@@ -429,7 +470,8 @@ int main(int argc, char** argv) {
     r << "  matches            " << matches << "\n";
     r << "  seed               " << seed << "\n";
     r << "  wall time          " << elapsed << " s  ("
-      << (elapsed > 0 ? matches / elapsed : 0) << " matches/s)\n";
+      << (elapsed > 0 ? matches / elapsed : 0) << " matches/s, " << jobs << " thread"
+      << (jobs == 1 ? "" : "s") << ")\n";
     r << "  ruleset            " << rulesetSource << "\n";
     r << "  AI brain           " << brain->name() << "\n";
     r << "  format             " << teamSize << "v" << teamSize << "\n";

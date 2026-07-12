@@ -22,8 +22,12 @@
 //
 //   usage: tb_team_balance [matches] [seed] [outfile]
 //          defaults: 4000  12345  output/team_report.txt
-//   env:   ATB_DATA_DIR, ATB_MAP, ATB_TEAM (team size; default from rules.json,
-//          but this tool is pointless at 1 — use >= 2)
+//   env:   ATB_DATA_DIR, ATB_MAP, ATB_RULES (rules file name/path; default
+//          rules.json), ATB_TEAM (team size; default from the rules file,
+//          but this tool is pointless at 1 — use >= 2), ATB_BRAIN (AI both
+//          sides play; default 'beam' — see brainNames() for the roster),
+//          ATB_JOBS (worker threads; default all cores — reports are
+//          bit-identical whatever the thread count)
 //
 #include "core/AI.h"
 #include "core/Battle.h"
@@ -42,6 +46,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -53,6 +58,7 @@
 #include <random>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 using namespace tb;
@@ -193,11 +199,12 @@ struct Outcome {
 
 Outcome runMatch(const Ruleset& ruleset, const SpellCatalog& catalog,
                  const std::vector<CharacterBuild>& A, const std::vector<CharacterBuild>& B,
-                 unsigned seed, const Grid* staticArena, const std::vector<Entity>& creatures) {
+                 unsigned seed, const Grid* staticArena, const std::vector<Entity>& creatures,
+                 const Brain& brain) {
     Battle battle = buildMatch(ruleset, A, B, catalog, seed, creatures, staticArena);
     Outcome o;
     for (; o.length < kHalfTurnCap && battle.phase() != Phase::Finished; ++o.length)
-        runEnemyTurn(battle, /*autoEndTurn=*/true);
+        runEnemyTurn(battle, /*autoEndTurn=*/true, brain);
     if (auto w = battle.winner()) o.result = (*w == Faction::Player) ? 1 : -1;
     return o;
 }
@@ -251,10 +258,15 @@ int main(int argc, char** argv) {
         catalogSource = "built-in";
     }
 
-    // Ruleset.
+    // Ruleset. ATB_RULES swaps the file: a name inside the data dir (e.g.
+    // rules.ranked.json) or a path when it has a '/'; default rules.json.
+    std::string rulesFile = "rules.json";
+    if (const char* rf = std::getenv("ATB_RULES"); rf && *rf) rulesFile = rf;
     Ruleset ruleset;
     std::string rulesetSource;
-    if (const std::string p = dataDir + "/rules.json"; std::ifstream(p).good()) {
+    if (const std::string p = rulesFile.find('/') != std::string::npos ? rulesFile
+                                                                       : dataDir + "/" + rulesFile;
+        std::ifstream(p).good()) {
         RulesetLoad load = loadRulesetFromFile(p);
         if (!load.ok) {
             std::fprintf(stderr, "team_balance: ruleset '%s' invalid:\n", p.c_str());
@@ -286,6 +298,20 @@ int main(int argc, char** argv) {
     if (const char* mp = std::getenv("ATB_MAP")) ruleset.arena.map = mp;
     if (const char* tv = std::getenv("ATB_TEAM"); tv && *tv) ruleset.teamSize = std::max(1, std::atoi(tv));
     const int teamSize = ruleset.teamSize;
+
+    // ATB_BRAIN selects the AI both sides play (default: the beam search). An
+    // unknown name is fatal — don't silently report the wrong AI's balance.
+    const Brain* brain = &defaultBrain();
+    if (const char* bn = std::getenv("ATB_BRAIN"); bn && *bn) {
+        brain = brainByName(bn);
+        if (!brain) {
+            std::fprintf(stderr, "team_balance: unknown ATB_BRAIN='%s'; available:", bn);
+            for (std::string_view n : brainNames())
+                std::fprintf(stderr, " %.*s", (int)n.size(), n.data());
+            std::fprintf(stderr, "\n");
+            return 1;
+        }
+    }
 
     std::optional<Grid> staticArena;
     if (!ruleset.arena.map.empty()) {
@@ -321,25 +347,61 @@ int main(int argc, char** argv) {
 
     std::mt19937 rng(seed);
     const auto t0 = std::chrono::steady_clock::now();
-    for (int m = 0; m < matches; ++m) {
-        std::vector<CharacterBuild> A(teamSize), B(teamSize);
-        std::vector<int> rolesA(teamSize), rolesB(teamSize);
-        for (int t = 0; t < teamSize; ++t) {
-            A[t] = randomBuild(rng, catalog, rules, ruleset.bannedSpells);
-            B[t] = randomBuild(rng, catalog, rules, ruleset.bannedSpells);
-            rolesA[t] = classifyRole(A[t], catalog);
-            rolesB[t] = classifyRole(B[t], catalog);
-        }
-        const int ca = comps.of(rolesA), cb = comps.of(rolesB);
-        Outcome o = runMatch(ruleset, catalog, A, B, rng(), arenaPtr, creatures);
 
+    // Phase 1 — inputs, serially: builds/roles/per-match seeds come off the one
+    // RNG in match order, so the stream (and thus every report) is bit-identical
+    // to a serial run no matter how many threads run phase 2.
+    struct MatchInput {
+        std::vector<CharacterBuild> A, B;
+        std::vector<int> rolesA, rolesB;
+        int ca = -1, cb = -1;
+        unsigned matchSeed = 0;
+    };
+    std::vector<MatchInput> inputs(matches);
+    for (MatchInput& in : inputs) {
+        in.A.resize(teamSize); in.B.resize(teamSize);
+        in.rolesA.resize(teamSize); in.rolesB.resize(teamSize);
+        for (int t = 0; t < teamSize; ++t) {
+            in.A[t] = randomBuild(rng, catalog, rules, ruleset.bannedSpells);
+            in.B[t] = randomBuild(rng, catalog, rules, ruleset.bannedSpells);
+            in.rolesA[t] = classifyRole(in.A[t], catalog);
+            in.rolesB[t] = classifyRole(in.B[t], catalog);
+        }
+        in.ca = comps.of(in.rolesA);
+        in.cb = comps.of(in.rolesB);
+        in.matchSeed = rng();
+    }
+
+    // Phase 2 — matches, in parallel: independent sims, indexed outcome slots.
+    // ATB_JOBS caps the workers (default: all cores; 1 = serial).
+    int jobs = std::max(1u, std::thread::hardware_concurrency());
+    if (const char* jv = std::getenv("ATB_JOBS"); jv && *jv) jobs = std::max(1, std::atoi(jv));
+    jobs = std::min(jobs, std::max(1, matches));
+    std::vector<Outcome> outcomes(matches);
+    {
+        std::atomic<int> nextMatch{0};
+        auto worker = [&]() {
+            for (int m = nextMatch.fetch_add(1); m < matches; m = nextMatch.fetch_add(1))
+                outcomes[m] = runMatch(ruleset, catalog, inputs[m].A, inputs[m].B,
+                                       inputs[m].matchSeed, arenaPtr, creatures, *brain);
+        };
+        std::vector<std::thread> pool;
+        for (int j = 1; j < jobs; ++j) pool.emplace_back(worker);
+        worker(); // the main thread works too
+        for (std::thread& t : pool) t.join();
+    }
+
+    // Phase 3 — aggregate in match order (the serial loop of old, minus the sim).
+    for (int m = 0; m < matches; ++m) {
+        const Outcome& o = outcomes[m];
+        const int ca = inputs[m].ca, cb = inputs[m].cb;
         lengths.push_back(o.length);
         totalLen += o.length;
         const bool aWon = o.result > 0, bWon = o.result < 0;
         if (aWon) ++aWins; else if (bWon) ++bWins; else ++draws;
 
-        for (int r : rolesA) { roleN[r]++; if (aWon) roleW[r]++; }
-        for (int r : rolesB) { roleN[r]++; if (bWon) roleW[r]++; }
+        for (int r : inputs[m].rolesA) { roleN[r]++; if (aWon) roleW[r]++; }
+        for (int r : inputs[m].rolesB) { roleN[r]++; if (bWon) roleW[r]++; }
         if (ca >= 0) { compN[ca]++; if (aWon) compW[ca]++; }
         if (cb >= 0) { compN[cb]++; if (bWon) compW[cb]++; }
         if (ca >= 0 && cb >= 0) {
@@ -405,10 +467,11 @@ int main(int argc, char** argv) {
     r << "  matches      " << matches << "     seed " << seed << "     " << teamSize << "v" << teamSize
       << "\n";
     r << "  wall time    " << elapsed << " s  (" << (elapsed > 0 ? matches / elapsed : 0)
-      << " matches/s)\n";
+      << " matches/s, " << jobs << " thread" << (jobs == 1 ? "" : "s") << ")\n";
     r << "  ruleset      " << rulesetSource << "     catalog " << catalogSource;
     if (!catalogVersion.empty()) r << " (v" << catalogVersion << ")";
     r << "\n";
+    r << "  AI brain     " << brain->name() << "\n";
     if (staticArena) r << "  arena        static map '" << ruleset.arena.map << "'\n";
     else r << "  arena        random " << ruleset.arena.width << "x" << ruleset.arena.height << "\n";
     {

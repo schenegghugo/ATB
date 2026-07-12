@@ -6,36 +6,55 @@
 # every build into an archetype (Aggro/Control/Summoner/Support/Evasion) and reports
 # win rates by team composition plus a composition-vs-composition matchup matrix.
 #
-# Reads the same data/catalog.json + data/creatures.json + data/rules.json the game
-# uses. Builds tb_team_balance if needed, then runs it. Meant for 2v2 / 3v3.
+# Reads data/catalog.json + data/creatures.json + a rules file (default: the
+# RANKED ruleset, data/rules.ranked.json — balance work targets competitive
+# play; pass --rules rules.json for the casual set). Builds tb_team_balance if
+# needed, then runs it. Meant for 2v2 / 3v3.
 #
 set -euo pipefail
 cd "$(dirname "$0")/.." # repo root (this script lives in scripts/)
 
-matches=40000
+matches=""
 seed=42
 out="output/team_report.txt"
 team=2
 map=""
 map_set=0
 data=""
+brain="adaptive"
+jobs=""
+rules="rules.ranked.json"
 
 usage() {
     cat <<'EOF'
 Usage: scripts/team_balance.sh [options]
 
-  -n, --matches N     number of matches            (default 4000)
+  -n, --matches N     number of matches (default: 40000, or 100 with a minimax
+                      brain — deep/adaptive play ~0.12 matches/s in 2v2)
   -s, --seed S        RNG seed (deterministic)      (default 42)
   -o, --out FILE      report output file            (default output/team_report.txt)
   -t, --team N        team size: 2 = 2v2, 3 = 3v3   (default 2)
   -m, --map KEY|FILE  battlefield: a map key under data/maps/ (e.g. 'duel'),
                       a path to a map .json, or '' to force a random arena
   -d, --data DIR      data directory holding catalog/creatures/rules (+ maps/)
+  -r, --rules FILE    rules file: a name inside the data dir or a path
+                      (default rules.ranked.json — the competitive ruleset)
+  -b, --brain NAME    AI both sides play (default 'adaptive' — the latest AI:
+                      turn-level minimax + observed-opponent intel).
+                      Roster: adaptive | deep | scout | beam | greedy.
+                      Composition studies need big N — use scout (intel
+                      realism, ~100x faster than adaptive) when a few
+                      hundred games won't do. Matches fan out over all
+                      cores (deterministic — identical report at any -j).
+  -j, --jobs N        worker threads (default: all cores)
   -h, --help          show this help
 
 Examples:
-  scripts/team_balance.sh --team 2 -n 8000
+  scripts/team_balance.sh                        # 100 matches, adaptive AI
+  scripts/team_balance.sh --brain scout -n 8000  # sweep-sized, intel realism
+  scripts/team_balance.sh --brain beam -n 40000  # the classic fast sweep
   scripts/team_balance.sh --team 3 --map duel
+  scripts/team_balance.sh --rules rules.json     # casual/default ruleset
   scripts/team_balance.sh -t 2 --data /tmp/mymod -o mymod_team.txt
 EOF
 }
@@ -48,10 +67,24 @@ while [[ $# -gt 0 ]]; do
         -t | --team) team="$2"; shift 2 ;;
         -m | --map) map="$2"; map_set=1; shift 2 ;;
         -d | --data) data="$2"; shift 2 ;;
+        -r | --rules) rules="$2"; shift 2 ;;
+        -b | --brain) brain="$2"; shift 2 ;;
+        -j | --jobs) jobs="$2"; shift 2 ;;
         -h | --help) usage; exit 0 ;;
         *) echo "team_balance.sh: unknown option '$1'" >&2; usage; exit 1 ;;
     esac
 done
+
+# Match-count default is brain-aware: the minimax brains (deep/adaptive) play
+# ~0.12 matches/s per core in 2v2, so an unset -n means a study-sized run
+# there (~3 min) and a sweep-sized one otherwise.
+eff_jobs="${jobs:-$(nproc)}"
+if [[ -z "$matches" ]]; then
+    case "$brain" in
+        deep | adaptive) matches=$((20 * eff_jobs)) ;;
+        *) matches=40000 ;;
+    esac
+fi
 
 # Build the simulator (configure first if the build dir isn't set up).
 if [[ ! -f build/CMakeCache.txt ]]; then
@@ -62,8 +95,15 @@ cmake --build build --target tb_team_balance -j >/dev/null
 [[ -n "$data" ]] && export ATB_DATA_DIR="$data"
 [[ "$map_set" == 1 ]] && export ATB_MAP="$map"
 export ATB_TEAM="$team"
+export ATB_RULES="$rules"
+export ATB_BRAIN="$brain"
+[[ -n "$jobs" ]] && export ATB_JOBS="$jobs"
 
-echo "team_balance: ${matches} matches, seed ${seed}, ${team}v${team}${map:+, map='${map}'}${data:+, data='${data}'}"
+echo "team_balance: ${matches} matches, seed ${seed}, rules '${rules}', ${team}v${team}, brain '${brain}', ${eff_jobs} thread(s)${map:+, map='${map}'}${data:+, data='${data}'}"
+case "$brain" in
+    deep | adaptive)
+        echo "team_balance: note: '${brain}' plays ~0.12 matches/s per core in 2v2 — this run is roughly $((matches * 100 / (12 * eff_jobs) / 60 + 1)) min; use --brain scout for sweeps" ;;
+esac
 ./build/tb_team_balance "$matches" "$seed" "$out"
 base="${out%.txt}"
 echo "team_balance: wrote ${out}, ${base}.html (charts), and ${base}.{roles,comps,matchups}.csv"
