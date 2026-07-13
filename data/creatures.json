@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "creatures": [
     {
       "key": "bomb",
@@ -118,6 +118,38 @@
           ]
         }
       ]
+    },
+    {
+      "key": "stormcloud",
+      "kind": "object",
+      "hp": 1,
+      "ap": 0,
+      "mp": 0,
+      "initiative": 1,
+      "fuse": 1,
+      "statuses": [],
+      "spells": [],
+      "onDeath": {
+        "name": "lightning",
+        "apCost": 0,
+        "minRange": 0,
+        "maxRange": 0,
+        "needsLineOfSight": false,
+        "shape": "circle",
+        "radius": 2,
+        "cooldown": 0,
+        "effects": [
+          {
+            "type": "damage",
+            "amount": 12
+          },
+          {
+            "type": "paintSurface",
+            "amount": 2,
+            "element": "electric"
+          }
+        ]
+      }
     }
   ]
 }

@@ -43,7 +43,7 @@ int main() {
         CatalogLoad load = loadCatalogFromString(a);
         CHECK(load.ok, "default catalog serializes -> loads cleanly");
         CHECK(load.version == "1.0.0", "version round-trips");
-        CHECK(load.catalog.all().size() == 20, "all 20 spells survive");
+        CHECK(load.catalog.all().size() == 25, "all 25 spells survive");
         const std::string b = serializeCatalog(load.catalog, "1.0.0");
         CHECK(a == b, "serialize -> load -> serialize is byte-identical");
     }
@@ -142,7 +142,7 @@ int main() {
         CatalogLoad fromFile = loadCatalogFromFile(path);
         CHECK(fromFile.ok, "loadCatalogFromFile loads a written catalog");
         CHECK(fromFile.sha256 == fromStr.sha256, "file and string hashes agree");
-        CHECK(fromFile.catalog.all().size() == 20, "file load has all 20 spells");
+        CHECK(fromFile.catalog.all().size() == 25, "file load has all 25 spells");
 
         CatalogLoad missing = loadCatalogFromFile("/tmp/atb_does_not_exist_42.json");
         CHECK(!missing.ok && !missing.errors.empty(), "missing file -> ok=false with an error");

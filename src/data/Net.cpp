@@ -75,7 +75,8 @@ bool applyIntent(Battle& b, EntityId actor, const Intent& in) {
         case Intent::Kind::Move: return b.moveToward(actor, in.target) > 0;
         case Intent::Kind::Cast:
             return b.cast(actor, in.spellIdx, in.target,
-                          in.hasTarget2 ? std::optional<Vec2i>(in.target2) : std::nullopt);
+                          in.hasTarget2 ? std::optional<Vec2i>(in.target2) : std::nullopt,
+                          in.rotation);
         case Intent::Kind::EndTurn: b.endTurn(); return true;
     }
     return false;
@@ -93,6 +94,7 @@ std::string serializeIntent(const Intent& in) {
             o.set("spellIdx", in.spellIdx);
             o.set("target", vec2Json(in.target));
             if (in.hasTarget2) o.set("target2", vec2Json(in.target2));
+            if (in.rotation != 0) o.set("rotation", in.rotation);
             break;
         case Intent::Kind::EndTurn:
             o.set("kind", "endTurn");
@@ -121,7 +123,7 @@ Parse<Intent> parseIntent(const std::string& text) {
         else e.push_back("intent: \"move\" requires \"target\"");
     } else if (kind == "cast") {
         in.kind = Intent::Kind::Cast;
-        jsonread::checkAllowed(o, {"kind", "spellIdx", "target", "target2"}, "intent", e);
+        jsonread::checkAllowed(o, {"kind", "spellIdx", "target", "target2", "rotation"}, "intent", e);
         if (jsonread::wantInt(o, "spellIdx", "intent", in.spellIdx, e) && in.spellIdx < 0)
             e.push_back("intent: \"spellIdx\" must be >= 0");
         if (const json::Value* t = o.find("target")) readVec2(*t, "intent.target", in.target, e);
@@ -130,6 +132,7 @@ Parse<Intent> parseIntent(const std::string& text) {
             readVec2(*t2, "intent.target2", in.target2, e);
             in.hasTarget2 = true;
         }
+        if (o.find("rotation")) jsonread::wantInt(o, "rotation", "intent", in.rotation, e);
     } else if (kind == "endTurn") {
         in.kind = Intent::Kind::EndTurn;
         jsonread::checkAllowed(o, {"kind"}, "intent", e);
@@ -184,6 +187,8 @@ Snapshot snapshotOf(const Battle& b) {
         gg.magnitude = g.magnitude;
         gg.center = g.center;
         gg.exit = g.exit;
+        gg.element = g.element;
+        gg.blocksLos = g.blocksLos;
         s.ground.push_back(std::move(gg));
     }
     return s;
@@ -241,6 +246,10 @@ std::string serializeSnapshot(const Snapshot& s) {
         go.set("magnitude", g.magnitude);
         go.set("center", vec2Json(g.center));
         go.set("exit", vec2Json(g.exit));
+        // Omit neutral/false defaults so pre-elemental snapshots round-trip identically.
+        if (g.element != Element::None)
+            go.set("element", std::string(enums::toString(enums::kElements, g.element)));
+        if (g.blocksLos) go.set("blocksLos", true);
         ground.push_back(go);
     }
     o.set("ground", ground);
@@ -358,6 +367,12 @@ Parse<Snapshot> parseSnapshot(const std::string& text) {
             g.magnitude = jsonread::optInt(gv, "magnitude", 0, ctx, e);
             readVec2Field(gv, "center", ctx, g.center, e);
             readVec2Field(gv, "exit", ctx, g.exit, e);
+            if (const json::Value* elv = gv.find("element"); elv && elv->isString()) {
+                if (auto el = enums::fromString(enums::kElements, elv->asString())) g.element = *el;
+                else e.push_back(ctx + ": unknown element \"" + elv->asString() + "\"");
+            }
+            if (const json::Value* bv = gv.find("blocksLos"); bv && bv->isBool())
+                g.blocksLos = bv->asBool();
             s.ground.push_back(std::move(g));
         }
     } else {

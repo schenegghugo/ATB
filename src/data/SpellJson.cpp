@@ -36,10 +36,13 @@ void enumField(const json::Value& obj, const char* key, const enums::Row<E> (&ta
 }
 
 void parseGround(const json::Value& gv, const std::string& ctx, GroundSpec& out, Errors& e) {
-    checkAllowed(gv, {"kind", "duration", "magnitude"}, ctx, e);
+    checkAllowed(gv, {"kind", "duration", "magnitude", "element"}, ctx, e);
     enumField(gv, "kind", enums::kGroundKinds, ctx, true, out.kind, e);
     out.duration = optInt(gv, "duration", 2, ctx, e); // matches GroundSpec default
     out.magnitude = optInt(gv, "magnitude", 0, ctx, e);
+    // `element` is optional (default None) — backward-compatible with pre-0.0.2
+    // catalogs that predate elemental surfaces.
+    enumField(gv, "element", enums::kElements, ctx, false, out.element, e);
 }
 
 } // namespace
@@ -71,7 +74,8 @@ Effect parseEffect(const json::Value& ev, const std::string& ctx, Errors& e) {
         e.push_back(ctx + ": expected an object");
         return out;
     }
-    checkAllowed(ev, {"type", "amount", "status", "ground", "creature", "polarized"}, ctx, e);
+    checkAllowed(ev, {"type", "amount", "status", "ground", "creature", "polarized", "element"},
+                 ctx, e);
 
     const std::size_t before = e.size();
     enumField(ev, "type", enums::kEffectTypes, ctx, true, out.type, e);
@@ -79,6 +83,7 @@ Effect parseEffect(const json::Value& ev, const std::string& ctx, Errors& e) {
 
     const std::string typeName(enums::toString(enums::kEffectTypes, out.type));
     if (out.type != Effect::Type::ApplyStatus) forbid(ev, "polarized", typeName, ctx, e);
+    if (out.type != Effect::Type::PaintSurface) forbid(ev, "element", typeName, ctx, e);
     switch (out.type) {
         case Effect::Type::Damage:
         case Effect::Type::Heal:
@@ -137,6 +142,21 @@ Effect parseEffect(const json::Value& ev, const std::string& ctx, Errors& e) {
             }
             break;
         }
+        case Effect::Type::PaintSurface: {
+            // amount = surface duration (turns); element = what to paint.
+            forbid(ev, "status", typeName, ctx, e);
+            forbid(ev, "ground", typeName, ctx, e);
+            forbid(ev, "creature", typeName, ctx, e);
+            int amount = 0;
+            if (wantInt(ev, "amount", ctx, amount, e)) {
+                if (amount < 1) e.push_back(ctx + ": \"paintSurface\" duration must be >= 1");
+                out.amount = amount;
+            }
+            enumField(ev, "element", enums::kElements, ctx, true, out.element, e);
+            if (out.element == Element::None)
+                e.push_back(ctx + ": \"paintSurface\" element must not be \"none\"");
+            break;
+        }
     }
     return out;
 }
@@ -163,11 +183,18 @@ json::Value effectToJson(const Effect& fx) {
             g.set("kind", Value(std::string(enums::toString(enums::kGroundKinds, fx.ground.kind))));
             g.set("duration", Value(fx.ground.duration));
             g.set("magnitude", Value(fx.ground.magnitude));
+            // Omit `element` when neutral so pre-elemental catalogs round-trip byte-identical.
+            if (fx.ground.element != Element::None)
+                g.set("element", Value(std::string(enums::toString(enums::kElements, fx.ground.element))));
             e.set("ground", std::move(g));
             break;
         }
         case Effect::Type::Summon:
             e.set("creature", Value(fx.creature));
+            break;
+        case Effect::Type::PaintSurface:
+            e.set("amount", Value(fx.amount)); // surface duration
+            e.set("element", Value(std::string(enums::toString(enums::kElements, fx.element))));
             break;
     }
     return e;

@@ -18,6 +18,15 @@ Vec2i cardinalStep(Vec2i from, Vec2i to) {
     return Vec2i{0, dy > 0 ? 1 : -1};
 }
 
+// Rotate a delta by `quarters` × 90° clockwise (screen space, y-down): each turn
+// maps (x, y) -> (-y, x). `quarters` is taken mod 4 (negatives welcome), so any
+// integer works — the caller (Shelter) feeds an unbounded wheel counter.
+Vec2i rotateQuarters(Vec2i d, int quarters) {
+    int q = ((quarters % 4) + 4) % 4;
+    for (int i = 0; i < q; ++i) d = Vec2i{-d.y, d.x};
+    return d;
+}
+
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -145,7 +154,11 @@ std::vector<Vec2i> Battle::pathBlockers(EntityId mover) const {
 }
 
 bool Battle::clearLineOfSight(Vec2i a, Vec2i b) const {
-    return hasLineOfSight(grid_, a, b, wallTiles());
+    // Walls and LOS-blocking surfaces (Steam / clouds) both occlude sight.
+    std::vector<Vec2i> blockers = wallTiles();
+    for (const GroundEffect& g : ground_)
+        if (g.blocksLos) blockers.insert(blockers.end(), g.tiles.begin(), g.tiles.end());
+    return hasLineOfSight(grid_, a, b, blockers);
 }
 
 // ---------------------------------------------------------------------------
@@ -179,8 +192,19 @@ void Battle::startTurnFor(EntityId id) {
 
     for (const StatusEffect& s : e.statuses) {
         if (s.delay > 0) continue;
-        if (s.kind == StatusEffect::Kind::DamageOverTime) applyDamage(id, s.magnitude);
+        if (s.kind == StatusEffect::Kind::DamageOverTime ||
+            s.kind == StatusEffect::Kind::Burning)
+            applyDamage(id, s.magnitude);
     }
+
+    // Standing on a harmful/benign elemental surface at turn start applies its
+    // per-turn effect (covers a unit that never moved off it). Deterministic —
+    // it reads only this unit's own tile.
+    if (e.alive()) surfaceTick(id, surfaceElementAt(e.pos));
+
+    // Stunned (Electric): this whole turn is forfeit — zero out AP/MP so no action
+    // is possible. The status then ages out below, so exactly one turn is skipped.
+    if (e.alive() && hasStatus(e, StatusEffect::Kind::Stunned)) { e.ap = 0; e.mp = 0; }
 
     // Fuse: an armed object (bomb) detonates when its countdown elapses — kill it
     // so its onDeath (the blast) fires. Skipped if ignition/an attack already did.
@@ -299,6 +323,7 @@ void Battle::checkVictory() {
 bool Battle::stepTo(EntityId who, Vec2i adjacent) {
     Entity& e = units_[who];
     if (phase() == Phase::Finished) return false;
+    if (hasStatus(e, StatusEffect::Kind::Frozen)) return false; // rooted (Ice)
     if (e.mp <= 0) return false;
     if (manhattan(e.pos, adjacent) != 1) return false;
     if (!grid_.isWalkable(adjacent)) return false;
@@ -361,7 +386,8 @@ bool Battle::canCast(EntityId caster, int spellIdx, Vec2i target) const {
     return true;
 }
 
-std::vector<Vec2i> Battle::affectedTiles(const Spell& spell, Vec2i casterPos, Vec2i target) const {
+std::vector<Vec2i> Battle::affectedTiles(const Spell& spell, Vec2i casterPos, Vec2i target,
+                                         int rotation) const {
     std::vector<Vec2i> tiles;
     auto push = [&](Vec2i p) {
         if (grid_.inBounds(p)) tiles.push_back(p);
@@ -387,11 +413,25 @@ std::vector<Vec2i> Battle::affectedTiles(const Spell& spell, Vec2i casterPos, Ve
             }
             break;
         case TargetShape::Line: {
-            Vec2i dir = cardinalStep(casterPos, target);
+            // The line runs from `target` along the caster→target ray, then the
+            // player's wheel rotates that heading in 90° steps (Shelter walls).
+            Vec2i dir = rotateQuarters(cardinalStep(casterPos, target), rotation);
             Vec2i p = target;
             for (int r = 0; r <= spell.radius; ++r) {
                 push(p);
                 p = Vec2i{p.x + dir.x, p.y + dir.y};
+            }
+            break;
+        }
+        case TargetShape::Cone: {
+            // A triangle fanning out from the caster along the (rotatable) facing:
+            // row k (1..radius) sits k tiles ahead and is 2k-1 tiles wide.
+            const Vec2i dir = rotateQuarters(cardinalStep(casterPos, target), rotation);
+            const Vec2i perp = rotateQuarters(dir, 1);
+            for (int k = 1; k <= spell.radius; ++k) {
+                const Vec2i center{casterPos.x + dir.x * k, casterPos.y + dir.y * k};
+                for (int j = -(k - 1); j <= (k - 1); ++j)
+                    push(Vec2i{center.x + perp.x * j, center.y + perp.y * j});
             }
             break;
         }
@@ -416,6 +456,7 @@ void Battle::spawnGround(const GroundSpec& spec, Faction owner, Vec2i casterPos,
     g.owner = owner;
     g.remainingTurns = spec.duration;
     g.magnitude = spec.magnitude;
+    g.element = spec.element; // neutral (None) unless an elemental spell painted it
     switch (spec.kind) {
         case GroundKind::Wall:
             g.kind = GroundKind::Wall;
@@ -423,6 +464,13 @@ void Battle::spawnGround(const GroundSpec& spec, Faction owner, Vec2i casterPos,
                 if (grid_.isWalkable(t) && !unitAt(t)) g.tiles.push_back(t);
             break;
         case GroundKind::Glyph:
+            // Elemental surface: route through the reaction engine (tile-local,
+            // one GroundEffect per tile). A neutral glyph (element None) is the
+            // legacy repel trap and keeps the single multi-tile footprint below.
+            if (spec.element != Element::None) {
+                paintSurface(spec.element, spec.duration, zone, owner);
+                return;
+            }
             g.kind = GroundKind::Glyph;
             g.center = target;
             for (Vec2i t : zone)
@@ -469,7 +517,8 @@ void Battle::spawnGround(const GroundSpec& spec, Faction owner, Vec2i casterPos,
     if (!g.tiles.empty()) ground_.push_back(std::move(g));
 }
 
-bool Battle::cast(EntityId caster, int spellIdx, Vec2i target, std::optional<Vec2i> portalExit) {
+bool Battle::cast(EntityId caster, int spellIdx, Vec2i target, std::optional<Vec2i> portalExit,
+                  int rotation) {
     if (!canCast(caster, spellIdx, target)) return false;
 
     // Acting drops the guise: casting from a cloaked pair member declares THAT
@@ -493,18 +542,20 @@ bool Battle::cast(EntityId caster, int spellIdx, Vec2i target, std::optional<Vec
         units_[caster].spellCooldowns[spellIdx] = sp.cooldown;
 
     emit({EventType::Cast, /*actor=*/caster, /*target=*/0, 0, /*spellSlot=*/spellIdx});
-    applySpellEffects(sp, casterTeam, casterPos, target, portalExit);
+    applySpellEffects(sp, casterTeam, casterPos, target, portalExit, rotation);
     return true;
 }
 
 void Battle::applySpellEffects(const Spell& sp, Faction casterTeam, Vec2i casterPos, Vec2i target,
-                               std::optional<Vec2i> portalExit) {
-    const std::vector<Vec2i> zone = affectedTiles(sp, casterPos, target);
+                               std::optional<Vec2i> portalExit, int rotation) {
+    const std::vector<Vec2i> zone = affectedTiles(sp, casterPos, target, rotation);
 
     // Tile/ground/spawn effects resolve once for the cast (not per victim).
     for (const Effect& fx : sp.effects) {
         if (fx.type == Effect::Type::Spawn)
             spawnGround(fx.ground, casterTeam, casterPos, target, zone, portalExit);
+        else if (fx.type == Effect::Type::PaintSurface)
+            paintSurface(fx.element, fx.amount, zone, casterTeam); // amount = duration
         else if (fx.type == Effect::Type::Summon)
             spawnCreature(fx.creature, casterTeam, target);
         else if (fx.type == Effect::Type::Decoy) {
@@ -571,6 +622,7 @@ void Battle::applySpellEffects(const Spell& sp, Faction casterTeam, Vec2i caster
                 case Effect::Type::Spawn:
                 case Effect::Type::Summon:
                 case Effect::Type::Decoy:
+                case Effect::Type::PaintSurface:
                     break; // handled above, once
             }
         }
@@ -649,14 +701,259 @@ void Battle::onEnterTile(EntityId who) {
         if (!onIt) continue;
 
         if (g.kind == GroundKind::Glyph) {
-            Vec2i dir = cardinalStep(g.center, here);
-            if (dir.x == 0 && dir.y == 0) dir = Vec2i{1, 0}; // standing on the origin
-            applyForcedMove(who, dir, g.magnitude);          // forced move does not re-trigger
+            // Elemental surface: apply the element's entry effect. A neutral glyph
+            // (element None) with a repel magnitude is the legacy trap (retired for
+            // the Glyph spell in E.5, but the mechanic stays available).
+            if (g.element != Element::None) { surfaceEnter(who, g.element); return; }
+            if (g.magnitude > 0) {
+                Vec2i dir = cardinalStep(g.center, here);
+                if (dir.x == 0 && dir.y == 0) dir = Vec2i{1, 0}; // standing on the origin
+                applyForcedMove(who, dir, g.magnitude);          // forced move does not re-trigger
+            }
             return;
         }
         if (g.kind == GroundKind::Portal) {
             if (grid_.isWalkable(g.exit) && !unitAt(g.exit)) e.pos = g.exit; // no chain
             return;
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Elemental-surface passives (E.2 — docs/elements.md §3). Balance numbers are
+// placeholders to be tuned in E.8; the shapes/ordering are what matter here.
+// ---------------------------------------------------------------------------
+namespace {
+constexpr int kBurnPerTurn = 5;   // Fire surface / Burning DoT
+constexpr int kPoisonPerTurn = 4; // Poison surface / Poisoned DoT
+constexpr int kShockDamage = 6;   // Electric on enter
+constexpr int kShockTick = 3;     // Electric while standing
+constexpr int kHealPerStep = 8;   // Heal pool
+} // namespace
+
+bool Battle::hasStatus(const Entity& e, StatusEffect::Kind k) {
+    for (const StatusEffect& s : e.statuses)
+        if (s.kind == k && s.delay <= 0) return true;
+    return false;
+}
+
+void Battle::refreshStatus(EntityId who, StatusEffect::Kind k, int magnitude, int turns) {
+    Entity& e = units_[who];
+    for (StatusEffect& s : e.statuses)
+        if (s.kind == k && s.delay <= 0) {
+            s.remainingTurns = std::max(s.remainingTurns, turns);
+            s.magnitude = std::max(s.magnitude, magnitude);
+            return;
+        }
+    e.statuses.push_back(StatusEffect{k, magnitude, turns, 0});
+    emit({EventType::Status, who, who, magnitude, -1, DamageSource::Spell, k});
+}
+
+void Battle::clearStatus(EntityId who, StatusEffect::Kind k) {
+    Entity& e = units_[who];
+    e.statuses.erase(std::remove_if(e.statuses.begin(), e.statuses.end(),
+                                    [&](const StatusEffect& s) { return s.kind == k; }),
+                     e.statuses.end());
+}
+
+void Battle::surfaceEnter(EntityId who, Element el) {
+    Entity& e = units_[who];
+    if (!e.alive()) return;
+    switch (el) {
+        case Element::Fire:
+            if (!hasStatus(e, StatusEffect::Kind::Wet))
+                refreshStatus(who, StatusEffect::Kind::Burning, kBurnPerTurn, 2);
+            break;
+        case Element::Poison:
+            refreshStatus(who, StatusEffect::Kind::DamageOverTime, kPoisonPerTurn, 2);
+            break;
+        case Element::Water:
+        case Element::Steam:
+        case Element::Ice: // slip physics deferred; soaks like the others
+            refreshStatus(who, StatusEffect::Kind::Wet, 0, el == Element::Ice ? 1 : 2);
+            clearStatus(who, StatusEffect::Kind::Burning);
+            break;
+        case Element::Oil:
+            refreshStatus(who, StatusEffect::Kind::Oiled, 0, 2);
+            e.mp /= 2; // greased: the step into oil taxes remaining movement
+            break;
+        case Element::Heal: {
+            const int before = e.hp;
+            e.hp = std::min(e.maxHp, e.hp + kHealPerStep);
+            if (e.hp > before) emit({EventType::Heal, who, who, e.hp - before});
+            break;
+        }
+        case Element::Electric:
+            applyDamage(who, kShockDamage);
+            if (e.alive()) refreshStatus(who, StatusEffect::Kind::Stunned, 0, 1);
+            break;
+        case Element::None:
+            break;
+    }
+}
+
+void Battle::surfaceTick(EntityId who, Element el) {
+    Entity& e = units_[who];
+    if (!e.alive()) return;
+    switch (el) {
+        case Element::Fire:
+            if (!hasStatus(e, StatusEffect::Kind::Wet)) applyDamage(who, kBurnPerTurn);
+            break;
+        case Element::Poison:
+            applyDamage(who, kPoisonPerTurn);
+            break;
+        case Element::Electric:
+            applyDamage(who, kShockTick); // stun is on-enter only, never re-applied
+            break;
+        case Element::Heal: {
+            const int before = e.hp;
+            e.hp = std::min(e.maxHp, e.hp + kHealPerStep);
+            if (e.hp > before) emit({EventType::Heal, who, who, e.hp - before});
+            break;
+        }
+        default:
+            break; // Water/Ice/Steam/Oil/None: no per-turn tick
+    }
+}
+
+Element Battle::surfaceElementAt(Vec2i at) const {
+    for (const GroundEffect& g : ground_) {
+        if (g.kind != GroundKind::Glyph || g.element == Element::None) continue;
+        for (Vec2i t : g.tiles)
+            if (t == at) return g.element; // first-match in spawn order (deterministic)
+    }
+    return Element::None;
+}
+
+// ---------------------------------------------------------------------------
+// Reaction engine (E.3 — docs/elements.md §4). Pure table + tile-local resolve.
+// ---------------------------------------------------------------------------
+namespace {
+constexpr int kExplosionDamage = 15; // fire burst r1 from an ignited flammable
+
+enum class Burst : std::uint8_t { None, Shock, ShockStun, Freeze, Explosion };
+struct Reaction {
+    Element result;
+    Burst burst;
+};
+
+// (existing surface, incoming element) -> (resulting surface, immediate burst).
+// Mirrors the §4 matrix exactly; `incoming` drives the outer switch.
+Reaction react(Element existing, Element incoming) {
+    using E = Element;
+    switch (incoming) {
+        case E::Fire:
+            switch (existing) {
+                case E::Water: return {E::Steam, Burst::None};       // extinguish
+                case E::Ice: return {E::Water, Burst::None};         // melt
+                case E::Poison: case E::Oil: return {E::None, Burst::Explosion};
+                case E::Heal: case E::Steam: return {E::None, Burst::None};
+                default: return {E::Fire, Burst::None};              // None/Fire
+            }
+        case E::Water:
+            switch (existing) {
+                case E::Fire: return {E::None, Burst::None};         // douse
+                case E::Ice: return {E::Ice, Burst::None};
+                case E::Steam: return {E::Water, Burst::None};       // condense
+                case E::Poison: return {E::Poison, Burst::None};
+                case E::Oil: return {E::Oil, Burst::None};
+                case E::Heal: return {E::Heal, Burst::None};
+                default: return {E::Water, Burst::None};
+            }
+        case E::Ice:
+            switch (existing) {
+                case E::Water: return {E::Ice, Burst::Freeze};       // freeze units
+                case E::Fire: return {E::Water, Burst::None};        // quench
+                case E::Steam: return {E::Water, Burst::None};
+                default: return {E::Ice, Burst::None};               // None/Ice/Poison/Oil/Heal
+            }
+        case E::Electric:
+            switch (existing) {
+                case E::Fire: return {E::Fire, Burst::Shock};
+                case E::Poison: return {E::Poison, Burst::Shock};
+                case E::Oil: return {E::Oil, Burst::Shock};
+                case E::Heal: return {E::Heal, Burst::Shock};
+                case E::Steam: return {E::Steam, Burst::Shock};      // cloud stays, LOS-block kept
+                default: return {E::Electric, Burst::ShockStun};     // None/Water/Ice: live floor
+            }
+        case E::Poison:
+            switch (existing) {
+                case E::Fire: return {E::Fire, Burst::Explosion};    // fire ignites the fumes, stays lit
+                case E::Ice: return {E::Ice, Burst::None};
+                case E::Heal: return {E::None, Burst::None};         // spoiled
+                case E::Steam: return {E::Steam, Burst::None};
+                default: return {E::Poison, Burst::None};            // None/Water/Poison/Oil
+            }
+        case E::Oil:
+            switch (existing) {
+                case E::Fire: return {E::Fire, Burst::Explosion};
+                case E::Ice: return {E::Ice, Burst::None};
+                case E::Poison: return {E::Poison, Burst::None};
+                case E::Steam: return {E::Steam, Burst::None};
+                default: return {E::Oil, Burst::None};              // None/Water/Oil/Heal
+            }
+        default: // Heal / Steam / None as an incoming paint: benign, no reaction.
+            return {existing == E::None ? incoming : existing, Burst::None};
+    }
+}
+} // namespace
+
+void Battle::removeSurfaceTileAt(Vec2i t) {
+    for (GroundEffect& g : ground_) {
+        if (g.kind != GroundKind::Glyph || g.element == Element::None) continue;
+        g.tiles.erase(std::remove(g.tiles.begin(), g.tiles.end(), t), g.tiles.end());
+    }
+    ground_.erase(std::remove_if(ground_.begin(), ground_.end(),
+                                 [](const GroundEffect& g) {
+                                     return g.kind == GroundKind::Glyph &&
+                                            g.element != Element::None && g.tiles.empty();
+                                 }),
+                  ground_.end());
+}
+
+void Battle::paintSurface(Element incoming, int duration, const std::vector<Vec2i>& zone,
+                          Faction team) {
+    for (Vec2i t : zone) {
+        if (!grid_.isWalkable(t)) continue;
+        const Reaction r = react(surfaceElementAt(t), incoming);
+
+        // Immediate burst — deterministic (unit lookups are id-ordered).
+        switch (r.burst) {
+            case Burst::Shock:
+                if (auto u = unitAt(t)) applyDamage(*u, kShockDamage);
+                break;
+            case Burst::ShockStun:
+                if (auto u = unitAt(t)) {
+                    applyDamage(*u, kShockDamage);
+                    if (units_[*u].alive()) {
+                        clearStatus(*u, StatusEffect::Kind::Frozen); // Frozen -> Stunned
+                        refreshStatus(*u, StatusEffect::Kind::Stunned, 0, 1);
+                    }
+                }
+                break;
+            case Burst::Freeze:
+                if (auto u = unitAt(t)) refreshStatus(*u, StatusEffect::Kind::Frozen, 0, 2);
+                break;
+            case Burst::Explosion:
+                for (EntityId i = 0; i < units_.size(); ++i)
+                    if (units_[i].alive() && manhattan(units_[i].pos, t) <= 1)
+                        applyDamage(i, kExplosionDamage);
+                break;
+            case Burst::None:
+                break;
+        }
+
+        // Lay down the resulting surface (or clear the tile when consumed).
+        removeSurfaceTileAt(t);
+        if (r.result != Element::None) {
+            GroundEffect g;
+            g.kind = GroundKind::Glyph;
+            g.owner = team;
+            g.tiles = {t};
+            g.remainingTurns = duration;
+            g.element = r.result;
+            g.blocksLos = (r.result == Element::Steam);
+            ground_.push_back(std::move(g));
         }
     }
 }

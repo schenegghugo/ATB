@@ -6,9 +6,12 @@
 //
 #include "core/AI.h"
 #include "core/Battle.h"
+#include "core/Creatures.h"
 #include "core/Spells.h"
 
+#include <algorithm>
 #include <cstdio>
+#include <optional>
 #include <vector>
 
 using namespace tb;
@@ -97,6 +100,302 @@ int main() {
         check(!b.clearLineOfSight({1, 3}, {8, 3}), "LOS blocked across the wall");
         b.stepTo(P, {2, 3});
         check(!b.stepTo(P, {3, 3}), "cannot step onto a wall tile");
+    }
+
+    // --- Shelter: wheel-rotated wall heading (90° steps) --------------------
+    std::printf("Shelter (rotated footprint):\n");
+    {
+        auto hasWall = [](const Battle& b, Vec2i t) {
+            const std::vector<Vec2i>& w = b.wallTiles();
+            return std::find(w.begin(), w.end(), t) != w.end();
+        };
+        // Caster west of the target: rotation 0 runs the wall EAST from (3,3).
+        Battle b0 = makeArena({1, 3}, {8, 5}, {spellid::Shelter});
+        int s0 = slotOf(b0, P, spellid::Shelter);
+        b0.cast(P, s0, {3, 3});
+        check(hasWall(b0, {5, 3}) && !hasWall(b0, {3, 5}), "rotation 0: wall runs east");
+
+        // One wheel step (rotation 1 = 90° CW) turns the same aim to run SOUTH.
+        Battle b1 = makeArena({1, 3}, {8, 5}, {spellid::Shelter});
+        int s1 = slotOf(b1, P, spellid::Shelter);
+        b1.cast(P, s1, {3, 3}, std::nullopt, /*rotation=*/1);
+        check(hasWall(b1, {3, 5}) && !hasWall(b1, {5, 3}), "rotation 1: wall runs south");
+
+        // Rotation wraps mod 4: 5 ≡ 1, so the footprint is identical to rotation 1.
+        Battle b5 = makeArena({1, 3}, {8, 5}, {spellid::Shelter});
+        int s5 = slotOf(b5, P, spellid::Shelter);
+        b5.cast(P, s5, {3, 3}, std::nullopt, /*rotation=*/5);
+        check(hasWall(b5, {3, 5}) && !hasWall(b5, {5, 3}), "rotation wraps mod 4 (5 == 1)");
+    }
+
+    // --- Elemental surfaces: passive behaviour (E.2) -----------------------
+    std::printf("Elemental surfaces (passive on-enter / on-tick):\n");
+    {
+        // A bare paint spell: spawn an elemental surface on one tile (no LOS need).
+        auto paint = [](Element el) {
+            Spell s;
+            s.name = "paint";
+            s.apCost = 1;
+            s.minRange = 1;
+            s.maxRange = 6;
+            s.needsLineOfSight = false;
+            s.shape = TargetShape::Single;
+            s.effects.push_back(
+                Effect{Effect::Type::Spawn, 0, {}, GroundSpec{GroundKind::Glyph, 5, 0, el}});
+            return s;
+        };
+        auto has = [](const Battle& b, EntityId who, StatusEffect::Kind k) {
+            for (const StatusEffect& s : b.unit(who).statuses)
+                if (s.kind == k) return true;
+            return false;
+        };
+
+        { // Fire: stepping onto it ignites (Burning)
+            Battle b = makeArena({1, 3}, {12, 1}, {spellid::Attack});
+            b.unit(P).spells.push_back(paint(Element::Fire));
+            const int fp = static_cast<int>(b.unit(P).spells.size()) - 1;
+            b.cast(P, fp, {3, 3});
+            b.stepTo(P, {2, 3});
+            b.stepTo(P, {3, 3}); // enter the fire
+            check(has(b, P, StatusEffect::Kind::Burning), "walking into Fire applies Burning");
+        }
+        { // Wet (from Water) blocks Burning on a later Fire tile
+            Battle b = makeArena({1, 3}, {12, 1}, {spellid::Attack});
+            b.unit(P).spells.push_back(paint(Element::Water));
+            b.unit(P).spells.push_back(paint(Element::Fire));
+            const int wp = static_cast<int>(b.unit(P).spells.size()) - 2;
+            const int fp = static_cast<int>(b.unit(P).spells.size()) - 1;
+            b.cast(P, wp, {3, 3});
+            b.cast(P, fp, {4, 3});
+            b.stepTo(P, {2, 3});
+            b.stepTo(P, {3, 3}); // Wet
+            b.stepTo(P, {4, 3}); // Fire, but Wet
+            check(has(b, P, StatusEffect::Kind::Wet), "Water soaks the unit (Wet)");
+            check(!has(b, P, StatusEffect::Kind::Burning), "Wet blocks Burning on Fire");
+        }
+        { // Electric: shock + stun, and the next turn is skipped
+            Battle b = makeArena({1, 3}, {12, 1}, {spellid::Attack});
+            b.unit(P).spells.push_back(paint(Element::Electric));
+            const int ep = static_cast<int>(b.unit(P).spells.size()) - 1;
+            const int hp0 = b.unit(P).hp;
+            b.cast(P, ep, {3, 3});
+            b.stepTo(P, {2, 3});
+            b.stepTo(P, {3, 3}); // enter the electric field
+            check(b.unit(P).hp < hp0, "Electric shocks on enter");
+            check(has(b, P, StatusEffect::Kind::Stunned), "Electric stuns on enter");
+            b.endTurn();          // P -> E
+            b.endTurn();          // E -> P: stun consumes the turn
+            check(b.unit(P).ap == 0 && b.unit(P).mp == 0, "Stunned turn is skipped (no AP/MP)");
+        }
+        { // Frozen roots: a frozen unit cannot voluntarily step
+            Battle b = makeArena({1, 3}, {12, 1}, {spellid::Attack});
+            b.unit(P).statuses.push_back(StatusEffect{StatusEffect::Kind::Frozen, 0, 2, 0});
+            check(!b.stepTo(P, {2, 3}), "Frozen unit cannot move");
+        }
+        { // Heal pool mends a hurt unit that stands in it
+            Battle b = makeArena({1, 3}, {12, 1}, {spellid::Attack});
+            b.unit(P).spells.push_back(paint(Element::Heal));
+            const int hp2 = b.unit(P).hp = 20;
+            const int slot = static_cast<int>(b.unit(P).spells.size()) - 1;
+            b.cast(P, slot, {3, 3});
+            b.stepTo(P, {2, 3});
+            b.stepTo(P, {3, 3}); // step into the pool
+            check(b.unit(P).hp > hp2, "Heal pool restores HP on enter");
+        }
+    }
+
+    // --- Elemental surfaces: reaction engine (E.3) -------------------------
+    std::printf("Elemental surfaces (reaction matrix):\n");
+    {
+        auto paint = [](Element el) {
+            Spell s;
+            s.name = "paint";
+            s.apCost = 1;
+            s.minRange = 1;
+            s.maxRange = 8;
+            s.needsLineOfSight = false;
+            s.shape = TargetShape::Single;
+            s.effects.push_back(
+                Effect{Effect::Type::Spawn, 0, {}, GroundSpec{GroundKind::Glyph, 5, 0, el}});
+            return s;
+        };
+        auto surfaceAt = [](const Battle& b, Vec2i t) {
+            for (const GroundEffect& g : b.groundEffects())
+                if (g.kind == GroundKind::Glyph && g.element != Element::None)
+                    for (Vec2i x : g.tiles)
+                        if (x == t) return g.element;
+            return Element::None;
+        };
+        auto has = [](const Battle& b, EntityId who, StatusEffect::Kind k) {
+            for (const StatusEffect& s : b.unit(who).statuses)
+                if (s.kind == k) return true;
+            return false;
+        };
+        // Caster P at (1,3) paints onto (5,3); a victim V sits on (5,3).
+        auto arena = [&](std::vector<Element> paints) {
+            Battle b = makeArena({1, 3}, {5, 3}, {spellid::Attack});
+            for (Element el : paints) b.unit(P).spells.push_back(paint(el));
+            return b;
+        };
+        auto castPaints = [&](Battle& b, std::vector<Element> paints, Vec2i at) {
+            for (int i = 0; i < static_cast<int>(paints.size()); ++i) b.cast(P, 1 + i, at);
+        };
+
+        { // Water + Fire -> Steam (blocks LOS)
+            Battle b = arena({Element::Water, Element::Fire});
+            castPaints(b, {Element::Water, Element::Fire}, {8, 3}); // empty tile, no victim
+            check(surfaceAt(b, {8, 3}) == Element::Steam, "Water + Fire -> Steam");
+            check(!b.clearLineOfSight({7, 3}, {9, 3}), "Steam blocks line of sight");
+        }
+        { // Fire + Water -> doused (no surface)
+            Battle b = arena({Element::Fire, Element::Water});
+            castPaints(b, {Element::Fire, Element::Water}, {8, 3});
+            check(surfaceAt(b, {8, 3}) == Element::None, "Fire + Water -> doused (bare)");
+        }
+        { // Ice on Fire -> Water (melt)
+            Battle b = arena({Element::Fire, Element::Ice});
+            castPaints(b, {Element::Fire, Element::Ice}, {8, 3});
+            check(surfaceAt(b, {8, 3}) == Element::Water, "Fire + Ice -> Water (melt)");
+        }
+        { // Water + Electric -> Electric, shocking + stunning the unit on it
+            Battle b = arena({Element::Water, Element::Electric});
+            const int hp0 = b.unit(E).hp;
+            castPaints(b, {Element::Water, Element::Electric}, {5, 3}); // V = E on (5,3)
+            check(surfaceAt(b, {5, 3}) == Element::Electric, "Water + Electric -> Electric field");
+            check(b.unit(E).hp < hp0, "electrified water shocks the unit on it");
+            check(has(b, E, StatusEffect::Kind::Stunned), "electrified water stuns the unit on it");
+        }
+        { // Water + Ice -> Ice, freezing the unit on it
+            Battle b = arena({Element::Water, Element::Ice});
+            castPaints(b, {Element::Water, Element::Ice}, {5, 3});
+            check(surfaceAt(b, {5, 3}) == Element::Ice, "Water + Ice -> Ice");
+            check(has(b, E, StatusEffect::Kind::Frozen), "freezing water roots the unit on it");
+        }
+        { // Poison + Fire -> explosion (surface consumed, r1 fire burst)
+            Battle b = arena({Element::Poison, Element::Fire});
+            const int hp0 = b.unit(E).hp;
+            castPaints(b, {Element::Poison, Element::Fire}, {5, 3});
+            check(surfaceAt(b, {5, 3}) == Element::None, "Poison + Fire -> explosion consumes surface");
+            check(b.unit(E).hp <= hp0 - 15, "explosion deals r1 fire damage");
+        }
+    }
+
+    // --- Elemental surfaces: PaintSurface effect + Cone shape (E.4) --------
+    std::printf("Elemental surfaces (PaintSurface effect + Cone):\n");
+    {
+        auto surfaceAt = [](const Battle& b, Vec2i t) {
+            for (const GroundEffect& g : b.groundEffects())
+                if (g.kind == GroundKind::Glyph && g.element != Element::None)
+                    for (Vec2i x : g.tiles)
+                        if (x == t) return g.element;
+            return Element::None;
+        };
+        { // A PaintSurface effect lays an elemental surface across its zone.
+            Battle b = makeArena({1, 3}, {12, 1}, {spellid::Attack});
+            Spell s;
+            s.name = "ignite";
+            s.apCost = 1;
+            s.minRange = 1;
+            s.maxRange = 8;
+            s.needsLineOfSight = false;
+            s.shape = TargetShape::Single;
+            s.effects.push_back(Effect{});
+            s.effects[0].type = Effect::Type::PaintSurface;
+            s.effects[0].amount = 3; // duration
+            s.effects[0].element = Element::Fire;
+            b.unit(P).spells.push_back(s);
+            const int slot = static_cast<int>(b.unit(P).spells.size()) - 1;
+            b.cast(P, slot, {4, 3});
+            check(surfaceAt(b, {4, 3}) == Element::Fire, "PaintSurface(Fire) creates a Fire surface");
+        }
+        { // A Cone fans out from the caster along its facing (rotatable).
+            Battle b = makeArena({3, 3}, {12, 1}, {spellid::Attack});
+            Spell s;
+            s.name = "blizzard";
+            s.apCost = 1;
+            s.minRange = 1;
+            s.maxRange = 8;
+            s.needsLineOfSight = false;
+            s.shape = TargetShape::Cone;
+            s.radius = 3;
+            s.effects.push_back(Effect{});
+            s.effects[0].type = Effect::Type::PaintSurface;
+            s.effects[0].amount = 3;
+            s.effects[0].element = Element::Ice;
+            b.unit(P).spells.push_back(s);
+            const int slot = static_cast<int>(b.unit(P).spells.size()) - 1;
+            b.cast(P, slot, {6, 3}); // aim east → cone points +x
+            // Apex row (k=1) is one tile ahead and 1 wide; the far row (k=3) is 5 wide.
+            check(surfaceAt(b, {4, 3}) == Element::Ice, "Cone covers the tile ahead of the caster");
+            check(surfaceAt(b, {6, 3}) == Element::Ice, "Cone reaches its full length");
+            check(surfaceAt(b, {6, 1}) == Element::Ice && surfaceAt(b, {6, 5}) == Element::Ice,
+                  "Cone widens with distance");
+            check(surfaceAt(b, {4, 1}) == Element::None, "Cone is narrow at the apex");
+        }
+    }
+
+    // --- Storm + Blizzard: the shipped elemental spells (E.5) ---------------
+    std::printf("Storm (rain -> lightning on the wet zone):\n");
+    {
+        auto surfaceAt = [](const Battle& b, Vec2i t) {
+            for (const GroundEffect& g : b.groundEffects())
+                if (g.kind == GroundKind::Glyph && g.element != Element::None)
+                    for (Vec2i x : g.tiles)
+                        if (x == t) return g.element;
+            return Element::None;
+        };
+        Battle b = makeArena({1, 3}, {6, 3}, {spellid::Storm});
+        b.setCreatures(makeDefaultCreatures()); // Storm summons the "stormcloud"
+        const int st = slotOf(b, P, spellid::Storm);
+        const int hp0 = b.unit(E).hp;
+        b.cast(P, st, {5, 3});                       // cloud lands on the empty tile by the enemy
+        check(surfaceAt(b, {6, 3}) == Element::Water, "Storm rains a Water surface over the zone");
+        // Cycle turns until the fused stormcloud strikes (its onDeath lightning).
+        for (int i = 0; i < 6 && surfaceAt(b, {6, 3}) == Element::Water; ++i) b.endTurn();
+        check(surfaceAt(b, {6, 3}) == Element::Electric,
+              "the bolt electrifies the wet zone (Water + Electric)");
+        check(b.unit(E).hp < hp0, "the enemy caught in the storm takes damage");
+    }
+    std::printf("Blizzard (cone freeze):\n");
+    {
+        Battle b = makeArena({3, 3}, {5, 3}, {spellid::Blizzard});
+        const int bz = slotOf(b, P, spellid::Blizzard);
+        const int hp0 = b.unit(E).hp;
+        b.cast(P, bz, {5, 3}); // cone points east, sweeping the enemy at (5,3)
+        bool frozen = false;
+        for (const StatusEffect& s : b.unit(E).statuses)
+            if (s.kind == StatusEffect::Kind::Frozen) frozen = true;
+        check(b.unit(E).hp < hp0, "Blizzard damages units in the cone");
+        check(frozen, "Blizzard freezes (roots) units in the cone");
+    }
+
+    // --- Elemental determinism guard (verify-don't-host, E.8) --------------
+    // Reactions are pure (no RNG), so the same cast sequence must reproduce the
+    // exact board. This guards the re-sim contract against future regressions.
+    std::printf("Elemental reactions are deterministic:\n");
+    {
+        auto fingerprint = [](Battle& b) {
+            std::string s;
+            for (EntityId i = 0; i < b.unitCount(); ++i) {
+                const Entity& u = b.unit(i);
+                s += std::to_string(u.pos.x) + "," + std::to_string(u.pos.y) + ":" +
+                     std::to_string(u.hp) + ";";
+            }
+            for (const GroundEffect& g : b.groundEffects())
+                for (Vec2i t : g.tiles)
+                    s += "g" + std::to_string(static_cast<int>(g.element)) + "@" +
+                         std::to_string(t.x) + "," + std::to_string(t.y) + ";";
+            return s;
+        };
+        auto run = [&]() {
+            Battle b = makeArena({1, 3}, {6, 3}, {spellid::Storm, spellid::Blizzard});
+            b.setCreatures(makeDefaultCreatures());
+            b.cast(P, slotOf(b, P, spellid::Storm), {5, 3});
+            b.cast(P, slotOf(b, P, spellid::Blizzard), {3, 3});
+            for (int i = 0; i < 6; ++i) b.endTurn();
+            return fingerprint(b);
+        };
+        check(run() == run(), "identical elemental cast sequences reproduce the exact board");
     }
 
     // --- Portal: traced entry -> exit, teleport on enter ---------------------

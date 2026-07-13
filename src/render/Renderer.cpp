@@ -44,8 +44,53 @@ Color kZoneOk{230, 140, 50, 120};   // selected spell would land
 Color kZoneBad{120, 60, 60, 110};    // selected spell can't be cast
 Color kStatusDot{230, 90, 200, 255}; // status-effect marker
 Color kGroundWall{110, 120, 140, 255}; // Shelter walls
-Color kGlyphZone{150, 70, 200, 80};    // Glyph trap area
+Color kGlyphZone{150, 70, 200, 80};    // Glyph trap area (neutral surface)
 Color kPortal{70, 200, 220, 255};      // Portal entry/exit
+
+// Elemental-surface palette (E.7). Semi-transparent fills laid over the floor,
+// tinted per element so reactions read at a glance (docs/elements.md). Themeable
+// via the `surf*` keys — applyBattleTheme() refreshes these from the Theme.
+Color kSurfFire{220, 90, 40, 120};
+Color kSurfWater{60, 120, 210, 110};
+Color kSurfIce{160, 210, 230, 120};
+Color kSurfPoison{110, 180, 60, 120};
+Color kSurfElectric{235, 210, 70, 150};
+Color kSurfHeal{80, 200, 130, 110};
+Color kSurfOil{55, 48, 40, 160};
+Color kSurfSteam{205, 205, 215, 130};
+
+Color elementColor(Element el) {
+    switch (el) {
+        case Element::Fire:     return kSurfFire;
+        case Element::Water:    return kSurfWater;
+        case Element::Ice:      return kSurfIce;
+        case Element::Poison:   return kSurfPoison;
+        case Element::Electric: return kSurfElectric;
+        case Element::Heal:     return kSurfHeal;
+        case Element::Oil:      return kSurfOil;
+        case Element::Steam:    return kSurfSteam;
+        case Element::None:     break;
+    }
+    return kGlyphZone;
+}
+
+// Pack sprite key for a surface's element (drawn over the floor when the pack
+// provides it; the flat tint above is the fallback). A neutral glyph and the
+// Shelter wall get their own keys.
+const char* surfaceKey(Element el) {
+    switch (el) {
+        case Element::Fire:     return "surfaces.fire";
+        case Element::Water:    return "surfaces.water";
+        case Element::Ice:      return "surfaces.ice";
+        case Element::Poison:   return "surfaces.poison";
+        case Element::Electric: return "surfaces.electric";
+        case Element::Heal:     return "surfaces.heal";
+        case Element::Oil:      return "surfaces.oil";
+        case Element::Steam:    return "surfaces.steam";
+        case Element::None:     break;
+    }
+    return "surfaces.glyph";
+}
 Color kStorm{200, 40, 50, 110};        // collapsed (closing-ring) tiles
 Color kPlayer{70, 170, 110, 255};
 Color kEnemy{200, 80, 80, 255};
@@ -151,6 +196,11 @@ const char* statusWord(StatusEffect::Kind k) {
         case StatusEffect::Kind::Invisible: return "Invisibility";
         case StatusEffect::Kind::Rewind: return "a Rewind marker";
         case StatusEffect::Kind::RangeDebuff: return "a range debuff";
+        case StatusEffect::Kind::Wet: return "Wet";
+        case StatusEffect::Kind::Burning: return "Burning";
+        case StatusEffect::Kind::Frozen: return "Frozen";
+        case StatusEffect::Kind::Stunned: return "Stunned";
+        case StatusEffect::Kind::Oiled: return "Oiled";
     }
     return "a status";
 }
@@ -381,11 +431,23 @@ void drawFrame(const Layout& l, const Battle& battle, const ViewState& view,
         if (gx.kind == GroundKind::Wall) {
             for (Vec2i p : gx.tiles) {
                 Rectangle r = tileRect(l, p);
-                DrawRectangleRec(r, kGroundWall);
-                DrawRectangleLinesEx(r, 2.0f, Color{20, 22, 30, 255});
+                // Pack sprite (`surfaces.wall`) layered over the floor, else the flat block.
+                if (!(pack && pack->drawSprite("surfaces.wall", r))) {
+                    DrawRectangleRec(r, kGroundWall);
+                    DrawRectangleLinesEx(r, 2.0f, Color{20, 22, 30, 255});
+                }
             }
         } else if (gx.kind == GroundKind::Glyph) {
-            for (Vec2i p : gx.tiles) DrawRectangleRec(tileRect(l, p), kGlyphZone);
+            // Elemental surfaces: a pack sprite (`surfaces.<element>`) drawn over
+            // the floor if the pack has one, else the flat element tint. Steam
+            // (LOS-blocking) gets a heavier outline so cover reads clearly.
+            const Color col = elementColor(gx.element);
+            const char* key = surfaceKey(gx.element);
+            for (Vec2i p : gx.tiles) {
+                Rectangle r = tileRect(l, p);
+                if (!(pack && pack->drawSprite(key, r))) DrawRectangleRec(r, col);
+                if (gx.blocksLos) DrawRectangleLinesEx(r, 2.0f, Fade(col, 0.9f));
+            }
         } else if (gx.kind == GroundKind::Portal) {
             for (Vec2i p : gx.tiles) { // entry
                 Vector2 c = tileCenter(l, p);
@@ -553,6 +615,14 @@ void applyBattleTheme(const Theme& t) {
     kStatusDot = c(t.statusDot);
     kGroundWall = c(t.groundWall);
     kGlyphZone = c(t.glyphZone);
+    kSurfFire = c(t.surfFire);
+    kSurfWater = c(t.surfWater);
+    kSurfIce = c(t.surfIce);
+    kSurfPoison = c(t.surfPoison);
+    kSurfElectric = c(t.surfElectric);
+    kSurfHeal = c(t.surfHeal);
+    kSurfOil = c(t.surfOil);
+    kSurfSteam = c(t.surfSteam);
     kPortal = c(t.portal);
     kStorm = c(t.storm);
     kPlayer = c(t.player);

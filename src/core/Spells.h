@@ -41,6 +41,12 @@ inline constexpr int Blind = 17;   // range debuff: -60% max cast range
 inline constexpr int Surge = 18;   // +2 AP for 2 turns, then -6 AP for 1 turn
 inline constexpr int Flux = 19;    // polarized: +2 MP to an ally, -2 MP to a foe
 inline constexpr int Decoy = 20;   // cloaked twin — damage defers until reveal
+// Elemental surfaces (0.0.2 — docs/elements.md):
+inline constexpr int Storm = 21;    // rain (Water) now, lightning (Electric) next turn
+inline constexpr int Blizzard = 22; // cone: damage + Frozen + Ice surface
+inline constexpr int Ignite = 23;   // paint a Fire surface
+inline constexpr int Puddle = 24;   // paint a Water surface
+inline constexpr int Electrify = 25;// paint an Electric surface (shocks on contact)
 } // namespace spellid
 
 struct SpellDef {

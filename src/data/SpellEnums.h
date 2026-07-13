@@ -31,6 +31,7 @@ inline constexpr Row<TargetShape> kTargetShapes[] = {
     {TargetShape::Line, "line"},
     {TargetShape::Cross, "cross"},
     {TargetShape::Circle, "circle"},
+    {TargetShape::Cone, "cone"},
 };
 
 inline constexpr Row<Effect::Type> kEffectTypes[] = {
@@ -42,6 +43,7 @@ inline constexpr Row<Effect::Type> kEffectTypes[] = {
     {Effect::Type::Spawn, "spawn"},
     {Effect::Type::Summon, "summon"},
     {Effect::Type::Decoy, "decoy"},
+    {Effect::Type::PaintSurface, "paintSurface"},
 };
 
 inline constexpr Row<StatusEffect::Kind> kStatusKinds[] = {
@@ -52,12 +54,29 @@ inline constexpr Row<StatusEffect::Kind> kStatusKinds[] = {
     {StatusEffect::Kind::Invisible, "invisible"},
     {StatusEffect::Kind::Rewind, "rewind"},
     {StatusEffect::Kind::RangeDebuff, "rangeDebuff"},
+    {StatusEffect::Kind::Wet, "wet"},
+    {StatusEffect::Kind::Burning, "burning"},
+    {StatusEffect::Kind::Frozen, "frozen"},
+    {StatusEffect::Kind::Stunned, "stunned"},
+    {StatusEffect::Kind::Oiled, "oiled"},
 };
 
 inline constexpr Row<GroundKind> kGroundKinds[] = {
     {GroundKind::Wall, "wall"},
     {GroundKind::Glyph, "glyph"},
     {GroundKind::Portal, "portal"},
+};
+
+inline constexpr Row<Element> kElements[] = {
+    {Element::None, "none"},
+    {Element::Fire, "fire"},
+    {Element::Water, "water"},
+    {Element::Ice, "ice"},
+    {Element::Poison, "poison"},
+    {Element::Electric, "electric"},
+    {Element::Heal, "heal"},
+    {Element::Oil, "oil"},
+    {Element::Steam, "steam"},
 };
 
 inline constexpr Row<EntityKind> kEntityKinds[] = {
@@ -104,16 +123,18 @@ static_assert(tableConsistent(kTargetShapes), "kTargetShapes inconsistent");
 static_assert(tableConsistent(kEffectTypes), "kEffectTypes inconsistent");
 static_assert(tableConsistent(kStatusKinds), "kStatusKinds inconsistent");
 static_assert(tableConsistent(kGroundKinds), "kGroundKinds inconsistent");
+static_assert(tableConsistent(kElements), "kElements inconsistent");
 static_assert(tableConsistent(kEntityKinds), "kEntityKinds inconsistent");
 
 // Expected counts — bump these when a core enum gains a value, as a reminder to
 // add the matching row above. (C++ can't enumerate enum values, so any *new*
 // core value is also caught in practice by the catalog round-trip test once the
 // default catalog uses it — serialization of an unmapped value is empty.)
-static_assert(std::size(kTargetShapes) == 4, "TargetShape changed — update kTargetShapes");
-static_assert(std::size(kEffectTypes) == 8, "Effect::Type changed — update kEffectTypes");
-static_assert(std::size(kStatusKinds) == 7, "StatusEffect::Kind changed — update kStatusKinds");
+static_assert(std::size(kTargetShapes) == 5, "TargetShape changed — update kTargetShapes");
+static_assert(std::size(kEffectTypes) == 9, "Effect::Type changed — update kEffectTypes");
+static_assert(std::size(kStatusKinds) == 12, "StatusEffect::Kind changed — update kStatusKinds");
 static_assert(std::size(kGroundKinds) == 3, "GroundKind changed — update kGroundKinds");
+static_assert(std::size(kElements) == 9, "Element changed — update kElements");
 static_assert(std::size(kEntityKinds) == 3, "EntityKind changed — update kEntityKinds");
 
 } // namespace tb::enums

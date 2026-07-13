@@ -136,6 +136,8 @@ so a pack can restyle just the walls, ship only a palette, or define every sprit
 | Enemy champion | `units.enemy` | *(faction tint)* |
 | Summon / object | `units.<name>` then `spells.<name>` (e.g. `units.brute` → `spells.brute`) | — |
 | Spell icon (bar) | `spells.<catalog key>` (e.g. `spells.fireball`) | — |
+| Shelter wall | `surfaces.wall` | *(built-in block)* |
+| Elemental surface | `surfaces.<element>` — `fire`/`water`/`ice`/`poison`/`electric`/`heal`/`oil`/`steam` (neutral glyph = `surfaces.glyph`) | *(element tint)* |
 
 Resolution ladder per element: **atlas sprite → palette colour → built-in
 primitive**. For a summoned creature or object (bomb, blocker, healer, brute) the
@@ -144,8 +146,9 @@ the faction sprite — so a pack that already draws the spell icons gets on-fiel
 creature art for free. Add a dedicated `units.<name>` only if you want the field
 look to differ from the bar icon.
 
-> Ground effects and status markers aren't pack-routed yet — that wiring is a
-> follow-up; the seam already supports the same key → sprite lookup.
+> Ground effects (walls + elemental surfaces) are pack-routed via the
+> `surfaces.*` keys above — a surface sprite is layered over the floor tile, or
+> falls back to the flat element tint. Status markers aren't pack-routed yet.
 
 ## Exporting an atlas from a texture packer
 

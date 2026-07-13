@@ -41,9 +41,12 @@ struct Intent {
     Vec2i target{};    // Move: destination tile; Cast: target tile (portal: the ENTRY)
     Vec2i target2{};   // Cast: optional second tile — the player-placed portal EXIT
     bool hasTarget2 = false;
+    int rotation = 0;  // Cast: 90° steps for a Line spell's heading (Shelter walls)
 
     static Intent move(Vec2i dest) { return {Kind::Move, -1, dest}; }
-    static Intent cast(int slot, Vec2i tgt) { return {Kind::Cast, slot, tgt}; }
+    static Intent cast(int slot, Vec2i tgt, int rot = 0) {
+        return {Kind::Cast, slot, tgt, {}, false, rot};
+    }
     // A cast with a player-chosen second tile (portal: entry + explicit exit).
     static Intent castTo(int slot, Vec2i entry, Vec2i exit) {
         return {Kind::Cast, slot, entry, exit, true};
@@ -52,7 +55,7 @@ struct Intent {
 
     [[nodiscard]] bool operator==(const Intent& o) const {
         return kind == o.kind && spellIdx == o.spellIdx && target.x == o.target.x &&
-               target.y == o.target.y && hasTarget2 == o.hasTarget2 &&
+               target.y == o.target.y && hasTarget2 == o.hasTarget2 && rotation == o.rotation &&
                (!hasTarget2 || (target2.x == o.target2.x && target2.y == o.target2.y));
     }
     [[nodiscard]] bool operator!=(const Intent& o) const { return !(*this == o); }
@@ -92,6 +95,8 @@ struct Snapshot {
         int magnitude = 0;
         Vec2i center{};
         Vec2i exit{};
+        Element element = Element::None; // elemental surface (None = neutral)
+        bool blocksLos = false;          // Steam / cloud
     };
 
     Phase phase = Phase::PlayerTurn;

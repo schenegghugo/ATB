@@ -212,6 +212,7 @@ std::vector<int> stateKey(const Battle& b) {
     k.push_back(static_cast<int>(b.groundEffects().size()));
     for (const GroundEffect& g : b.groundEffects()) {
         k.push_back(static_cast<int>(g.kind)); k.push_back(g.remainingTurns);
+        k.push_back(static_cast<int>(g.element)); // elemental surfaces differ per state
         k.push_back(g.exit.x); k.push_back(g.exit.y);
         for (Vec2i t : g.tiles) { k.push_back(t.x); k.push_back(t.y); }
     }

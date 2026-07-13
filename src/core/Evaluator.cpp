@@ -11,8 +11,37 @@ namespace {
 int pendingDoT(const Entity& e) {
     int d = 0;
     for (const StatusEffect& s : e.statuses)
-        if (s.kind == StatusEffect::Kind::DamageOverTime) d += s.magnitude * s.remainingTurns;
+        if (s.kind == StatusEffect::Kind::DamageOverTime ||
+            s.kind == StatusEffect::Kind::Burning) // Fire behaves like a DoT here
+            d += s.magnitude * s.remainingTurns;
     return d;
+}
+
+bool hasActive(const Entity& e, StatusEffect::Kind k) {
+    for (const StatusEffect& s : e.statuses)
+        if (s.kind == k && s.delay <= 0) return true;
+    return false;
+}
+
+// Net expected self-damage next turn from the elemental surface a unit stands on
+// (positive = harmful, negative = a Heal pool). Mirrors Battle::surfaceTick; the
+// magnitudes are estimates the planner uses to avoid fire and value a heal pool.
+int surfaceHazard(const Battle& b, const Entity& u) {
+    for (const GroundEffect& g : b.groundEffects()) {
+        if (g.kind != GroundKind::Glyph || g.element == Element::None) continue;
+        bool on = false;
+        for (Vec2i t : g.tiles)
+            if (t == u.pos) { on = true; break; }
+        if (!on) continue;
+        switch (g.element) {
+            case Element::Fire: return hasActive(u, StatusEffect::Kind::Wet) ? 0 : 5;
+            case Element::Poison: return 4;
+            case Element::Electric: return 3;
+            case Element::Heal: return -8;
+            default: return 0;
+        }
+    }
+    return 0;
 }
 
 int shieldPool(const Entity& e) {
@@ -81,9 +110,15 @@ int expectedIncoming(const Battle& b, EntityId victimId, bool nextTurnOnly, cons
     for (EntityId i = 0; i < b.unitCount(); ++i) {
         const Entity& f = b.unit(i);
         if (!f.alive() || f.team == v.team) continue; // a foe's own invisibility doesn't blind it
+        // A Stunned attacker forfeits its next turn — it projects no threat, which
+        // is exactly what makes the planner value stunning a foe (and fear being
+        // stunned, since MY units then menace the enemy less).
+        if (hasActive(f, StatusEffect::Kind::Stunned)) continue;
         const int dist = manhattan(f.pos, v.pos);
         const bool los = b.clearLineOfSight(f.pos, v.pos);
-        const int mp = nextTurnMp(f);
+        // A Frozen attacker can still cast but cannot close: its reach loses the
+        // movement term.
+        const int mp = hasActive(f, StatusEffect::Kind::Frozen) ? 0 : nextTurnMp(f);
         // Entities beyond the intel snapshot are mid-sim spawns (summons/bombs)
         // — public templates, never intel-tracked.
         const FoeIntel* fi =
@@ -214,7 +249,7 @@ double HandcraftedEvaluator::evaluate(const Battle& b, const EvalContext& ctx) c
             const double risk = w_.riskWeight *
                                 (expectedIncoming(b, i, /*nextTurnOnly=*/u.team == me,
                                                   u.team == me ? intel : nullptr, w_) +
-                                 expectedBlast(b, i));
+                                 expectedBlast(b, i) + surfaceHazard(b, u));
             score += (u.team == me) ? (effHp - risk) : -(effHp - risk);
             // Asymmetric aggression: only *my* units are rewarded for closing in,
             // so the gradient pulls us toward combat instead of a mutual standoff.

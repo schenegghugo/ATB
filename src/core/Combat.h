@@ -29,7 +29,13 @@ constexpr int kCollisionDamagePerCell = 5;
 // maxRange, clamped to minRange — see Battle::canCast).
 struct StatusEffect {
     enum class Kind : std::uint8_t {
-        DamageOverTime, Shield, ApBuff, MpBuff, Invisible, Rewind, RangeDebuff
+        DamageOverTime, Shield, ApBuff, MpBuff, Invisible, Rewind, RangeDebuff,
+        // Elemental-surface statuses (docs/elements.md §3):
+        Wet,      // soaked — clears/blocks Burning; conductive
+        Burning,  // fire DoT (distinct from generic DoT so Water can clear it)
+        Frozen,   // rooted — may act, cannot voluntarily move (from Ice)
+        Stunned,  // skips the unit's next turn entirely (from Electric)
+        Oiled     // greased — movement taxed; flammable
     };
     Kind kind = Kind::DamageOverTime;
     int magnitude = 0;       // dmg/turn, absorb pool, +AP/+MP, or % range reduction
@@ -45,12 +51,18 @@ struct StatusEffect {
 // on the entry when the portal is cast — to an exit traced from the caster.
 enum class GroundKind : std::uint8_t { Wall, Glyph, Portal };
 
-// Authoring payload carried by an Effect of type Spawn.
+// Elemental surfaces (Divinity/BG3-style — see docs/elements.md). `None` is the
+// neutral floor (the recast Glyph); the rest are painted by elemental spells and
+// combine via the reaction matrix. `Steam` is reaction-only (Fire + Water).
+enum class Element : std::uint8_t { None, Fire, Water, Ice, Poison, Electric, Heal, Oil, Steam };
+
+// Authoring payload carried by an Effect of type Spawn (or PaintSurface).
 struct GroundSpec {
     GroundKind kind = GroundKind::Wall;
     int duration = 2;   // turns the feature persists
     int magnitude = 0;  // Glyph: repel distance; Portal: trace length (the exit
                         // lands this far past the entry along the caster's aim)
+    Element element = Element::None; // the surface's element (Glyph/surface only)
 };
 
 // --- Spell / effect data ----------------------------------------------------
@@ -59,17 +71,24 @@ struct Effect {
     // the pair — damage to either member defers until the pair is revealed
     // (casting from a member declares it the real one; expiry defaults to the
     // original). See Battle's cloak-pair machinery.
-    enum class Type : std::uint8_t { Damage, Heal, Push, Pull, ApplyStatus, Spawn, Summon, Decoy };
+    enum class Type : std::uint8_t {
+        Damage, Heal, Push, Pull, ApplyStatus, Spawn, Summon, Decoy,
+        PaintSurface // paint `element` onto the zone (runs the reaction matrix)
+    };
     Type type = Type::Damage;
-    int amount = 0;            // damage / heal / forced-move distance / decoy duration
+    int amount = 0;            // damage / heal / forced-move distance / decoy or
+                               // surface duration (PaintSurface)
     StatusEffect status{};     // used when type == ApplyStatus
     GroundSpec ground{};       // used when type == Spawn
     std::string creature{};    // creature template key, used when type == Summon
     bool polarized = false;    // ApplyStatus only: negate the magnitude vs foes
                                // (one spell = buff on allies, debuff on enemies)
+    Element element = Element::None; // used when type == PaintSurface
 };
 
-enum class TargetShape : std::uint8_t { Single, Line, Cross, Circle };
+// Cone fans out from the caster along the caster→target ray (facing rotatable by
+// the mouse wheel, like Line). `radius` is its length.
+enum class TargetShape : std::uint8_t { Single, Line, Cross, Circle, Cone };
 
 struct Spell {
     std::string name;

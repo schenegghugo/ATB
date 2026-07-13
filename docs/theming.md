@@ -36,7 +36,7 @@ fallback.
 ```
 
 - Colours are `"#RRGGBB"` or `"#RRGGBBAA"` (lower- or upper-case hex).
-- **Every key is optional** — override three colours or all thirty-four; the
+- **Every key is optional** — override three colours or all forty-two; the
   rest keep the built-in defaults. `themes/default.json` lists every key with
   its default value, so it doubles as the reference.
 
@@ -45,15 +45,19 @@ fallback.
 Chrome (menus, screens, shared widgets): `bg`, `panel`, `panelHot`, `text`,
 `muted`, `accent`, `good`, `bad`, `line`, `picked`, `pickedHot`.
 
-Battle board + HUD: `gridLine`, `floor`, `wall`, `obstacle`, `reach`, `hover`,
-`zoneOk`, `zoneBad`, `statusDot`, `groundWall`, `glyphZone`, `portal`, `storm`,
-`player`, `enemy`, `los`, `textDim`, `btnReady`, `btnCooldown`, `btnPoor`,
-`btnSelected`, `btnCdText`.
+Battle board + HUD: `gridLine`, `floor`, `wall`, `obstacle`, `reach`, `castable`,
+`hover`, `zoneOk`, `zoneBad`, `statusDot`, `groundWall`, `glyphZone`, `portal`,
+`storm`, `player`, `enemy`, `los`, `textDim`, `btnReady`, `btnCooldown`,
+`btnPoor`, `btnSelected`, `btnCdText`.
 
-Tile colours (`floor`, `wall`, `obstacle`) are the *primitive* fallbacks — a
-sprite pack's art or palette still wins where it provides one (see
-[sprite-packs.md](sprite-packs.md)). A theme restyles the interface; a pack
-restyles the art. They compose.
+Elemental surfaces (0.0.2): `surfFire`, `surfWater`, `surfIce`, `surfPoison`,
+`surfElectric`, `surfHeal`, `surfOil`, `surfSteam` — the per-element tints laid
+over the floor (translucent by default, so `#RRGGBBAA` alpha matters).
+
+Tile + surface colours are the *primitive* fallbacks — a sprite pack's art or
+palette still wins where it provides one (a pack's `surfaces.<element>` sprite
+overrides the `surf*` tint; see [sprite-packs.md](sprite-packs.md)). A theme
+restyles the interface; a pack restyles the art. They compose.
 
 ## Preferences
 

@@ -52,7 +52,17 @@ struct Theme {
     RGBA zoneBad{120, 60, 60, 110};
     RGBA statusDot{230, 90, 200, 255};
     RGBA groundWall{110, 120, 140, 255};
-    RGBA glyphZone{150, 70, 200, 80};
+    RGBA glyphZone{150, 70, 200, 80}; // neutral surface (element-less glyph)
+    // Elemental-surface tints (0.0.2). Primitive fallbacks — a pack's
+    // `surfaces.<element>` sprite still wins where it provides one.
+    RGBA surfFire{220, 90, 40, 120};
+    RGBA surfWater{60, 120, 210, 110};
+    RGBA surfIce{160, 210, 230, 120};
+    RGBA surfPoison{110, 180, 60, 120};
+    RGBA surfElectric{235, 210, 70, 150};
+    RGBA surfHeal{80, 200, 130, 110};
+    RGBA surfOil{55, 48, 40, 160};
+    RGBA surfSteam{205, 205, 215, 130};
     RGBA portal{70, 200, 220, 255};
     RGBA storm{200, 40, 50, 110};
     RGBA player{70, 170, 110, 255};

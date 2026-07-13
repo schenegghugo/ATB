@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "1.1.0",
+  "version": "1.2.0",
   "spells": [
     {
       "id": 1,
@@ -534,6 +534,147 @@
         {
           "type": "decoy",
           "amount": 3
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "key": "storm",
+      "buildCost": 4,
+      "tags": [
+        "aoe",
+        "terrain",
+        "elemental"
+      ],
+      "name": "Storm",
+      "apCost": 4,
+      "minRange": 2,
+      "maxRange": 6,
+      "needsLineOfSight": true,
+      "shape": "circle",
+      "radius": 2,
+      "cooldown": 3,
+      "effects": [
+        {
+          "type": "paintSurface",
+          "amount": 3,
+          "element": "water"
+        },
+        {
+          "type": "summon",
+          "creature": "stormcloud"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "key": "blizzard",
+      "buildCost": 3,
+      "tags": [
+        "damage",
+        "aoe",
+        "control",
+        "elemental"
+      ],
+      "name": "Blizzard",
+      "apCost": 3,
+      "minRange": 1,
+      "maxRange": 4,
+      "needsLineOfSight": true,
+      "shape": "cone",
+      "radius": 3,
+      "cooldown": 2,
+      "effects": [
+        {
+          "type": "damage",
+          "amount": 10
+        },
+        {
+          "type": "applyStatus",
+          "status": {
+            "kind": "frozen",
+            "magnitude": 0,
+            "turns": 2
+          }
+        },
+        {
+          "type": "paintSurface",
+          "amount": 3,
+          "element": "ice"
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "key": "ignite",
+      "buildCost": 2,
+      "tags": [
+        "terrain",
+        "elemental"
+      ],
+      "name": "Ignite",
+      "apCost": 2,
+      "minRange": 1,
+      "maxRange": 5,
+      "needsLineOfSight": true,
+      "shape": "circle",
+      "radius": 1,
+      "cooldown": 2,
+      "effects": [
+        {
+          "type": "paintSurface",
+          "amount": 3,
+          "element": "fire"
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "key": "puddle",
+      "buildCost": 1,
+      "tags": [
+        "terrain",
+        "elemental",
+        "support"
+      ],
+      "name": "Puddle",
+      "apCost": 1,
+      "minRange": 1,
+      "maxRange": 5,
+      "needsLineOfSight": true,
+      "shape": "circle",
+      "radius": 1,
+      "cooldown": 1,
+      "effects": [
+        {
+          "type": "paintSurface",
+          "amount": 3,
+          "element": "water"
+        }
+      ]
+    },
+    {
+      "id": 25,
+      "key": "electrify",
+      "buildCost": 2,
+      "tags": [
+        "terrain",
+        "elemental",
+        "control"
+      ],
+      "name": "Electrify",
+      "apCost": 2,
+      "minRange": 1,
+      "maxRange": 6,
+      "needsLineOfSight": true,
+      "shape": "circle",
+      "radius": 1,
+      "cooldown": 2,
+      "effects": [
+        {
+          "type": "paintSurface",
+          "amount": 2,
+          "element": "electric"
         }
       ]
     }

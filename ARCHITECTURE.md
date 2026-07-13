@@ -126,17 +126,21 @@ struct Spell {
     std::string name;
     int apCost, minRange, maxRange;   // Manhattan range
     bool needsLineOfSight;
-    TargetShape shape;                // Single | Line | Cross | Circle
+    TargetShape shape;                // Single | Line | Cross | Circle | Cone
     int radius, cooldown;
     std::vector<Effect> effects;      // the payload
 };
 
 struct Effect {
-    enum class Type { Damage, Heal, Push, Pull, ApplyStatus, Spawn };
+    enum class Type { Damage, Heal, Push, Pull, ApplyStatus, Spawn,
+                      Summon, Decoy, PaintSurface };
     Type type;
     int amount;
-    StatusEffect status;   // when ApplyStatus  (DoT / Shield / ApBuff / MpBuff / Invisible)
-    GroundSpec ground;     // when Spawn         (Wall / Glyph / Portal)
+    StatusEffect status;   // when ApplyStatus  (DoT / Shield / buffs / Invisible /
+                           //                    Rewind / RangeDebuff / Wet / Burning /
+                           //                    Frozen / Stunned / Oiled)
+    GroundSpec ground;     // when Spawn         (Wall / Glyph / Portal, + Element)
+    Element element;       // when PaintSurface  (elemental-surface reactions)
 };
 ```
 
@@ -300,7 +304,8 @@ and slugs — no engine change needed for most of it:
 | Floor / wall / obstacle tile | `TileType` |
 | Player / enemy unit tint | `Faction` |
 | Shelter wall / Glyph / Portal | `GroundKind` |
-| Status markers (DoT, Shield, buffs, Invisible) | `StatusEffect::Kind` |
+| Elemental surfaces (fire/water/ice/…) | `surfaces.<element>` (pack-routed; see `docs/sprite-packs.md`) |
+| Status markers (DoT, Shield, buffs, Invisible, Wet/Burning/Frozen/Stunned/Oiled) | `StatusEffect::Kind` |
 | Spell icons / cast VFX | `Spell::name` / the catalog `key` slug (`"fireball"`) |
 
 Per-creature art needed **no core change at all**: summons and objects resolve
@@ -636,7 +641,7 @@ ever, for casual customs.
 |--------------|-------|--------|
 | **Restyle the game with your own sprites/palette** | drop a pack folder + `pack.json` in and point `ATB_PACK` at it; no code, no recompile, no server involvement (§6). Atlas sprites, palette re-themes, and `anim`/`cast` animations all supported. | works now |
 | **Add / change a spell** | the catalog: edit `data/catalog.json` (or `makeDefaultCatalog()`, the compiled fallback). Combine existing `Effect`s. | works now (data + compiled) |
-| **Add a new _mechanic_** (something no `Effect` can express) | extend the `Effect`/`StatusEffect`/`GroundKind` vocabulary in `core/`, then resolve it in `Battle`. This is an *engine* change, reviewed accordingly. | core change |
+| **Add a new _mechanic_** (something no `Effect` can express) | extend the `Effect`/`StatusEffect`/`GroundKind`/`Element` vocabulary in `core/`, then resolve it in `Battle` (e.g. the 0.0.2 elemental surfaces). This is an *engine* change, reviewed accordingly. | core change |
 | **Write your own AI** | implement `Brain` (`core/AI.h`), `registerBrain()` it, select by name (`ATB_BRAIN`). Ship built-ins: `beam`, `greedy`, `scout`, `deep`, `adaptive`. Or keep the search and swap the scoring: implement `Evaluator` (`core/Evaluator.h`). | works now |
 | **Write a whole new frontend** (different engine, web, TUI…) | implement against the `Battle` read API (`grid()`, `units()`, `affectedTiles()`, …) and drive it with intents. `render/` + `main.cpp` are the reference frontend. | API stable |
 | **Change the match format** (team size, banned spells, closing-ring, arena, economy) | edit `data/rules.json` — read by both the game and the balance sim via a shared `buildMatch()`. | works now |

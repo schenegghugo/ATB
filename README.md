@@ -1,6 +1,6 @@
 # Tactical Battler — POC
 
-**Docs version: 0.0.1**
+**Docs version: 0.0.2**
 
 A Dofus-style tactical turn-based combat loop in **C++20** + **Raylib**.
 Gameplay logic is fully **headless** and decoupled from rendering.
@@ -37,8 +37,11 @@ zero database deps**, so they run on a server or in tests unchanged.
 Spells are **data** in a catalog (the "dictionary of skills"), each with a
 build-point cost. Characters are **point-buy and classless**: a budget is spent
 across skills *and* stat upgrades, so a glass-cannon caster and a durable bruiser
-are just different spends — no classes. The POC ships 7 spells (attack, fireball
-AoE, poison DoT, knockback push, harpoon pull, bulwark shield, mend heal).
+are just different spends — no classes. The catalog ships 25 spells: damage,
+push/pull, DoT, shields/heals, summons, terrain (Shelter/Glyph/Portal), the
+hidden-info kit (Invisible/Decoy), and the 0.0.2 **elemental surfaces**
+(Storm/Blizzard + Ignite/Puddle/Electrify — fire/water/ice/poison/electric that
+paint the floor and react).
 
 ```
 Battle ── uses ── Spell (combat data only)
@@ -71,9 +74,9 @@ extension hooks are in place for the skills system:
    collision damage; out-of-turn by design.
 
 Spells are **data** (`Spell` = AP cost + range + shape + a list of `Effect`s), so
-new content needs no state-machine changes. The POC ships an 11-spell catalog
-(see `makeDefaultCatalog`) exercising every `Effect` type — e.g. the basic
-attack is 3 AP, range 1–6, LOS, 15 damage.
+new content needs no state-machine changes. The catalog ships 25 spells
+(see `makeDefaultCatalog` / `data/catalog.json`) exercising every `Effect` type —
+e.g. the basic attack is 3 AP, range 1–6, LOS, 15 damage.
 
 ## Build & Run
 

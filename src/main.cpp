@@ -393,6 +393,7 @@ int main() {
     render::Animator animator; // per-entity event-clip playback (cast flashes, §2.4)
     std::string status;
     int selectedSpell = 0;
+    int spellRotation = 0;         // wheel-driven 90° turns for a Line spell (Shelter walls)
     // Which battle-layout grip is being dragged (board corner / column dividers).
     enum class LayoutDrag { None, Board, Clock, Chat } layoutDrag = LayoutDrag::None;
     // Two-click portal: the placed entry tile awaiting an exit (nullopt = not placing).
@@ -443,6 +444,7 @@ int main() {
         pendingDecoy.reset();
         animator.reset();
         selectedSpell = 0;
+        spellRotation = 0;
         logScroll = 0;
         status = "Player turn — left-click move, click a spell (or 1-9), right-click cast, Tab=editor.";
         state = AppState::Battle;
@@ -833,8 +835,11 @@ int main() {
         Vec2i hovered = render::screenToGrid(layout, GetMouseX(), GetMouseY());
         const bool hoveredValid = source->battle().grid().inBounds(hovered);
 
-        // Combat-log scrollback: wheel up = older, down = newer (clamped ≥ 0).
-        logScroll = std::max(0, logScroll + static_cast<int>(GetMouseWheelMove()));
+        // Mouse wheel: while aiming a rotatable spell over the board it turns the
+        // shape (handled in the player block below); otherwise it scrolls the log.
+        // Captured here, routed there — up = older/CCW, down = newer/CW.
+        const int wheelDelta = static_cast<int>(GetMouseWheelMove());
+        bool wheelConsumed = false;
 
         // Replay playback controls (read-only viewer): Space pause, →/. step, ↑↓ speed.
         if (replay) {
@@ -867,6 +872,7 @@ int main() {
             onlineMatch = false;
             animator.reset();
             selectedSpell = 0;
+            spellRotation = 0;
             logScroll = 0;
             status = "New arena. Player turn.";
         }
@@ -980,6 +986,7 @@ int main() {
 
         if (playerControl && !chatFocused && !pendingDecoy && !draggingLayout) {
             const EntityId me = active;
+            const int selBefore = selectedSpell; // reset aim rotation if this changes
             const int spellCount = static_cast<int>(source->battle().unit(me).spells.size());
             for (int k = 0; k < spellCount && k < 9; ++k)
                 if (IsKeyPressed(KEY_ONE + k)) selectedSpell = k;
@@ -1007,6 +1014,22 @@ int main() {
                 portalPending.reset(); // moving abandons a half-placed portal
                 if (auto s = source->submit(net::Intent::move(hovered))) status = *s;
             }
+            // Selecting a different spell drops any accumulated aim rotation.
+            if (selectedSpell != selBefore) spellRotation = 0;
+
+            // Mouse wheel rotates a Line spell's footprint (Shelter walls) in 90°
+            // steps while aiming over the board — the core takes spellRotation mod 4.
+            // Consuming it here keeps the wheel from also scrolling the combat log.
+            const bool rotatable = selectedSpell < spellCount &&
+                source->battle().unit(me).spells[selectedSpell].shape == TargetShape::Line;
+            if (rotatable && hoveredValid && wheelDelta != 0) {
+                spellRotation += wheelDelta;
+                wheelConsumed = true;
+                status = TextFormat("%s facing: %d",
+                                    source->battle().unit(me).spells[selectedSpell].name.c_str(),
+                                    ((spellRotation % 4) + 4) % 4);
+            }
+
             if (hoveredValid && IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
                 const Spell& sel = source->battle().unit(me).spells[selectedSpell];
                 if (isPortalSpell(sel)) {
@@ -1031,7 +1054,7 @@ int main() {
                         status = "Pick a walkable exit within the portal's reach (Esc cancels).";
                     }
                 } else {
-                    const net::Intent in = net::Intent::cast(selectedSpell, hovered);
+                    const net::Intent in = net::Intent::cast(selectedSpell, hovered, spellRotation);
                     // A decoy cast commits to a hidden choice up-front (CR.6) — prompt
                     // for it instead of submitting straight away.
                     if (source->needsDecoyChoice(in)) {
@@ -1047,6 +1070,9 @@ int main() {
                 source->submit(net::Intent::endTurn());
             }
         }
+
+        // Wheel not spent on spell rotation scrolls the combat log (up = older).
+        if (!wheelConsumed) logScroll = std::max(0, logScroll + wheelDelta);
 
         if (finished && !replay && !spectating) {
             // update() (pumped above) let a correspondence source finalize + submit;
@@ -1125,7 +1151,8 @@ int main() {
             }
             if (!portalPending && hoveredValid && selectedSpell < static_cast<int>(u.spells.size())) {
                 view.spellCastable = source->battle().canCast(me, selectedSpell, hovered);
-                view.spellZone = source->battle().affectedTiles(u.spells[selectedSpell], u.pos, hovered);
+                view.spellZone = source->battle().affectedTiles(u.spells[selectedSpell], u.pos, hovered,
+                                                                spellRotation);
             }
         }
 

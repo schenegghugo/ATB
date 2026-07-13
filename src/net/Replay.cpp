@@ -11,6 +11,7 @@
 #include "data/RulesetJson.h"
 #include "data/Sha256.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <sstream>
 
@@ -44,6 +45,9 @@ std::string intentToken(const net::Intent& in) {
             // A player-placed portal exit rides after a '>' (whitespace-free token).
             if (in.hasTarget2)
                 s += ">" + std::to_string(in.target2.x) + "," + std::to_string(in.target2.y);
+            // A rotated Line heading (Shelter) trails after a '~' — omitted when 0
+            // so pre-rotation records round-trip byte-for-byte.
+            if (in.rotation != 0) s += "~" + std::to_string(in.rotation);
             return s;
         }
         case net::Intent::Kind::EndTurn:
@@ -66,18 +70,34 @@ bool parseIntentToken(const std::string& t, net::Intent& out) {
         char* end = nullptr;
         const long slot = std::strtol(t.c_str() + 1, &end, 10);
         if (end != t.c_str() + at) return false;
-        const auto gt = t.find('>', at); // optional ">x2,y2" portal exit
+        const auto gt = t.find('>', at);   // optional ">x2,y2" portal exit
+        const auto tilde = t.find('~', at); // optional "~rot" Line rotation (trails last)
+        // Rotation, if present, terminates the whole token; parse and strip it.
+        int rot = 0;
+        if (tilde != std::string::npos) {
+            const std::string rs = t.substr(tilde + 1);
+            if (rs.empty()) return false;
+            rot = std::atoi(rs.c_str());
+        }
+        // The entry runs from '@' up to the first of '>' or '~' (whichever comes first).
+        const auto entryEnd = std::min(gt, tilde);
         Vec2i entry;
-        if (!parseXY(t.substr(at + 1, gt == std::string::npos ? std::string::npos : gt - at - 1),
+        if (!parseXY(t.substr(at + 1, entryEnd == std::string::npos ? std::string::npos
+                                                                    : entryEnd - at - 1),
                      entry))
             return false;
         if (gt == std::string::npos) {
-            out = net::Intent::cast(static_cast<int>(slot), entry);
+            out = net::Intent::cast(static_cast<int>(slot), entry, rot);
             return true;
         }
+        // Exit runs from '>' up to '~' (or the end).
         Vec2i exit;
-        if (!parseXY(t.substr(gt + 1), exit)) return false;
+        if (!parseXY(t.substr(gt + 1, tilde == std::string::npos ? std::string::npos
+                                                                 : tilde - gt - 1),
+                     exit))
+            return false;
         out = net::Intent::castTo(static_cast<int>(slot), entry, exit);
+        out.rotation = rot;
         return true;
     }
     return false;

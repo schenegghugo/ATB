@@ -101,6 +101,24 @@ int main() {
         std::printf("    notation is %zu chars, %zu intents\n", wire.size(), rec.intents.size());
     }
 
+    std::printf("Intent tokens round-trip (incl. rotated Shelter walls)\n");
+    {
+        const net::Intent toks[] = {
+            net::Intent::move({3, 4}), net::Intent::cast(2, {5, 7}),
+            net::Intent::cast(8, {5, 7}, /*rotation=*/2),  // rotated wall
+            net::Intent::castTo(1, {5, 7}, {2, 9}), net::Intent::endTurn()};
+        for (const net::Intent& in : toks) {
+            net::Intent back;
+            const std::string t = replay::intentToken(in);
+            CHECK(replay::parseIntentToken(t, back) && back == in,
+                  ("token round-trips: " + t).c_str());
+        }
+        // A pre-rotation token (no '~') still parses, defaulting rotation to 0.
+        net::Intent legacy;
+        CHECK(replay::parseIntentToken("c8@5,7", legacy) && legacy.rotation == 0,
+              "legacy cast token defaults rotation to 0");
+    }
+
     std::printf("verify() reproduces the exact game\n");
     {
         replay::VerifyResult v = replay::verify(rec, ruleset, catalog, creatures);

@@ -4,6 +4,7 @@
 //
 #include "core/AI.h"
 #include "core/Battle.h"
+#include "core/Evaluator.h"
 #include "core/Intel.h"
 #include "core/Spells.h"
 
@@ -95,6 +96,42 @@ int main() {
         Battle b(std::move(g), std::move(r));
         (void)enemyTakeOneAction(b, P);
         check(b.unit(1).hp < 60 && b.unit(2).hp < 60, "both foes took Fireball damage");
+    }
+
+    // --- Evaluator prices elemental hazards + lost turns (E.6) --------------
+    std::printf("Evaluator values surfaces + stun/freeze:\n");
+    {
+        auto boardScore = [&](void (*setup)(Battle&)) {
+            Grid g(12, 5);
+            std::vector<Entity> r;
+            r.push_back(makeUnit(Faction::Player, {2, 2}, {spellid::Attack}));
+            r.push_back(makeUnit(Faction::Enemy, {8, 2}, {spellid::Attack}));
+            Battle b(std::move(g), std::move(r));
+            setup(b);
+            return handcraftedEvaluator().evaluate(b, makeEvalContext(b, Faction::Player, false));
+        };
+        const double base = boardScore([](Battle&) {});
+        const double stunned = boardScore(
+            [](Battle& b) { b.unit(1).statuses.push_back({StatusEffect::Kind::Stunned, 0, 1, 0}); });
+        const double burning = boardScore(
+            [](Battle& b) { b.unit(1).statuses.push_back({StatusEffect::Kind::Burning, 5, 2, 0}); });
+        check(stunned > base, "a stunned foe (lost turn) scores better for me");
+        check(burning > base, "a burning foe (Fire DoT) scores better for me");
+
+        // Painting Fire under a foe (clean A/B on one board) improves my eval.
+        {
+            Grid g(12, 5);
+            std::vector<Entity> r;
+            r.push_back(makeUnit(Faction::Player, {2, 2}, {spellid::Ignite}));
+            r.push_back(makeUnit(Faction::Enemy, {6, 2}, {spellid::Attack})); // within Ignite range 5
+            Battle b(std::move(g), std::move(r));
+            const auto ctx = makeEvalContext(b, Faction::Player, false);
+            const double before = handcraftedEvaluator().evaluate(b, ctx);
+            const bool cast = b.cast(P, 0, {6, 2}); // Ignite paints Fire on the enemy's tile
+            const double after = handcraftedEvaluator().evaluate(b, ctx);
+            check(cast, "Ignite cast lands (sanity)");
+            check(after > before, "painting Fire under a foe improves the eval for me");
+        }
     }
 
     // --- Lookahead: finds the exact-lethal line ------------------------------

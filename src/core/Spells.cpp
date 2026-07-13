@@ -46,6 +46,17 @@ Effect spawnWall(int duration) {
 Effect spawnGlyph(int duration, int repel) {
     return Effect{Effect::Type::Spawn, 0, {}, GroundSpec{GroundKind::Glyph, duration, repel}};
 }
+Effect paintSurface(Element el, int duration) {
+    Effect e;
+    e.type = Effect::Type::PaintSurface;
+    e.amount = duration; // amount doubles as the surface's lifetime
+    e.element = el;
+    return e;
+}
+Effect freeze(int turns) {
+    return Effect{Effect::Type::ApplyStatus, 0,
+                  StatusEffect{StatusEffect::Kind::Frozen, 0, turns}, {}};
+}
 Effect spawnPortal(int duration, int trace) {
     return Effect{Effect::Type::Spawn, 0, {}, GroundSpec{GroundKind::Portal, duration, trace}};
 }
@@ -202,6 +213,38 @@ SpellCatalog makeDefaultCatalog() {
     c.add(def(spellid::Decoy, "decoy", 3,
               Spell{"", 3, 1, 3, true, TargetShape::Single, 0, 5, {decoyFx(3)}},
               {"support", "mobility", "single"}));
+
+    // --- Elemental surfaces (0.0.2 — docs/elements.md) ----------------------
+    // Storm — rain soaks a radius-2 zone with Water now, and drops a fused
+    // "stormcloud" at the centre that smites a radius-2 lightning circle next
+    // turn (Damage + Electric). Electric landing on the still-wet tiles reacts
+    // to an electrified field that shocks + stuns. Two-stage via onDeath/fuse.
+    c.add(def(spellid::Storm, "storm", 4,
+              Spell{"", 4, 2, 6, true, TargetShape::Circle, 2, 3,
+                    {paintSurface(Element::Water, 3), summon("stormcloud")}},
+              {"aoe", "terrain", "elemental"})); // damage is indirect (the cloud's onDeath)
+
+    // Blizzard — a cone of ice fanning from the caster: damages, roots (Frozen),
+    // and freezes the ground (Ice surface; freezes any water it sweeps).
+    c.add(def(spellid::Blizzard, "blizzard", 3,
+              Spell{"", 3, 1, 4, true, TargetShape::Cone, 3, 2,
+                    {damage(10), freeze(2), paintSurface(Element::Ice, 3)}},
+              {"damage", "aoe", "control", "elemental"}));
+
+    // Ignite / Puddle / Electrify — the cheap "painters" that make reactions
+    // reachable: lay a single-element surface (radius-1 splash) to set up combos.
+    c.add(def(spellid::Ignite, "ignite", 2,
+              Spell{"", 2, 1, 5, true, TargetShape::Circle, 1, 2,
+                    {paintSurface(Element::Fire, 3)}},
+              {"terrain", "elemental"}));
+    c.add(def(spellid::Puddle, "puddle", 1,
+              Spell{"", 1, 1, 5, true, TargetShape::Circle, 1, 1,
+                    {paintSurface(Element::Water, 3)}},
+              {"terrain", "elemental", "support"}));
+    c.add(def(spellid::Electrify, "electrify", 2,
+              Spell{"", 2, 1, 6, true, TargetShape::Circle, 1, 2,
+                    {paintSurface(Element::Electric, 2)}},
+              {"terrain", "elemental", "control"}));
 
     return c;
 }

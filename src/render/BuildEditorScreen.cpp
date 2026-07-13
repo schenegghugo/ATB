@@ -390,6 +390,7 @@ BuildEditorScreen::Result BuildEditorScreen::runFrame(int screenW, int screenH, 
     const float by = H - 44;
     Rectangle saveBtn{16, by, 130, 32};
     Rectangle menuBtn{154, by, 110, 32};
+    Rectangle resetBtn{272, by, 110, 32};
 
     if (button(saveBtn, "Save Slot", m, kPanel, val.ok)) {
         repo_.save(cur());
@@ -397,6 +398,13 @@ BuildEditorScreen::Result BuildEditorScreen::runFrame(int screenW, int screenH, 
         statusMsg_ = "Saved '" + cur().name + "'.";
     }
     if (button(menuBtn, "< Menu", m, kPanel)) result = Result::Menu;
+    // Reset: hand every spent point back at once (clears spells + stat upgrades,
+    // keeps the name). Disabled on an already-empty build.
+    if (button(resetBtn, "Reset", m, kPanel, val.spent > 0)) {
+        cur().spellIds.clear();
+        cur().stats = {};
+        statusMsg_ = "Build reset — all points refunded.";
+    }
 
     // The launch button reflects the entered mode; Edit mode has none.
     if (mode == Mode::Local) {
@@ -407,7 +415,7 @@ BuildEditorScreen::Result BuildEditorScreen::runFrame(int screenW, int screenH, 
     }
 
     if (!statusMsg_.empty())
-        DrawText(statusMsg_.c_str(), 160, static_cast<int>(by) + 8, 14, kMuted);
+        DrawText(statusMsg_.c_str(), 392, static_cast<int>(by) + 8, 14, kMuted);
 
     // Hovered-spell info popup, drawn last so it floats above every widget.
     if (hoveredDef) drawSpellPopup(*hoveredDef, hoveredRect, screenW, screenH);

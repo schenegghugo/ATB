@@ -24,6 +24,29 @@ Entity makeBomb() {
     return e;
 }
 
+// "stormcloud" — an inert Object dropped by Storm. It does nothing on its own;
+// a 1-turn fuse "detonates" it next turn, firing onDeath: a radius-2 lightning
+// circle that damages and paints Electric. On the Water that Storm rained, the
+// Electric reacts (docs/elements.md §4) into an electrified field. Fragile (1 HP)
+// so an early shove/hit still triggers the strike.
+Entity makeStormcloud() {
+    Entity e;
+    e.name = "stormcloud";
+    e.kind = EntityKind::Object;
+    e.maxHp = e.hp = 1;
+    e.maxAp = e.ap = 0;
+    e.maxMp = e.mp = 0;
+    e.initiative = 1; // acts late in the order
+    e.fuse = 1;       // strikes on its first turn (the turn after Storm is cast)
+    Effect bolt{Effect::Type::Damage, 12, {}, {}, {}};
+    Effect zap;
+    zap.type = Effect::Type::PaintSurface;
+    zap.amount = 2; // Electric surface duration
+    zap.element = Element::Electric;
+    e.onDeath = Spell{"lightning", 0, 0, 0, false, TargetShape::Circle, 2, 0, {bolt, zap}};
+    return e;
+}
+
 // Shared scaffolding for the summon archetypes: a Summon with one innate spell,
 // fewer stats than a champion.
 Entity makeSummon(std::string name, int hp, int mp, int initiative, Spell ability) {
@@ -64,7 +87,7 @@ Entity makeBrute() {
 } // namespace
 
 std::vector<Entity> makeDefaultCreatures() {
-    return {makeBomb(), makeBlocker(), makeHealer(), makeBrute()};
+    return {makeBomb(), makeBlocker(), makeHealer(), makeBrute(), makeStormcloud()};
 }
 
 } // namespace tb

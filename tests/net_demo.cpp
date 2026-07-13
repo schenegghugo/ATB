@@ -81,6 +81,7 @@ int main() {
     std::printf("Intent round-trip (byte-identical) + equality\n");
     {
         const Intent samples[] = {Intent::move({3, 4}), Intent::cast(2, {5, 7}),
+                                  Intent::cast(8, {5, 7}, /*rotation=*/3),
                                   Intent::castTo(1, {5, 7}, {2, 9}), Intent::endTurn()};
         for (const Intent& in : samples) {
             const std::string j = serializeIntent(in);
@@ -93,6 +94,9 @@ int main() {
         // A plain cast and a two-tile cast to the same entry are distinct intents.
         CHECK(Intent::cast(1, {5, 7}) != Intent::castTo(1, {5, 7}, {2, 9}),
               "portal exit is part of intent identity");
+        // Rotation is part of intent identity too (Shelter wall heading).
+        CHECK(Intent::cast(8, {5, 7}, 1) != Intent::cast(8, {5, 7}, 2),
+              "wall rotation is part of intent identity");
     }
 
     std::printf("Intent malformed inputs are rejected\n");

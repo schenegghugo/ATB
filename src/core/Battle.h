@@ -58,6 +58,8 @@ struct GroundEffect {
     int magnitude = 0;          // Glyph repel distance
     Vec2i center;               // Glyph repel origin
     Vec2i exit;                 // Portal destination
+    Element element = Element::None; // elemental surface (None = neutral floor)
+    bool blocksLos = false;     // Steam / clouds block line of sight like walls
 };
 
 enum class Phase : std::uint8_t { PlayerTurn, EnemyTurn, Finished };
@@ -154,13 +156,16 @@ public:
     // effect to each unit in the zone (friendly fire included). Returns false if
     // the cast is illegal. `portalExit`, when set, places a Portal spell's exit
     // explicitly (a walkable tile) instead of tracing it from the caster's aim —
-    // ignored by every other spell.
+    // ignored by every other spell. `rotation` turns a Line spell's heading in
+    // 90° steps (Shelter walls; ignored by every other shape).
     bool cast(EntityId caster, int spellIdx, Vec2i target,
-              std::optional<Vec2i> portalExit = std::nullopt);
+              std::optional<Vec2i> portalExit = std::nullopt, int rotation = 0);
 
     // --- Targeting helpers (pure; reused by AI preview + renderer) -----------
+    // `rotation` rotates a Line shape's heading by that many 90° steps (0 = the
+    // default caster→target ray); other shapes ignore it.
     [[nodiscard]] std::vector<Vec2i> affectedTiles(const Spell& spell, Vec2i casterPos,
-                                                   Vec2i target) const;
+                                                   Vec2i target, int rotation = 0) const;
     [[nodiscard]] std::vector<EntityId> unitsAt(const std::vector<Vec2i>& tiles) const;
 
     // --- Forced movement (out-of-turn; hook for push/pull spells) ------------
@@ -179,7 +184,7 @@ private:
     // Resolve a spell's effects over its zone (shared by cast() and death-
     // triggered detonations). `casterPos` anchors directional/shape geometry.
     void applySpellEffects(const Spell& sp, Faction casterTeam, Vec2i casterPos, Vec2i target,
-                           std::optional<Vec2i> portalExit = std::nullopt);
+                           std::optional<Vec2i> portalExit = std::nullopt, int rotation = 0);
     // Spawn a registered creature prototype (by key) for `team` at `at`, if the
     // tile is free. No-op if the key is unknown.
     void spawnCreature(const std::string& key, Faction team, Vec2i at);
@@ -197,6 +202,28 @@ private:
     // Tick this unit's pending Rewind (if any); restore the snapshot when it
     // elapses, or fizzle if the unit is dead. Called at its turn start.
     void rewindTick(EntityId id);
+
+    // --- Elemental-surface passives (E.2, docs/elements.md §3) ---------------
+    [[nodiscard]] static bool hasStatus(const Entity& e, StatusEffect::Kind k);
+    // Add a status, or refresh an existing one of the same kind to the longer
+    // duration / larger magnitude (keeps Wet/Burning/… from stacking unboundedly).
+    void refreshStatus(EntityId who, StatusEffect::Kind k, int magnitude, int turns);
+    void clearStatus(EntityId who, StatusEffect::Kind k);
+    // Element `el`'s effect when a unit first steps onto the surface.
+    void surfaceEnter(EntityId who, Element el);
+    // Element `el`'s effect on a unit that begins its turn standing on the surface.
+    void surfaceTick(EntityId who, Element el);
+    // The elemental surface (if any) currently under `at`, else Element::None.
+    [[nodiscard]] Element surfaceElementAt(Vec2i at) const;
+
+    // --- Reaction engine (E.3, docs/elements.md §4) --------------------------
+    // Paint `incoming` across `zone`, resolving the reaction matrix per tile in
+    // zone order (deterministic; one reaction per tile per cast) and applying any
+    // burst. Elemental surfaces are stored one-tile-per-GroundEffect so reactions
+    // stay tile-local. Called by spawnGround for an elemental Glyph spawn.
+    void paintSurface(Element incoming, int duration, const std::vector<Vec2i>& zone, Faction team);
+    // Strip any elemental surface (element != None) covering tile `t`.
+    void removeSurfaceTileAt(Vec2i t);
 
     Grid grid_;
     std::vector<Entity> units_;

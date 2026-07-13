@@ -39,7 +39,7 @@ int main() {
         CreatureLoad load = loadCreaturesFromString(a);
         CHECK(load.ok, "bestiary serializes -> loads cleanly");
         CHECK(load.version == "1.0.0", "version round-trips");
-        CHECK(load.creatures.size() == 4, "all 4 creatures survive (bomb + 3 summons)");
+        CHECK(load.creatures.size() == 5, "all 5 creatures survive (bomb + 3 summons + stormcloud)");
         CHECK(a == serializeCreatures(load.creatures, "1.0.0"), "serialize -> load -> serialize byte-identical");
     }
 
