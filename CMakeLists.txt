@@ -333,6 +333,7 @@ add_executable(tactical_battler
     src/render/MainMenuScreen.cpp
     src/render/MatchSource.cpp
     src/render/PackManifest.cpp
+    src/render/PatchNotesScreen.cpp
     src/render/ReadyCheckScreen.cpp
     src/render/SettingsScreen.cpp
     src/render/SpritePack.cpp

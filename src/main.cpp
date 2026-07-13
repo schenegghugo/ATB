@@ -42,6 +42,7 @@
 #include "render/CorrespondenceMatchSource.h"
 #include "render/LobbyScreen.h"
 #include "render/MainMenuScreen.h"
+#include "render/PatchNotesScreen.h"
 #include "render/Theme.h"
 #include "render/MatchSource.h"
 #include "render/ReadyCheckScreen.h"
@@ -77,7 +78,7 @@ using namespace tb;
 
 namespace {
 
-enum class AppState { Menu, Editor, Connect, Lobby, ReadyCheck, Waiting, Battle, Settings, Paused };
+enum class AppState { Menu, Editor, Connect, Lobby, ReadyCheck, Waiting, Battle, Settings, Paused, PatchNotes };
 
 // The in-game pause menu (Esc anywhere) links out to the project page.
 inline constexpr const char* kGithubUrl = "https://github.com/schenegghugo/ATB";
@@ -374,6 +375,7 @@ int main() {
     render::BuildEditorScreen editor(session.catalog, *session.repo, session.ruleset);
     render::MainMenuScreen menu;
     render::SettingsScreen settings;
+    render::PatchNotesScreen patchNotes;
     std::vector<std::string> themesList, packsList; // rescanned on entering Settings
     render::LobbyScreen lobbyScreen;
     render::ReadyCheckScreen readyScreen;
@@ -400,6 +402,7 @@ int main() {
     std::optional<Vec2i> portalPending;
     AppState pauseReturn = AppState::Menu;    // where Esc's pause menu returns to
     AppState settingsReturn = AppState::Menu; // where the Settings "Back" returns to
+    AppState patchNotesReturn = AppState::Menu; // where Patch Notes "Back" returns to
     int logScroll = 0;             // combat-log scrollback (0 = pinned to newest)
     bool onlineMatch = false;      // this battle came from the lobby (→ end screen returns there)
     float turnClock = 0.0f;        // seconds left in the active seat's move (timed matches)
@@ -542,6 +545,8 @@ int main() {
                 state = pauseReturn; // Esc closes the pause menu
             } else if (state == AppState::Settings) {
                 state = settingsReturn; // Esc = Back on the settings screen
+            } else if (state == AppState::PatchNotes) {
+                state = patchNotesReturn; // Esc = Back on the patch-notes screen
             } else {
                 pauseReturn = state; // open the pause menu from anywhere else
                 state = AppState::Paused;
@@ -564,6 +569,11 @@ int main() {
             if (render::ui::button({bx, by, bw, bh}, "Settings", mp, render::ui::kPanel)) {
                 settingsReturn = AppState::Paused;
                 state = AppState::Settings;
+            }
+            by += bh + gap;
+            if (render::ui::button({bx, by, bw, bh}, "Patch Notes", mp, render::ui::kPanel)) {
+                patchNotesReturn = AppState::Paused;
+                state = AppState::PatchNotes;
             }
             by += bh + gap;
             if (render::ui::button({bx, by, bw, bh}, "Open GitHub page", mp, render::ui::kPanel))
@@ -592,9 +602,21 @@ int main() {
                     settingsReturn = AppState::Menu;
                     state = AppState::Settings;
                     break;
+                case render::MainMenuScreen::Result::PatchNotes:
+                    patchNotesReturn = AppState::Menu;
+                    state = AppState::PatchNotes;
+                    break;
                 case render::MainMenuScreen::Result::Quit:        quit = true; break;
                 case render::MainMenuScreen::Result::None: break;
             }
+            continue;
+        }
+
+        if (state == AppState::PatchNotes) {
+            BeginDrawing();
+            const auto r = patchNotes.runFrame(GetScreenWidth(), GetScreenHeight());
+            EndDrawing();
+            if (r == render::PatchNotesScreen::Result::Back) state = patchNotesReturn;
             continue;
         }
 

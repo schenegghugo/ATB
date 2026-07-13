@@ -9,7 +9,7 @@ namespace tb::render {
 
 class MainMenuScreen {
 public:
-    enum class Result { None, LocalMatch, PlayOnline, BuildEditor, Settings, Quit };
+    enum class Result { None, LocalMatch, PlayOnline, BuildEditor, Settings, PatchNotes, Quit };
 
     // `version` (e.g. the compiled ATB_VERSION) is shown in the footer.
     Result runFrame(int screenW, int screenH, const char* version = "");
