@@ -35,7 +35,9 @@ std::optional<std::string> LocalMatchSource::submit(const net::Intent& in) {
                                              in.spellIdx < static_cast<int>(spells.size())
                                          ? spells[in.spellIdx].name
                                          : std::string("spell");
-            if (battle_.cast(me, in.spellIdx, in.target)) return "Cast " + name + "!";
+            if (battle_.cast(me, in.spellIdx, in.target,
+                             in.hasTarget2 ? std::optional<Vec2i>(in.target2) : std::nullopt))
+                return "Cast " + name + "!";
             return std::string("Cast failed (check AP, range, LOS).");
         }
         case net::Intent::Kind::EndTurn:

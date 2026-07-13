@@ -15,8 +15,15 @@ namespace tb {
 inline constexpr int kPrefsSchemaVersion = 1;
 
 struct Prefs {
-    std::string theme; // themes/<theme>.json ("" = built-in defaults)
-    std::string pack;  // packs/<pack>/pack.json ("" = primitives, no pack)
+    std::string theme;    // themes/<theme>.json ("" = built-in defaults)
+    std::string pack;     // packs/<pack>/pack.json ("" = primitives, no pack)
+
+    // Battle-screen layout the player drags into shape (grips in-match) and that
+    // persists here. uiScale sizes the board (drag its corner); clockHeight and
+    // chatFraction split the right-hand column (drag the dividers).
+    float uiScale = 1.0f;      // board tile-size multiplier
+    int clockHeight = 68;      // clock strip height, px
+    float chatFraction = 0.5f; // chat's share of the column below the clock (rest = log)
 };
 
 struct PrefsLoad {

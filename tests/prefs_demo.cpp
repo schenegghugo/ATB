@@ -30,10 +30,16 @@ int main() {
         Prefs p;
         p.theme = "gruvbox";
         p.pack = "default";
+        p.uiScale = 1.25f;      // exactly representable in binary → exact round-trip
+        p.clockHeight = 80;
+        p.chatFraction = 0.375f; // 3/8, exact in binary
         CHECK(savePrefsToFile(p, file), "saves");
         const PrefsLoad r = loadPrefsFromFile(file);
         CHECK(r.ok && !r.absent, "loads");
         CHECK(r.prefs.theme == "gruvbox" && r.prefs.pack == "default", "fields round-trip");
+        CHECK(r.prefs.uiScale == 1.25f, "uiScale round-trips");
+        CHECK(r.prefs.clockHeight == 80 && r.prefs.chatFraction == 0.375f,
+              "layout ratios round-trip");
     }
 
     std::printf("Absent file = defaults, not an error (fresh install)\n");
@@ -41,6 +47,8 @@ int main() {
         const PrefsLoad r = loadPrefsFromFile((tmp / "nope.json").string());
         CHECK(r.ok && r.absent, "absent file is ok");
         CHECK(r.prefs.theme.empty() && r.prefs.pack.empty(), "defaults are empty picks");
+        CHECK(r.prefs.uiScale == 1.0f && r.prefs.clockHeight == 68 && r.prefs.chatFraction == 0.5f,
+              "layout fields default sensibly");
     }
 
     std::printf("Malformed prefs are rejected with context\n");

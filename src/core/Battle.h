@@ -152,8 +152,11 @@ public:
 
     // Resolves the spell: spends AP, computes the affected tiles, applies every
     // effect to each unit in the zone (friendly fire included). Returns false if
-    // the cast is illegal.
-    bool cast(EntityId caster, int spellIdx, Vec2i target);
+    // the cast is illegal. `portalExit`, when set, places a Portal spell's exit
+    // explicitly (a walkable tile) instead of tracing it from the caster's aim —
+    // ignored by every other spell.
+    bool cast(EntityId caster, int spellIdx, Vec2i target,
+              std::optional<Vec2i> portalExit = std::nullopt);
 
     // --- Targeting helpers (pure; reused by AI preview + renderer) -----------
     [[nodiscard]] std::vector<Vec2i> affectedTiles(const Spell& spell, Vec2i casterPos,
@@ -172,10 +175,11 @@ private:
     void applyDamage(EntityId id, int amount, DamageSource src = DamageSource::Spell);
     void checkVictory();
     void spawnGround(const GroundSpec& spec, Faction owner, Vec2i casterPos, Vec2i target,
-                     const std::vector<Vec2i>& zone);
+                     const std::vector<Vec2i>& zone, std::optional<Vec2i> portalExit = std::nullopt);
     // Resolve a spell's effects over its zone (shared by cast() and death-
     // triggered detonations). `casterPos` anchors directional/shape geometry.
-    void applySpellEffects(const Spell& sp, Faction casterTeam, Vec2i casterPos, Vec2i target);
+    void applySpellEffects(const Spell& sp, Faction casterTeam, Vec2i casterPos, Vec2i target,
+                           std::optional<Vec2i> portalExit = std::nullopt);
     // Spawn a registered creature prototype (by key) for `team` at `at`, if the
     // tile is free. No-op if the key is unknown.
     void spawnCreature(const std::string& key, Faction team, Vec2i at);

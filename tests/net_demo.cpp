@@ -80,7 +80,8 @@ void printErrors(const std::vector<std::string>& errs) {
 int main() {
     std::printf("Intent round-trip (byte-identical) + equality\n");
     {
-        const Intent samples[] = {Intent::move({3, 4}), Intent::cast(2, {5, 7}), Intent::endTurn()};
+        const Intent samples[] = {Intent::move({3, 4}), Intent::cast(2, {5, 7}),
+                                  Intent::castTo(1, {5, 7}, {2, 9}), Intent::endTurn()};
         for (const Intent& in : samples) {
             const std::string j = serializeIntent(in);
             Parse<Intent> p = parseIntent(j);
@@ -89,6 +90,9 @@ int main() {
             CHECK(p.ok && p.value == in, "intent value survives the round-trip");
             CHECK(p.ok && serializeIntent(p.value) == j, "intent serialize->parse->serialize identical");
         }
+        // A plain cast and a two-tile cast to the same entry are distinct intents.
+        CHECK(Intent::cast(1, {5, 7}) != Intent::castTo(1, {5, 7}, {2, 9}),
+              "portal exit is part of intent identity");
     }
 
     std::printf("Intent malformed inputs are rejected\n");

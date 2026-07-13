@@ -1,5 +1,7 @@
 # Tactical Battler — POC
 
+**Docs version: 0.0.1**
+
 A Dofus-style tactical turn-based combat loop in **C++20** + **Raylib**.
 Gameplay logic is fully **headless** and decoupled from rendering.
 

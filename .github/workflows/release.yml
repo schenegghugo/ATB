@@ -1,22 +1,68 @@
 name: Release
 
-# Rolling release: every green push to main rebuilds the Windows + Linux
-# bundles and republishes them under the "latest" tag, so friends who
-# re-download (or a future in-game updater) are always on main. Manual runs
-# via workflow_dispatch republish the current main.
+# Two ways to ship, one pipeline:
+#
+#   * Push a version tag  ->  cut an IMMUTABLE release named after the tag.
+#       git tag v1.2.3 && git push origin v1.2.3
+#     Builds Windows + Linux, bakes v1.2.3 into the binary, and publishes a
+#     GitHub Release "v1.2.3" that never moves. This is the "proper versioning"
+#     path — each release is a permanent, numbered artifact.
+#
+#   * Push to main        ->  refresh the rolling "latest" pre-release.
+#     Same build, but republished under the moving "latest" tag so friends
+#     testing main always have the newest build at one stable URL. Versioned
+#     as `git describe` (e.g. v1.2.3-4-gabc123: 4 commits past the last tag).
+#
+#   * Run manually (workflow_dispatch) with a version input to force a release.
+#
+# Versioning is single-source: the git ref decides it, the `meta` job computes
+# it once, and every downstream job (CMake -DATB_VERSION, VERSION.txt, release
+# name) consumes that one value.
 
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version to publish, e.g. v1.2.3 (blank = rolling 'latest')"
+        required: false
 
 concurrency:
-  group: release-main
+  group: release-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  # Decide the version + publish mode ONCE, so nothing downstream re-derives it.
+  meta:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }} # e.g. v1.2.3  (baked into the build)
+      tag: ${{ steps.v.outputs.tag }}         # release tag: the version, or "latest"
+      release: ${{ steps.v.outputs.release }} # "true" = immutable release, "false" = rolling
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history + tags so `git describe` works
+      - id: v
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            VERSION="${{ github.ref_name }}"; TAG="$VERSION"; RELEASE=true
+          elif [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"; TAG="$VERSION"; RELEASE=true
+          else
+            VERSION="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"
+            TAG="latest"; RELEASE=false
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG"         >> "$GITHUB_OUTPUT"
+          echo "release=$RELEASE" >> "$GITHUB_OUTPUT"
+          echo "Publishing version=$VERSION tag=$TAG release=$RELEASE"
+
   # The same gate as CI — a broken commit must never ship.
   test:
+    needs: meta
     name: Headless core + tests (gate)
     runs-on: ubuntu-latest
     steps:
@@ -35,10 +81,12 @@ jobs:
 
   build-linux:
     name: Linux x64 bundle
-    needs: test
+    needs: [meta, test]
     # Build on the OLDEST supported Ubuntu: binaries built against its glibc
     # run on every newer distro; the reverse does not hold.
     runs-on: ubuntu-22.04
+    env:
+      ATB_VERSION: ${{ needs.meta.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -52,7 +100,7 @@ jobs:
 
       - name: Configure + build client
         run: |
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DATB_VERSION="$ATB_VERSION"
           cmake --build build --target tactical_battler -j
 
       - name: Stage bundle
@@ -61,21 +109,23 @@ jobs:
           cp build/tactical_battler stage/ATB/
           cp -r data packs themes stage/ATB/
           cp LICENSE README.md stage/ATB/
-          printf '%s %s\n' "${GITHUB_SHA::7}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > stage/ATB/VERSION.txt
-          tar -C stage -czf ATB-linux-x64.tar.gz ATB
+          printf '%s %s\n' "$ATB_VERSION" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > stage/ATB/VERSION.txt
+          tar -C stage -czf "ATB-${ATB_VERSION}-linux-x64.tar.gz" ATB
 
       - uses: actions/upload-artifact@v4
         with:
           name: ATB-linux-x64
-          path: ATB-linux-x64.tar.gz
+          path: ATB-*-linux-x64.tar.gz
 
   build-windows:
     name: Windows x64 bundle
-    needs: test
+    needs: [meta, test]
     runs-on: windows-latest
     defaults:
       run:
         shell: msys2 {0}
+    env:
+      ATB_VERSION: ${{ needs.meta.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -95,7 +145,7 @@ jobs:
       - name: Configure + build client
         run: |
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_EXE_LINKER_FLAGS="-static"
+            -DATB_VERSION="$ATB_VERSION" -DCMAKE_EXE_LINKER_FLAGS="-static"
           cmake --build build --target tactical_battler -j
 
       - name: Stage bundle
@@ -104,39 +154,56 @@ jobs:
           cp build/tactical_battler.exe stage/ATB/
           cp -r data packs themes stage/ATB/
           cp LICENSE README.md stage/ATB/
-          printf '%s %s\n' "${GITHUB_SHA::7}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > stage/ATB/VERSION.txt
-          cd stage && zip -r ../ATB-windows-x64.zip ATB
+          printf '%s %s\n' "$ATB_VERSION" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > stage/ATB/VERSION.txt
+          cd stage && zip -r "../ATB-${ATB_VERSION}-windows-x64.zip" ATB
 
       - uses: actions/upload-artifact@v4
         with:
           name: ATB-windows-x64
-          path: ATB-windows-x64.zip
+          path: ATB-*-windows-x64.zip
 
   publish:
-    name: Publish rolling "latest" release
-    needs: [build-linux, build-windows]
+    name: Publish GitHub release
+    needs: [meta, build-linux, build-windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.meta.outputs.version }}
+      TAG: ${{ needs.meta.outputs.tag }}
+      IS_RELEASE: ${{ needs.meta.outputs.release }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/download-artifact@v4
         with:
           merge-multiple: true
 
-      # Recreate the release so the "latest" tag always points at the shipped
-      # commit (updating assets alone would leave the tag on an old commit).
-      - name: Recreate release
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Publish
         run: |
-          gh release delete latest --cleanup-tag --yes || true
-          gh release create latest \
-            --title "Latest build (${GITHUB_SHA::7})" \
-            --notes "Automated rolling build of \`main\` @ ${GITHUB_SHA}. Unzip and run \`tactical_battler\` — re-download this same link to update." \
-            --latest \
-            ATB-linux-x64.tar.gz ATB-windows-x64.zip
+          if [ "$IS_RELEASE" = "true" ]; then
+            # Immutable, numbered release. The tag already exists (tag push) or
+            # gh creates it (manual dispatch). --generate-notes writes a changelog
+            # from the commits since the previous tag.
+            gh release create "$TAG" \
+              --title "$VERSION" \
+              --generate-notes \
+              --latest \
+              ATB-*-linux-x64.tar.gz ATB-*-windows-x64.zip
+          else
+            # Rolling pre-release: move the "latest" tag onto this commit and
+            # replace its assets. Marked --prerelease so it never outranks a real
+            # numbered release in GitHub's "Latest" badge.
+            gh release delete latest --cleanup-tag --yes || true
+            gh release create latest \
+              --title "Rolling build ($VERSION)" \
+              --notes "Automated build of \`main\` at $VERSION. Unzip and run \`tactical_battler\`; re-download this link to update. For a stable numbered build, use a tagged release." \
+              --prerelease \
+              ATB-*-linux-x64.tar.gz ATB-*-windows-x64.zip
+          fi
 
   # Optional: push the same bundles to itch.io channels. The itch desktop app
   # then auto-updates installed copies (delta patches) — zero updater code.
@@ -144,9 +211,11 @@ jobs:
   # the *secret* BUTLER_API_KEY (from https://itch.io/user/settings/api-keys).
   itch:
     name: Push to itch.io channels
-    needs: [build-linux, build-windows]
+    needs: [meta, build-linux, build-windows]
     if: vars.ITCH_PROJECT != ''
     runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -163,9 +232,8 @@ jobs:
         env:
           BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
         run: |
-          VERSION="${GITHUB_SHA::7}"
           mkdir -p win linux
-          (cd win && unzip -q ../ATB-windows-x64.zip)
-          (cd linux && tar -xzf ../ATB-linux-x64.tar.gz)
+          (cd win && unzip -q ../ATB-*-windows-x64.zip)
+          (cd linux && tar -xzf ../ATB-*-linux-x64.tar.gz)
           ./butler push win/ATB   "${{ vars.ITCH_PROJECT }}:windows" --userversion "$VERSION"
           ./butler push linux/ATB "${{ vars.ITCH_PROJECT }}:linux"   --userversion "$VERSION"

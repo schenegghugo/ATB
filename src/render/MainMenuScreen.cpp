@@ -5,7 +5,7 @@
 
 namespace tb::render {
 
-MainMenuScreen::Result MainMenuScreen::runFrame(int screenW, int screenH) {
+MainMenuScreen::Result MainMenuScreen::runFrame(int screenW, int screenH, const char* version) {
     const Vector2 m = GetMousePosition();
     ClearBackground(ui::kBg);
 
@@ -45,8 +45,12 @@ MainMenuScreen::Result MainMenuScreen::runFrame(int screenW, int screenH) {
         by += bh + gap;
     }
 
-    DrawText("v0.1 — no account needed for local/custom play", 16,
+    const char* ver = (version && *version) ? version : "dev";
+    DrawText(TextFormat("%s  —  no account needed for local/custom play", ver), 16,
              static_cast<int>(H) - 26, 13, ui::kMuted);
+    // Also echo the version under the title, right-aligned to the tagline width.
+    DrawText(ver, static_cast<int>((W + MeasureText(tagline, 16)) / 2) - MeasureText(ver, 14),
+             static_cast<int>(H * 0.18f) + 78, 14, ui::kAccent);
     return result;
 }
 

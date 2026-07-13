@@ -30,8 +30,12 @@ public:
     void sync(const Battle& battle, double now) {
         const auto& evs = battle.events();
         if (evs.size() < seen_) reset(); // battle was replaced (rematch / new arena)
-        for (std::size_t i = seen_; i < evs.size(); ++i)
+        for (std::size_t i = seen_; i < evs.size(); ++i) {
             if (evs[i].type == EventType::Cast) castAt_[evs[i].actor] = now;
+            // A hit stamps the VICTIM so the renderer can shake + flash it. Both
+            // spell damage and collision/ring damage carry EventType::Damage.
+            else if (evs[i].type == EventType::Damage) hitAt_[evs[i].target] = now;
+        }
         seen_ = evs.size();
     }
 
@@ -44,14 +48,23 @@ public:
         return it == castAt_.end() ? -1.0 : now - it->second;
     }
 
+    // Seconds since `id` last took damage, or -1 if never. The renderer maps a
+    // short window after this into a shake offset + red flash (see kHitClip).
+    [[nodiscard]] double hitElapsed(EntityId id, double now) const {
+        auto it = hitAt_.find(id);
+        return it == hitAt_.end() ? -1.0 : now - it->second;
+    }
+
     void reset() {
         seen_ = 0;
         castAt_.clear();
+        hitAt_.clear();
     }
 
 private:
     std::size_t seen_ = 0;
     std::unordered_map<EntityId, double> castAt_;
+    std::unordered_map<EntityId, double> hitAt_;
 };
 
 } // namespace tb::render

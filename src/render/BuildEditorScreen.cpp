@@ -53,6 +53,92 @@ const char* shapeName(TargetShape s) {
     return "?";
 }
 
+// --- Spell hover popup (build editor) ---------------------------------------
+std::string withSign(int v) { return (v >= 0 ? "+" : "") + std::to_string(v); }
+
+std::string statusText(const StatusEffect& s, bool polarized) {
+    const std::string t = " for " + std::to_string(s.remainingTurns) + " turns";
+    switch (s.kind) {
+        case StatusEffect::Kind::DamageOverTime:
+            return "Damage over time: " + std::to_string(s.magnitude) + "/turn" + t;
+        case StatusEffect::Kind::Shield:
+            return "Shield: absorbs " + std::to_string(s.magnitude) + t;
+        case StatusEffect::Kind::ApBuff:
+            return withSign(s.magnitude) + " AP" + t + (s.delay > 0 ? " (delayed)" : "");
+        case StatusEffect::Kind::MpBuff:
+            return polarized ? "MP: " + withSign(s.magnitude) + " ally / " + withSign(-s.magnitude) +
+                                   " foe" + t
+                             : withSign(s.magnitude) + " MP" + t;
+        case StatusEffect::Kind::Invisible: return "Invisible" + t;
+        case StatusEffect::Kind::Rewind: return "Rewind: snaps back after" + t.substr(4);
+        case StatusEffect::Kind::RangeDebuff:
+            return "Blind: -" + std::to_string(s.magnitude) + "% range" + t;
+    }
+    return "a status";
+}
+
+std::string describeEffect(const Effect& fx) {
+    switch (fx.type) {
+        case Effect::Type::Damage: return "Deals " + std::to_string(fx.amount) + " damage";
+        case Effect::Type::Heal: return "Heals " + std::to_string(fx.amount) + " HP";
+        case Effect::Type::Push: return "Pushes the target " + std::to_string(fx.amount) + " tiles";
+        case Effect::Type::Pull: return "Pulls the target " + std::to_string(fx.amount) + " tiles";
+        case Effect::Type::ApplyStatus: return statusText(fx.status, fx.polarized);
+        case Effect::Type::Spawn: {
+            const char* g = fx.ground.kind == GroundKind::Wall    ? "wall line"
+                            : fx.ground.kind == GroundKind::Glyph ? "repel glyph"
+                                                                  : "portal";
+            return "Conjures a " + std::string(g) + " (" + std::to_string(fx.ground.duration) +
+                   " turns)";
+        }
+        case Effect::Type::Summon: return "Summons a " + fx.creature;
+        case Effect::Type::Decoy: return "Creates a decoy for " + std::to_string(fx.amount) + " turns";
+    }
+    return "";
+}
+
+// A floating info card for the hovered spell, anchored beside `card` and clamped
+// to the screen. Drawn last in the frame so it sits above every other widget.
+void drawSpellPopup(const SpellDef& d, Rectangle card, int screenW, int screenH) {
+    const Spell& sp = d.spell;
+    std::vector<std::string> lines;
+    lines.push_back("Build cost: " + std::to_string(d.buildCost) + " pts     AP cost: " +
+                    std::to_string(sp.apCost));
+    std::string rng = "Range " + std::to_string(sp.minRange) + "-" + std::to_string(sp.maxRange) +
+                      "     Shape " + shapeName(sp.shape);
+    if (sp.radius > 0) rng += " (r" + std::to_string(sp.radius) + ")";
+    lines.push_back(rng);
+    lines.push_back(std::string(sp.needsLineOfSight ? "Needs line of sight" : "Ignores line of sight") +
+                    "     Cooldown " +
+                    (sp.cooldown > 0 ? std::to_string(sp.cooldown) + " turns" : std::string("none")));
+    lines.push_back("");
+    for (const Effect& fx : sp.effects) {
+        const std::string s = describeEffect(fx);
+        if (!s.empty()) lines.push_back("- " + s);
+    }
+
+    const int titleSize = 18, lineSize = 13, pad = 12, lineH = 18;
+    int wNeed = MeasureText(sp.name.c_str(), titleSize);
+    for (const std::string& s : lines) wNeed = std::max(wNeed, MeasureText(s.c_str(), lineSize));
+    const int popW = wNeed + pad * 2;
+    const int popH = pad * 2 + titleSize + 8 + static_cast<int>(lines.size()) * lineH;
+
+    int px = static_cast<int>(card.x + card.width + 8); // prefer to the card's right
+    int py = static_cast<int>(card.y);
+    if (px + popW > screenW - 8) px = static_cast<int>(card.x) - popW - 8; // flip left if clipped
+    px = std::clamp(px, 8, std::max(8, screenW - popW - 8));
+    py = std::clamp(py, 8, std::max(8, screenH - popH - 8));
+
+    DrawRectangle(px, py, popW, popH, Color{16, 18, 26, 246});
+    DrawRectangleLines(px, py, popW, popH, kAccent);
+    DrawText(sp.name.c_str(), px + pad, py + pad, titleSize, kText);
+    int ly = py + pad + titleSize + 8;
+    for (const std::string& s : lines) {
+        DrawText(s.c_str(), px + pad, ly, lineSize, s.rfind("- ", 0) == 0 ? kGood : kMuted);
+        ly += lineH;
+    }
+}
+
 } // namespace
 
 BuildEditorScreen::BuildEditorScreen(const SpellCatalog& catalog, BuildRepository& repo,
@@ -205,10 +291,13 @@ BuildEditorScreen::Result BuildEditorScreen::runFrame(int screenW, int screenH, 
     const float cardW = 172.0f, cardH = 80.0f, gap = 10.0f;
     const int cols = std::max(1, static_cast<int>((gridW + gap) / (cardW + gap)));
     int shown = 0;
+    const SpellDef* hoveredDef = nullptr; // for the info popup (drawn last, on top)
+    Rectangle hoveredRect{};
     for (const SpellDef& d : catalog_.all()) {
         if (!matchesFilter(d)) continue;
         const int col = shown % cols, gridRow = shown / cols;
         Rectangle card{gx0 + col * (cardW + gap), gy0 + gridRow * (cardH + gap), cardW, cardH};
+        if (hovered(card, m)) { hoveredDef = &d; hoveredRect = card; }
         const bool banned = isBanned(d.key);
         const bool picked = hasSpell(d.id);
         Color base = banned ? kBg
@@ -319,6 +408,9 @@ BuildEditorScreen::Result BuildEditorScreen::runFrame(int screenW, int screenH, 
 
     if (!statusMsg_.empty())
         DrawText(statusMsg_.c_str(), 160, static_cast<int>(by) + 8, 14, kMuted);
+
+    // Hovered-spell info popup, drawn last so it floats above every widget.
+    if (hoveredDef) drawSpellPopup(*hoveredDef, hoveredRect, screenW, screenH);
 
     return result;
 }

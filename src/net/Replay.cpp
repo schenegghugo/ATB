@@ -38,9 +38,14 @@ std::string intentToken(const net::Intent& in) {
     switch (in.kind) {
         case net::Intent::Kind::Move:
             return "m" + std::to_string(in.target.x) + "," + std::to_string(in.target.y);
-        case net::Intent::Kind::Cast:
-            return "c" + std::to_string(in.spellIdx) + "@" + std::to_string(in.target.x) + "," +
-                   std::to_string(in.target.y);
+        case net::Intent::Kind::Cast: {
+            std::string s = "c" + std::to_string(in.spellIdx) + "@" +
+                            std::to_string(in.target.x) + "," + std::to_string(in.target.y);
+            // A player-placed portal exit rides after a '>' (whitespace-free token).
+            if (in.hasTarget2)
+                s += ">" + std::to_string(in.target2.x) + "," + std::to_string(in.target2.y);
+            return s;
+        }
         case net::Intent::Kind::EndTurn:
             return ".";
     }
@@ -61,9 +66,18 @@ bool parseIntentToken(const std::string& t, net::Intent& out) {
         char* end = nullptr;
         const long slot = std::strtol(t.c_str() + 1, &end, 10);
         if (end != t.c_str() + at) return false;
-        Vec2i tgt;
-        if (!parseXY(t.substr(at + 1), tgt)) return false;
-        out = net::Intent::cast(static_cast<int>(slot), tgt);
+        const auto gt = t.find('>', at); // optional ">x2,y2" portal exit
+        Vec2i entry;
+        if (!parseXY(t.substr(at + 1, gt == std::string::npos ? std::string::npos : gt - at - 1),
+                     entry))
+            return false;
+        if (gt == std::string::npos) {
+            out = net::Intent::cast(static_cast<int>(slot), entry);
+            return true;
+        }
+        Vec2i exit;
+        if (!parseXY(t.substr(gt + 1), exit)) return false;
+        out = net::Intent::castTo(static_cast<int>(slot), entry, exit);
         return true;
     }
     return false;

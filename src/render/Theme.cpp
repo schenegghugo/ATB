@@ -35,6 +35,7 @@ constexpr KeySlot kSlots[] = {
     {"wall", &Theme::wall},
     {"obstacle", &Theme::obstacle},
     {"reach", &Theme::reach},
+    {"castable", &Theme::castable},
     {"hover", &Theme::hover},
     {"zoneOk", &Theme::zoneOk},
     {"zoneBad", &Theme::zoneBad},
@@ -71,10 +72,23 @@ ThemeLoad loadThemeFromString(const std::string& text) {
         return out;
     }
 
-    jsonread::checkAllowed(root, {"schema", "name", "version", "colors"}, "root", e);
+    jsonread::checkAllowed(root, {"schema", "name", "version", "colors", "metrics"}, "root", e);
 
     const int schema = jsonread::optInt(root, "schema", 1, "root", e);
     if (schema != kThemeSchemaVersion) e.push_back("root: unsupported \"schema\" (expected 1)");
+
+    // Optional layout metrics (resizable-UI extension). Absent = built-in density.
+    if (const json::Value* metrics = root.find("metrics")) {
+        if (!metrics->isObject()) {
+            e.push_back("metrics: expected an object");
+        } else {
+            jsonread::checkAllowed(*metrics, {"tileSize", "uiScale"}, "metrics", e);
+            out.theme.metrics.tileSize =
+                jsonread::optInt(*metrics, "tileSize", out.theme.metrics.tileSize, "metrics", e);
+            out.theme.metrics.uiScale =
+                jsonread::optDouble(*metrics, "uiScale", out.theme.metrics.uiScale, "metrics", e);
+        }
+    }
     if (const json::Value* n = root.find("name"); n && n->isString()) out.name = n->asString();
     if (const json::Value* v = root.find("version"); v && v->isString())
         out.version = v->asString();

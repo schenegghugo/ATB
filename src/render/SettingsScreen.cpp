@@ -51,6 +51,18 @@ SettingsScreen::Result SettingsScreen::runFrame(int screenW, int screenH, const 
 
     Result result = Result::None;
 
+    // UI scale — the resizable-board control (saved to settings.json, applied live).
+    DrawText("UI SCALE  (board size — saved)", static_cast<int>(x), static_cast<int>(y), 15,
+             ui::kAccent);
+    {
+        Rectangle minus{x + 260, y - 6, 34, 28}, plus{x + 386, y - 6, 34, 28};
+        if (ui::button(minus, "-", m, ui::kPanel)) result = Result::ScaleDown;
+        DrawText(TextFormat("%.0f%%", view.uiScale * 100.0f), static_cast<int>(x) + 312,
+                 static_cast<int>(y), 18, ui::kText);
+        if (ui::button(plus, "+", m, ui::kPanel)) result = Result::ScaleUp;
+    }
+    y += 44.0f;
+
     // Two picker columns, side by side: themes | packs.
     const float colW = 260.0f;
     const float themesX = x, packsX = x + colW + 48.0f;

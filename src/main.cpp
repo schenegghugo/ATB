@@ -15,7 +15,8 @@
 //     Space/Enter  : end the player's turn
 //     R            : regenerate the arena (keep builds)
 //     Tab          : return to the build editor
-//     Esc          : quit
+//     Esc          : open the pause menu (Resume / Settings / GitHub / Quit);
+//                    in battle it first cancels a half-placed portal or decoy
 //
 #include "core/Battle.h"
 #include "core/Build.h"
@@ -55,6 +56,12 @@
 
 #include "raylib.h"
 
+// Build version, compiled in from the git tag by CMake (see the tactical_battler
+// target). Defaults to "dev" for ad-hoc builds without the define.
+#ifndef ATB_VERSION
+#define ATB_VERSION "dev"
+#endif
+
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -70,7 +77,10 @@ using namespace tb;
 
 namespace {
 
-enum class AppState { Menu, Editor, Connect, Lobby, ReadyCheck, Waiting, Battle, Settings };
+enum class AppState { Menu, Editor, Connect, Lobby, ReadyCheck, Waiting, Battle, Settings, Paused };
+
+// The in-game pause menu (Esc anywhere) links out to the project page.
+inline constexpr const char* kGithubUrl = "https://github.com/schenegghugo/ATB";
 
 // A blocking network call moved off the render thread (async connect / join). The
 // worker fills the result under `mu` and flips `done`; the UI polls each frame.
@@ -136,9 +146,22 @@ std::string catalogKey(const SpellCatalog& catalog, const std::string& spellName
     return "";
 }
 
+// A portal-type spell places a Portal ground effect — the GUI casts it with an
+// explicit two-click entry+exit (see the battle input loop) rather than one tile.
+// `portalReach` is how far (Manhattan) the exit may sit from the entry; 0 = not a
+// portal. It mirrors the core cap in Battle::spawnGround (GroundSpec::magnitude).
+int portalReach(const Spell& sp) {
+    for (const Effect& fx : sp.effects)
+        if (fx.type == Effect::Type::Spawn && fx.ground.kind == GroundKind::Portal)
+            return fx.ground.magnitude;
+    return 0;
+}
+bool isPortalSpell(const Spell& sp) { return portalReach(sp) > 0; }
+
 } // namespace
 
 int main() {
+    TraceLog(LOG_INFO, "Tactical Battler %s", ATB_VERSION);
     Session session;
 
     // Load the spell catalog from data/catalog.json. Policy:
@@ -243,11 +266,17 @@ int main() {
     // palettes; "" or a broken file → the built-in defaults. Returns false
     // (with a status message) so the Settings screen can surface a bad pick.
     std::string settingsStatus;
-    auto applyThemeByName = [&settingsStatus](const std::string& name) -> bool {
+    // Battle-board metrics from the active theme (resizable-UI extension); the
+    // player's prefs.uiScale multiplies these. applyThemeByName refreshes them.
+    int themeTileSize = render::Theme{}.metrics.tileSize;
+    double themeScale = render::Theme{}.metrics.uiScale;
+    auto applyThemeByName = [&](const std::string& name) -> bool {
         if (name.empty()) {
             const render::Theme defaults;
             render::ui::applyTheme(defaults);
             render::applyBattleTheme(defaults);
+            themeTileSize = defaults.metrics.tileSize;
+            themeScale = defaults.metrics.uiScale;
             return true;
         }
         const std::string dir = render::siblingDir("themes");
@@ -262,12 +291,28 @@ int main() {
         }
         render::ui::applyTheme(tl.theme);
         render::applyBattleTheme(tl.theme);
+        themeTileSize = tl.theme.metrics.tileSize;
+        themeScale = tl.theme.metrics.uiScale;
         TraceLog(LOG_INFO, "Applied theme '%s' (%s)", name.c_str(), tl.name.c_str());
         return true;
     };
     if (!applyThemeByName(prefs.theme)) prefs.theme.clear(); // bad pref → defaults
 
-    render::Layout layout;
+    // Effective board layout = theme density × theme scale × the player's prefs
+    // scale, with the remaining metrics derived from the tile size. Recomputed
+    // wherever the scale can change so a resize applies live.
+    auto makeLayout = [&]() {
+        render::Layout l;
+        const double f = std::clamp(themeScale * static_cast<double>(prefs.uiScale), 0.6, 1.8);
+        l.tileSize = std::clamp(static_cast<int>(std::lround(themeTileSize * f)), 16, 120);
+        const double s = l.tileSize / 36.0;
+        l.originX = static_cast<int>(std::lround(16 * s));
+        l.originY = static_cast<int>(std::lround(28 * s));
+        l.spellBarHeight = static_cast<int>(std::lround(46 * s));
+        l.hudHeight = static_cast<int>(std::lround(96 * s));
+        return l;
+    };
+    render::Layout layout = makeLayout();
     // Open large enough for both the arena (sized from the ruleset) and the
     // (responsive) build editor; the editor reads the live window size each frame,
     // so it adapts to resizes / tiling window managers (e.g. Sway).
@@ -278,6 +323,7 @@ int main() {
 
     SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE);
     InitWindow(sw, sh, "Tactical Battler — POC");
+    SetExitKey(KEY_NULL); // Esc opens the pause menu instead of closing the window
     if (!IsWindowReady()) {
         // No display/GL context (e.g. headless, or Wayland without the Wayland
         // backend compiled in). Bail cleanly instead of crashing in the GL calls.
@@ -347,6 +393,12 @@ int main() {
     render::Animator animator; // per-entity event-clip playback (cast flashes, §2.4)
     std::string status;
     int selectedSpell = 0;
+    // Which battle-layout grip is being dragged (board corner / column dividers).
+    enum class LayoutDrag { None, Board, Clock, Chat } layoutDrag = LayoutDrag::None;
+    // Two-click portal: the placed entry tile awaiting an exit (nullopt = not placing).
+    std::optional<Vec2i> portalPending;
+    AppState pauseReturn = AppState::Menu;    // where Esc's pause menu returns to
+    AppState settingsReturn = AppState::Menu; // where the Settings "Back" returns to
     int logScroll = 0;             // combat-log scrollback (0 = pinned to newest)
     bool onlineMatch = false;      // this battle came from the lobby (→ end screen returns there)
     float turnClock = 0.0f;        // seconds left in the active seat's move (timed matches)
@@ -473,10 +525,58 @@ int main() {
 
     while (!WindowShouldClose() && !quit) {
         const float dt = GetFrameTime();
+        layout = makeLayout(); // pick up a live UI-scale change from Settings
+
+        // Esc, everywhere: sub-modal actions cancel first (portal placement, the
+        // decoy prompt), otherwise Esc toggles the pause menu.
+        if (IsKeyPressed(KEY_ESCAPE)) {
+            if (state == AppState::Battle && portalPending) {
+                portalPending.reset();
+                status = "Portal cancelled.";
+            } else if (state == AppState::Battle && pendingDecoy) {
+                pendingDecoy.reset();
+                status = "Decoy cast cancelled.";
+            } else if (state == AppState::Paused) {
+                state = pauseReturn; // Esc closes the pause menu
+            } else if (state == AppState::Settings) {
+                state = settingsReturn; // Esc = Back on the settings screen
+            } else {
+                pauseReturn = state; // open the pause menu from anywhere else
+                state = AppState::Paused;
+            }
+        }
+
+        if (state == AppState::Paused) {
+            BeginDrawing();
+            const int W = GetScreenWidth(), H = GetScreenHeight();
+            DrawRectangle(0, 0, W, H, Color{0, 0, 0, 200});
+            const char* title = "PAUSED";
+            DrawText(title, (W - MeasureText(title, 40)) / 2, static_cast<int>(H * 0.24f), 40,
+                     render::ui::kText);
+            const Vector2 mp = GetMousePosition();
+            const float bw = 280.0f, bh = 46.0f, gap = 12.0f, bx = (W - bw) / 2.0f;
+            float by = H * 0.24f + 80.0f;
+            if (render::ui::button({bx, by, bw, bh}, "Resume", mp, render::ui::kAccent))
+                state = pauseReturn;
+            by += bh + gap;
+            if (render::ui::button({bx, by, bw, bh}, "Settings", mp, render::ui::kPanel)) {
+                settingsReturn = AppState::Paused;
+                state = AppState::Settings;
+            }
+            by += bh + gap;
+            if (render::ui::button({bx, by, bw, bh}, "Open GitHub page", mp, render::ui::kPanel))
+                OpenURL(kGithubUrl);
+            by += bh + gap;
+            if (render::ui::button({bx, by, bw, bh}, "Quit", mp, render::ui::kPanel)) quit = true;
+            DrawText("Esc to resume", (W - MeasureText("Esc to resume", 14)) / 2,
+                     static_cast<int>(by) + bh + 18, 14, render::ui::kMuted);
+            EndDrawing();
+            continue;
+        }
 
         if (state == AppState::Menu) {
             BeginDrawing();
-            const auto r = menu.runFrame(GetScreenWidth(), GetScreenHeight());
+            const auto r = menu.runFrame(GetScreenWidth(), GetScreenHeight(), ATB_VERSION);
             EndDrawing();
             switch (r) {
                 case render::MainMenuScreen::Result::LocalMatch:  editorMode = EMode::Local; editorReturn = AppState::Menu; state = AppState::Editor; break;
@@ -487,6 +587,7 @@ int main() {
                     // runs shows up without a restart (ricing-friendly).
                     themesList = listThemes(render::siblingDir("themes"));
                     packsList = listPacks(render::siblingDir("packs"));
+                    settingsReturn = AppState::Menu;
                     state = AppState::Settings;
                     break;
                 case render::MainMenuScreen::Result::Quit:        quit = true; break;
@@ -508,6 +609,7 @@ int main() {
             sv.packs = packsList;
             sv.curTheme = prefs.theme;
             sv.curPack = prefs.pack;
+            sv.uiScale = prefs.uiScale;
             sv.status = settingsStatus;
             BeginDrawing();
             const auto r = settings.runFrame(GetScreenWidth(), GetScreenHeight(), sv);
@@ -516,7 +618,7 @@ int main() {
             // palette/pack) and reports via settingsStatus.
             using SR = render::SettingsScreen::Result;
             if (r == SR::Back) {
-                state = AppState::Menu;
+                state = settingsReturn; // back to the menu, or the pause menu that opened it
             } else if (r == SR::SetTheme) {
                 if (applyThemeByName(settings.picked())) {
                     prefs.theme = settings.picked();
@@ -533,6 +635,17 @@ int main() {
                                          ? "Pack applied + saved."
                                          : "Pack applied (couldn't write settings.json).";
                 }
+            } else if (r == SR::ScaleUp || r == SR::ScaleDown) {
+                prefs.uiScale = std::clamp(prefs.uiScale + (r == SR::ScaleUp ? 0.1f : -0.1f),
+                                           0.7f, 1.6f);
+                layout = makeLayout();
+                // Refit the window so the resized board stays fully visible.
+                const Grid ag(session.ruleset.arena.width, session.ruleset.arena.height);
+                SetWindowSize(std::max(layout.screenWidth(ag), 1180),
+                              std::max(layout.screenHeight(ag), 720));
+                settingsStatus = savePrefsToFile(prefs, "settings.json")
+                                     ? TextFormat("UI scale %.0f%% — saved.", prefs.uiScale * 100.0f)
+                                     : "UI scale set (couldn't write settings.json).";
             }
             continue;
         }
@@ -813,16 +926,67 @@ int main() {
             chatFocused = false;
         }
 
+        // --- Interactive layout: drag the board's corner or a column divider to
+        // resize the battle panels; the new ratios persist to settings.json on
+        // release. A live drag suppresses the board's move/cast handling below.
+        {
+            render::ViewState lg;
+            lg.windowW = GetScreenWidth();
+            lg.windowH = GetScreenHeight();
+            lg.showClock = (clockSec > 0 || chessClock) && !finished;
+            lg.showChat = source->chatEnabled();
+            lg.clockHeight = prefs.clockHeight;
+            lg.chatFraction = prefs.chatFraction;
+            const Grid& bg = source->battle().grid();
+            const int mx = GetMouseX(), my = GetMouseY();
+            if (layoutDrag == LayoutDrag::None && !pendingDecoy && !chatFocused &&
+                IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                if (render::boardResizeHandle(layout, bg).contains(mx, my))
+                    layoutDrag = LayoutDrag::Board;
+                else if (render::clockDivider(layout, bg, lg).contains(mx, my))
+                    layoutDrag = LayoutDrag::Clock;
+                else if (render::chatDivider(layout, bg, lg).contains(mx, my))
+                    layoutDrag = LayoutDrag::Chat;
+            }
+            if (layoutDrag != LayoutDrag::None) {
+                if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+                    if (layoutDrag == LayoutDrag::Board) {
+                        const double baseTile = std::max(1.0, themeTileSize * themeScale);
+                        const double wantTile =
+                            static_cast<double>(mx - layout.originX) / std::max(1, bg.width());
+                        prefs.uiScale = std::clamp(static_cast<float>(wantTile / baseTile), 0.7f, 1.6f);
+                        layout = makeLayout(); // board follows the cursor this frame
+                    } else if (layoutDrag == LayoutDrag::Clock) {
+                        prefs.clockHeight = std::clamp(my - layout.originY, 66, 240);
+                    } else if (layoutDrag == LayoutDrag::Chat) {
+                        const int top = layout.originY + prefs.clockHeight + 6;
+                        const int avail = lg.windowH - 8 - top;
+                        if (avail > 40)
+                            prefs.chatFraction =
+                                std::clamp(static_cast<float>(my - top) / avail, 0.15f, 0.85f);
+                    }
+                } else { // released — persist the layout ratios
+                    layoutDrag = LayoutDrag::None;
+                    savePrefsToFile(prefs, "settings.json");
+                    status = "Layout saved.";
+                }
+            }
+        }
+        const bool draggingLayout = layoutDrag != LayoutDrag::None;
+
         // Which spell button (if any) the cursor is over — set inside the player
         // block below; also read later when composing the view (hover tooltip).
         int hoveredSpell = -1;
 
-        if (playerControl && !chatFocused && !pendingDecoy) {
+        if (playerControl && !chatFocused && !pendingDecoy && !draggingLayout) {
             const EntityId me = active;
             const int spellCount = static_cast<int>(source->battle().unit(me).spells.size());
             for (int k = 0; k < spellCount && k < 9; ++k)
                 if (IsKeyPressed(KEY_ONE + k)) selectedSpell = k;
             if (selectedSpell >= spellCount) selectedSpell = 0;
+            // Switching off the portal spell abandons a half-placed portal.
+            if (portalPending && !isPortalSpell(source->battle().unit(me).spells[selectedSpell]))
+                portalPending.reset();
 
             // Hit-test the spell buttons against the same rects the renderer draws.
             for (int s = 0; s < spellCount; ++s)
@@ -840,20 +1004,46 @@ int main() {
                 status = TextFormat("Selected %s.",
                                     source->battle().unit(me).spells[selectedSpell].name.c_str());
             } else if (hoveredValid && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                portalPending.reset(); // moving abandons a half-placed portal
                 if (auto s = source->submit(net::Intent::move(hovered))) status = *s;
             }
             if (hoveredValid && IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
-                const net::Intent in = net::Intent::cast(selectedSpell, hovered);
-                // A decoy cast commits to a hidden choice up-front (CR.6) — prompt
-                // for it instead of submitting straight away.
-                if (source->needsDecoyChoice(in)) {
-                    pendingDecoy = in;
-                    status = "Decoy: commit your secret — stay the ORIGINAL or swap to the TWIN.";
-                } else if (auto s = source->submit(in)) {
-                    status = *s;
+                const Spell& sel = source->battle().unit(me).spells[selectedSpell];
+                if (isPortalSpell(sel)) {
+                    // Two clicks: the first right-click places the ENTRY (a legal
+                    // cast tile), the second places the EXIT (any walkable tile) and
+                    // fires the cast — the core teleports whoever stands on the entry.
+                    if (!portalPending) {
+                        if (source->battle().canCast(me, selectedSpell, hovered)) {
+                            portalPending = hovered;
+                            status = "Portal entry placed — right-click the exit tile (Esc cancels).";
+                        } else {
+                            status = "Can't open a portal there.";
+                        }
+                    } else if (source->battle().grid().isWalkable(hovered) &&
+                               hovered != *portalPending &&
+                               manhattan(*portalPending, hovered) <= portalReach(sel)) {
+                        if (auto s = source->submit(
+                                net::Intent::castTo(selectedSpell, *portalPending, hovered)))
+                            status = *s;
+                        portalPending.reset();
+                    } else {
+                        status = "Pick a walkable exit within the portal's reach (Esc cancels).";
+                    }
+                } else {
+                    const net::Intent in = net::Intent::cast(selectedSpell, hovered);
+                    // A decoy cast commits to a hidden choice up-front (CR.6) — prompt
+                    // for it instead of submitting straight away.
+                    if (source->needsDecoyChoice(in)) {
+                        pendingDecoy = in;
+                        status = "Decoy: commit your secret — stay the ORIGINAL or swap to the TWIN.";
+                    } else if (auto s = source->submit(in)) {
+                        status = *s;
+                    }
                 }
             }
             if (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER)) {
+                portalPending.reset();
                 source->submit(net::Intent::endTurn());
             }
         }
@@ -876,6 +1066,9 @@ int main() {
         view.windowW = GetScreenWidth();
         view.windowH = GetScreenHeight();
         view.logScroll = logScroll;
+        view.clockHeight = prefs.clockHeight;
+        view.chatFraction = prefs.chatFraction;
+        view.showLayoutHandles = true; // draggable grips on the board + column
         // Two-clock strip atop the log column (timed matches): per-move, my time
         // ticks on my turn and the idle side shows the full window; a chess clock
         // shows both seats' authoritative remaining banks.
@@ -909,7 +1102,28 @@ int main() {
             // Hovering a button previews *that* spell; otherwise show the selected one.
             view.spellLabel = spellLabel(u, hoveredSpell >= 0 ? hoveredSpell : selectedSpell);
             for (const Spell& sp : u.spells) view.spellIconKeys.push_back(catalogKey(session.catalog, sp.name));
-            if (hoveredValid && selectedSpell < static_cast<int>(u.spells.size())) {
+            if (selectedSpell < static_cast<int>(u.spells.size())) {
+                const Grid& g = source->battle().grid();
+                if (portalPending) {
+                    // Exit placement: green = every walkable tile within the portal's
+                    // reach of the entry (matching the core cap); mark the entry.
+                    const int reach = portalReach(u.spells[selectedSpell]);
+                    for (int y = 0; y < g.height(); ++y)
+                        for (int x = 0; x < g.width(); ++x)
+                            if (g.isWalkable({x, y}) && Vec2i{x, y} != *portalPending &&
+                                manhattan(*portalPending, {x, y}) <= reach)
+                                view.castable.push_back({x, y});
+                    view.portalEntry = *portalPending;
+                    view.portalEntrySet = true;
+                } else {
+                    // Green field: every tile the selected spell may legally target.
+                    for (int y = 0; y < g.height(); ++y)
+                        for (int x = 0; x < g.width(); ++x)
+                            if (source->battle().canCast(me, selectedSpell, {x, y}))
+                                view.castable.push_back({x, y});
+                }
+            }
+            if (!portalPending && hoveredValid && selectedSpell < static_cast<int>(u.spells.size())) {
                 view.spellCastable = source->battle().canCast(me, selectedSpell, hovered);
                 view.spellZone = source->battle().affectedTiles(u.spells[selectedSpell], u.pos, hovered);
             }

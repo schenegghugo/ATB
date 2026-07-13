@@ -15,6 +15,9 @@ namespace tb::render {
 
 namespace {
 
+// Duration (seconds) of the damage shake + red flash clip on a struck unit.
+constexpr double kHitClip = 0.35;
+
 // Semantic keys a pack targets for tiles (sprites are dotted; palette is short).
 struct TileKeys { const char* sprite; const char* palette; };
 TileKeys tileKeys(TileType t) {
@@ -35,6 +38,7 @@ Color kFloor{30, 34, 46, 255};
 Color kWall{70, 78, 96, 255};
 Color kObstacle{120, 96, 60, 255};
 Color kReach{60, 110, 200, 90};
+Color kCastable{70, 200, 120, 95};   // legal target tiles for the selected spell
 Color kHover{230, 230, 240, 110};
 Color kZoneOk{230, 140, 50, 120};   // selected spell would land
 Color kZoneBad{120, 60, 60, 110};    // selected spell can't be cast
@@ -204,12 +208,14 @@ RightColumn rightColumn(const Layout& l, const Grid& g, const ViewState& view) {
     r.w = view.windowW - r.x0 - 8;
     if (r.w < 200) return r;
     r.fits = true;
-    r.clockH = view.showClock ? 74 : 0; // 68px strip + 6px gap
+    r.clockH = view.showClock ? view.clockHeight + 6 : 0; // strip + gap
     const int top = l.originY + r.clockH;
     const int avail = view.windowH - 8 - top;
     if (view.showChat) {
         r.chatY = top;
-        r.chatH = avail / 2;
+        // Chat/log split from the persisted ratio, but never let either collapse.
+        r.chatH = std::clamp(static_cast<int>(avail * view.chatFraction), 70,
+                             std::max(70, avail - 90));
         const int inputH = 28;
         r.input = {r.x0 + 6, r.chatY + r.chatH - inputH - 6, r.w - 12, inputH};
         r.logY = top + r.chatH + 6;
@@ -221,6 +227,14 @@ RightColumn rightColumn(const Layout& l, const Grid& g, const ViewState& view) {
     return r;
 }
 
+// A draggable-divider grip: a hairline across the strip with three centre dots.
+void drawDividerGrip(const Rect& d) {
+    if (d.w == 0) return;
+    const int cy = d.y + d.h / 2, cx = d.x + d.w / 2;
+    DrawLine(d.x + 6, cy, d.x + d.w - 6, cy, kGridLine);
+    for (int i = -1; i <= 1; ++i) DrawCircle(cx + i * 8, cy, 2, kTextDim);
+}
+
 void drawCombatLog(const Layout& l, const Battle& battle, const ViewState& view) {
     const Grid& g = battle.grid();
     const RightColumn r = rightColumn(l, g, view);
@@ -228,7 +242,7 @@ void drawCombatLog(const Layout& l, const Battle& battle, const ViewState& view)
 
     // Move-clock strip atop the column: two big MM:SS side by side (YOU | OPPONENT).
     if (view.showClock) {
-        const int y0 = l.originY, stripH = 68;
+        const int y0 = l.originY, stripH = view.clockHeight;
         DrawRectangle(r.x0, y0, r.w, stripH, Color{12, 14, 20, 235});
         DrawRectangleLines(r.x0, y0, r.w, stripH, kGridLine);
         const int half = r.w / 2;
@@ -294,6 +308,12 @@ void drawCombatLog(const Layout& l, const Battle& battle, const ViewState& view)
         DrawText(lines[start + i].first.c_str(), r.x0 + 8, top + i * lineH, 13, lines[start + i].second);
     if (start < maxStart) // more history above the fold
         DrawText("^ scroll", r.x0 + r.w - MeasureText("^ scroll", 12) - 8, r.logY + 8, 12, kTextDim);
+
+    // Drag grips between the stacked panels (clock/chat/log).
+    if (view.showLayoutHandles) {
+        drawDividerGrip(clockDivider(l, g, view));
+        drawDividerGrip(chatDivider(l, g, view));
+    }
 }
 
 } // namespace
@@ -301,6 +321,24 @@ void drawCombatLog(const Layout& l, const Battle& battle, const ViewState& view)
 Rect chatInputRect(const Layout& l, const Grid& g, const ViewState& view) {
     const RightColumn r = rightColumn(l, g, view);
     return (r.fits && view.showChat) ? r.input : Rect{};
+}
+
+Rect boardResizeHandle(const Layout& l, const Grid& g) {
+    const int x = l.originX + g.width() * l.tileSize;
+    const int y = l.originY + g.height() * l.tileSize;
+    return Rect{x - 20, y - 20, 20, 20}; // grip tucked into the board's SE corner
+}
+
+Rect clockDivider(const Layout& l, const Grid& g, const ViewState& view) {
+    if (!view.showClock) return {};
+    const RightColumn r = rightColumn(l, g, view);
+    return r.fits ? Rect{r.x0, l.originY + view.clockHeight - 3, r.w, 11} : Rect{};
+}
+
+Rect chatDivider(const Layout& l, const Grid& g, const ViewState& view) {
+    if (!view.showChat) return {};
+    const RightColumn r = rightColumn(l, g, view);
+    return r.fits ? Rect{r.x0, r.logY - 9, r.w, 12} : Rect{};
 }
 
 Rect spellSlotRect(const Layout& l, const Grid& g, int slot, int slotCount) {
@@ -366,9 +404,25 @@ void drawFrame(const Layout& l, const Battle& battle, const ViewState& view,
         DrawRectangleRec(tileRect(l, p), kReach);
     }
 
-    // --- Selected-spell zone preview ----------------------------------------
+    // --- Castable tiles for the selected spell (green target field) ----------
+    for (Vec2i p : view.castable) {
+        Rectangle r = tileRect(l, p);
+        DrawRectangleRec(r, kCastable);
+        DrawRectangleLinesEx(r, 1.0f, Fade(kCastable, 1.0f));
+    }
+
+    // --- Selected-spell zone preview (the AoE at the hovered tile) -----------
     for (Vec2i p : view.spellZone) {
         DrawRectangleRec(tileRect(l, p), view.spellCastable ? kZoneOk : kZoneBad);
+    }
+
+    // --- Portal entry marker (two-click placement: exit pending) -------------
+    if (view.portalEntrySet) {
+        const Vector2 c = tileCenter(l, view.portalEntry);
+        DrawCircleV(c, l.tileSize * 0.32f, Fade(kPortal, 0.75f));
+        DrawCircleLines(static_cast<int>(c.x), static_cast<int>(c.y), l.tileSize * 0.32f, kPortal);
+        DrawText("IN", static_cast<int>(c.x) - MeasureText("IN", 12) / 2,
+                 static_cast<int>(c.y) - 6, 12, kText);
     }
 
     // --- Hover ---------------------------------------------------------------
@@ -391,9 +445,18 @@ void drawFrame(const Layout& l, const Battle& battle, const ViewState& view,
         if (!e.alive()) continue;
         // How far into a cast clip this unit is (−1 = not casting); ambient uses `now`.
         const double castT = anim ? anim->castElapsed(id, now) : -1.0;
+        // Damage feedback: a brief horizontal shake + red flash right after a hit.
+        const double hitT = anim ? anim->hitElapsed(id, now) : -1.0;
+        float shakeX = 0.0f, flash = 0.0f;
+        if (hitT >= 0.0 && hitT < kHitClip) {
+            const float k = 1.0f - static_cast<float>(hitT) / kHitClip; // 1 → 0 decay
+            shakeX = std::sin(static_cast<float>(hitT) * 60.0f) * l.tileSize * 0.16f * k;
+            flash = k;
+        }
         Color color = e.team == Faction::Player ? kPlayer : kEnemy;
         if (e.invisible()) color = Fade(color, 0.35f); // concealed: drawn ghosted
         Vector2 c = tileCenter(l, e.pos);
+        c.x += shakeX;
         const Rectangle dest{c.x - l.tileSize * 0.5f, c.y - l.tileSize * 0.5f,
                              static_cast<float>(l.tileSize), static_cast<float>(l.tileSize)};
         // A summon/object shares its sprite across teams (a brute looks like a
@@ -422,6 +485,9 @@ void drawFrame(const Layout& l, const Battle& battle, const ViewState& view,
             DrawCircleLines(static_cast<int>(c.x), static_cast<int>(c.y),
                             l.tileSize * 0.36f, Color{0, 0, 0, 160});
         }
+        // Red hit-flash overlay, fading with the shake.
+        if (flash > 0.0f)
+            DrawCircleV(c, l.tileSize * 0.42f, Fade(Color{240, 60, 50, 255}, flash * 0.55f));
         // Active status effects as small markers above the unit.
         for (std::size_t s = 0; s < e.statuses.size(); ++s) {
             DrawRectangle(static_cast<int>(c.x) - 12 + static_cast<int>(s) * 8,
@@ -441,6 +507,15 @@ void drawFrame(const Layout& l, const Battle& battle, const ViewState& view,
         Color color = e.team == Faction::Player ? kPlayer : kEnemy;
         drawEntityPanel(l, g, e, color, slot, slotCount,
                         battle.phase() != Phase::Finished && id == activeId);
+    }
+
+    // Board resize grip — diagonal ticks in the board's SE corner.
+    if (view.showLayoutHandles) {
+        const Rect h = boardResizeHandle(l, g);
+        const float x1 = static_cast<float>(h.x + h.w), y1 = static_cast<float>(h.y + h.w);
+        for (int o = 3; o <= 15; o += 6)
+            DrawLineEx({x1 - static_cast<float>(o), y1 - 2.0f},
+                       {x1 - 2.0f, y1 - static_cast<float>(o)}, 2.0f, kTextDim);
     }
 
     drawSpellBar(l, battle, view, pack);
@@ -471,6 +546,7 @@ void applyBattleTheme(const Theme& t) {
     kWall = c(t.wall);
     kObstacle = c(t.obstacle);
     kReach = c(t.reach);
+    kCastable = c(t.castable);
     kHover = c(t.hover);
     kZoneOk = c(t.zoneOk);
     kZoneBad = c(t.zoneBad);

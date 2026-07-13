@@ -56,6 +56,24 @@ int main() {
     {
         const ThemeLoad r = loadThemeFromString(R"({ "schema": 1 })");
         CHECK(r.ok, "colors object is optional");
+        const Theme defaults;
+        CHECK(r.theme.metrics.tileSize == defaults.metrics.tileSize &&
+                  r.theme.metrics.uiScale == defaults.metrics.uiScale,
+              "metrics default when the block is absent");
+    }
+
+    std::printf("The metrics block overrides layout sizing (resizable-UI extension)\n");
+    {
+        const ThemeLoad r = loadThemeFromString(R"({
+            "schema": 1, "metrics": { "tileSize": 44, "uiScale": 1.25 }
+        })");
+        CHECK(r.ok, "theme with metrics loads");
+        CHECK(r.theme.metrics.tileSize == 44, "tileSize parsed");
+        CHECK(r.theme.metrics.uiScale == 1.25, "uiScale parsed");
+        CHECK(rejectsWith(R"({ "metrics": { "tile": 44 } })", "unknown field"),
+              "unknown metrics key is an error");
+        CHECK(rejectsWith(R"({ "metrics": [] })", "expected an object"),
+              "metrics must be an object");
     }
 
     std::printf("Malformed themes are rejected with context\n");

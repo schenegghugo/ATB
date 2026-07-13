@@ -411,7 +411,7 @@ std::vector<EntityId> Battle::unitsAt(const std::vector<Vec2i>& tiles) const {
 }
 
 void Battle::spawnGround(const GroundSpec& spec, Faction owner, Vec2i casterPos, Vec2i target,
-                         const std::vector<Vec2i>& zone) {
+                         const std::vector<Vec2i>& zone, std::optional<Vec2i> portalExit) {
     GroundEffect g;
     g.owner = owner;
     g.remainingTurns = spec.duration;
@@ -430,23 +430,30 @@ void Battle::spawnGround(const GroundSpec& spec, Faction owner, Vec2i casterPos,
             break;
         case GroundKind::Portal: {
             g.kind = GroundKind::Portal;
-            // Traced from the caster: the targeted tile is the ENTRY, and the
-            // exit sits `magnitude` tiles further along the caster→entry ray,
-            // clamped to the last unblocked tile (walls end the trace). Units
-            // don't block the trace — occupancy is checked at teleport time.
             g.tiles = {target};
-            const Vec2i dir = cardinalStep(casterPos, target);
-            const std::vector<Vec2i> walls = wallTiles();
-            Vec2i exit = target;
-            for (int i = 0; i < spec.magnitude; ++i) {
-                const Vec2i next{exit.x + dir.x, exit.y + dir.y};
-                bool blocked = !grid_.isWalkable(next);
-                for (Vec2i w : walls)
-                    if (w == next) blocked = true;
-                if (blocked) break;
-                exit = next;
+            // Player-placed exit: any walkable tile other than the entry, within the
+            // portal's reach (`magnitude` tiles — the same distance the trace covers).
+            // When the caster doesn't specify one (the AI, replays without an exit) or
+            // it's out of range, fall back to tracing `magnitude` tiles along the
+            // caster→entry ray, clamped to the last unblocked tile (walls end the
+            // trace; units don't block — occupancy is checked at teleport time).
+            if (portalExit && grid_.isWalkable(*portalExit) && *portalExit != target &&
+                manhattan(target, *portalExit) <= spec.magnitude) {
+                g.exit = *portalExit;
+            } else {
+                const Vec2i dir = cardinalStep(casterPos, target);
+                const std::vector<Vec2i> walls = wallTiles();
+                Vec2i exit = target;
+                for (int i = 0; i < spec.magnitude; ++i) {
+                    const Vec2i next{exit.x + dir.x, exit.y + dir.y};
+                    bool blocked = !grid_.isWalkable(next);
+                    for (Vec2i w : walls)
+                        if (w == next) blocked = true;
+                    if (blocked) break;
+                    exit = next;
+                }
+                g.exit = exit;
             }
-            g.exit = exit;
             break;
         }
     }
@@ -462,7 +469,7 @@ void Battle::spawnGround(const GroundSpec& spec, Faction owner, Vec2i casterPos,
     if (!g.tiles.empty()) ground_.push_back(std::move(g));
 }
 
-bool Battle::cast(EntityId caster, int spellIdx, Vec2i target) {
+bool Battle::cast(EntityId caster, int spellIdx, Vec2i target, std::optional<Vec2i> portalExit) {
     if (!canCast(caster, spellIdx, target)) return false;
 
     // Acting drops the guise: casting from a cloaked pair member declares THAT
@@ -486,17 +493,18 @@ bool Battle::cast(EntityId caster, int spellIdx, Vec2i target) {
         units_[caster].spellCooldowns[spellIdx] = sp.cooldown;
 
     emit({EventType::Cast, /*actor=*/caster, /*target=*/0, 0, /*spellSlot=*/spellIdx});
-    applySpellEffects(sp, casterTeam, casterPos, target);
+    applySpellEffects(sp, casterTeam, casterPos, target, portalExit);
     return true;
 }
 
-void Battle::applySpellEffects(const Spell& sp, Faction casterTeam, Vec2i casterPos, Vec2i target) {
+void Battle::applySpellEffects(const Spell& sp, Faction casterTeam, Vec2i casterPos, Vec2i target,
+                               std::optional<Vec2i> portalExit) {
     const std::vector<Vec2i> zone = affectedTiles(sp, casterPos, target);
 
     // Tile/ground/spawn effects resolve once for the cast (not per victim).
     for (const Effect& fx : sp.effects) {
         if (fx.type == Effect::Type::Spawn)
-            spawnGround(fx.ground, casterTeam, casterPos, target, zone);
+            spawnGround(fx.ground, casterTeam, casterPos, target, zone, portalExit);
         else if (fx.type == Effect::Type::Summon)
             spawnCreature(fx.creature, casterTeam, target);
         else if (fx.type == Effect::Type::Decoy) {

@@ -73,7 +73,9 @@ void readVec2Field(const json::Value& obj, const char* key, const std::string& c
 bool applyIntent(Battle& b, EntityId actor, const Intent& in) {
     switch (in.kind) {
         case Intent::Kind::Move: return b.moveToward(actor, in.target) > 0;
-        case Intent::Kind::Cast: return b.cast(actor, in.spellIdx, in.target);
+        case Intent::Kind::Cast:
+            return b.cast(actor, in.spellIdx, in.target,
+                          in.hasTarget2 ? std::optional<Vec2i>(in.target2) : std::nullopt);
         case Intent::Kind::EndTurn: b.endTurn(); return true;
     }
     return false;
@@ -90,6 +92,7 @@ std::string serializeIntent(const Intent& in) {
             o.set("kind", "cast");
             o.set("spellIdx", in.spellIdx);
             o.set("target", vec2Json(in.target));
+            if (in.hasTarget2) o.set("target2", vec2Json(in.target2));
             break;
         case Intent::Kind::EndTurn:
             o.set("kind", "endTurn");
@@ -118,11 +121,15 @@ Parse<Intent> parseIntent(const std::string& text) {
         else e.push_back("intent: \"move\" requires \"target\"");
     } else if (kind == "cast") {
         in.kind = Intent::Kind::Cast;
-        jsonread::checkAllowed(o, {"kind", "spellIdx", "target"}, "intent", e);
+        jsonread::checkAllowed(o, {"kind", "spellIdx", "target", "target2"}, "intent", e);
         if (jsonread::wantInt(o, "spellIdx", "intent", in.spellIdx, e) && in.spellIdx < 0)
             e.push_back("intent: \"spellIdx\" must be >= 0");
         if (const json::Value* t = o.find("target")) readVec2(*t, "intent.target", in.target, e);
         else e.push_back("intent: \"cast\" requires \"target\"");
+        if (const json::Value* t2 = o.find("target2")) {
+            readVec2(*t2, "intent.target2", in.target2, e);
+            in.hasTarget2 = true;
+        }
     } else if (kind == "endTurn") {
         in.kind = Intent::Kind::EndTurn;
         jsonread::checkAllowed(o, {"kind"}, "intent", e);

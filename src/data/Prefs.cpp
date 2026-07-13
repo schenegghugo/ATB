@@ -39,11 +39,16 @@ PrefsLoad loadPrefsFromString(const std::string& text) {
         return out;
     }
 
-    jsonread::checkAllowed(root, {"schema", "theme", "pack"}, "root", e);
+    jsonread::checkAllowed(
+        root, {"schema", "theme", "pack", "uiScale", "clockHeight", "chatFraction"}, "root", e);
     const int schema = jsonread::optInt(root, "schema", 1, "root", e);
     if (schema != kPrefsSchemaVersion) e.push_back("root: unsupported \"schema\" (expected 1)");
     optName(root, "theme", out.prefs.theme, e);
     optName(root, "pack", out.prefs.pack, e);
+    out.prefs.uiScale = static_cast<float>(jsonread::optDouble(root, "uiScale", 1.0, "root", e));
+    out.prefs.clockHeight = jsonread::optInt(root, "clockHeight", 68, "root", e);
+    out.prefs.chatFraction =
+        static_cast<float>(jsonread::optDouble(root, "chatFraction", 0.5, "root", e));
 
     out.ok = e.empty();
     return out;
@@ -67,6 +72,9 @@ std::string serializePrefs(const Prefs& prefs) {
     root.set("schema", kPrefsSchemaVersion);
     root.set("theme", prefs.theme);
     root.set("pack", prefs.pack);
+    root.set("uiScale", static_cast<double>(prefs.uiScale));
+    root.set("clockHeight", prefs.clockHeight);
+    root.set("chatFraction", static_cast<double>(prefs.chatFraction));
     return json::dump(root) + "\n";
 }
 

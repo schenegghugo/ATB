@@ -45,6 +45,7 @@ struct ViewState {
     Vec2i hoveredTile{-1, -1};
     bool hoveredValid = false;
     std::vector<Vec2i> reachable;     // tiles the active unit can move to
+    std::vector<Vec2i> castable;      // legal target tiles for the selected spell (green)
     bool showLosToHover = false;      // draw a sightline from active unit to hover
     std::string statusLine;          // bottom-of-screen feedback
 
@@ -52,6 +53,11 @@ struct ViewState {
     std::vector<Vec2i> spellZone;     // tiles the selected spell would hit
     bool spellCastable = false;       // tints the zone valid/invalid
     std::string spellLabel;          // e.g. "[2] Fireball  4 AP  cost 4"
+
+    // Two-click portal placement: the entry tile chosen on the first click, shown
+    // while the player picks an exit (castable then lists the walkable exit tiles).
+    Vec2i portalEntry{-1, -1};
+    bool portalEntrySet = false;
 
     // Clickable spell bar (drawn for the active player unit).
     bool showSpellBar = false;
@@ -61,6 +67,12 @@ struct ViewState {
     // Combat log panel (drawn in the empty column right of the board, if it fits).
     int windowW = 0, windowH = 0; // actual window size (the board uses Layout::screen*)
     int logScroll = 0;            // lines scrolled up from the newest (0 = autoscroll to bottom)
+
+    // Draggable layout (persisted ratios): the clock strip height and chat's share
+    // of the column below it. showLayoutHandles draws the grab grips.
+    int clockHeight = 68;
+    float chatFraction = 0.5f;
+    bool showLayoutHandles = false;
 
     // Move clock strip atop the log column (timed networked matches). Two big MM:SS:
     // YOU on the left, OPPONENT on the right; the side whose turn it is ticks + is
@@ -81,6 +93,15 @@ struct ViewState {
 // The chat text-input rectangle (hit-test in the frontend), or an empty Rect when
 // chat isn't shown. Single source of truth shared with the renderer.
 [[nodiscard]] Rect chatInputRect(const Layout& l, const Grid& g, const ViewState& view);
+
+// Draggable layout grips, shared with the frontend's hit-test. Each is an empty
+// Rect (w==0) when it doesn't apply this frame:
+//   boardResizeHandle — corner grip that resizes the board (drives Prefs::uiScale)
+//   clockDivider      — strip below the clock (drives Prefs::clockHeight)
+//   chatDivider       — strip between chat and log (drives Prefs::chatFraction)
+[[nodiscard]] Rect boardResizeHandle(const Layout& l, const Grid& g);
+[[nodiscard]] Rect clockDivider(const Layout& l, const Grid& g, const ViewState& view);
+[[nodiscard]] Rect chatDivider(const Layout& l, const Grid& g, const ViewState& view);
 
 // Converts a pixel position to a grid coordinate (caller checks inBounds).
 [[nodiscard]] Vec2i screenToGrid(const Layout& l, int px, int py);

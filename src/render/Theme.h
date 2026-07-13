@@ -17,6 +17,15 @@
 namespace tb::render {
 
 struct Theme {
+    // Layout metrics — the resizable-UI extension. A theme ships a base board
+    // density (tileSize) and an optional multiplier; the player's settings.json
+    // `uiScale` multiplies on top of these. Everything else derives from tileSize.
+    struct Metrics {
+        int tileSize = 36;    // battle board tile edge, px
+        double uiScale = 1.0; // theme-level size multiplier (composes with prefs)
+    };
+    Metrics metrics{};
+
     // Chrome (menus / screens / shared widgets — ui::k*).
     RGBA bg{18, 20, 28, 255};
     RGBA panel{30, 34, 46, 255};
@@ -37,6 +46,7 @@ struct Theme {
     RGBA wall{70, 78, 96, 255};
     RGBA obstacle{120, 96, 60, 255};
     RGBA reach{60, 110, 200, 90};
+    RGBA castable{70, 200, 120, 95}; // legal target tiles for the selected spell
     RGBA hover{230, 230, 240, 110};
     RGBA zoneOk{230, 140, 50, 120};
     RGBA zoneBad{120, 60, 60, 110};

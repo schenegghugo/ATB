@@ -117,6 +117,24 @@ int main() {
         b.cast(P, po, {5, 3});                // entry under the enemy; trace east -> exit (9,3)
         check(b.unit(E).pos == Vec2i{9, 3}, "unit standing on the entry is transported at cast");
     }
+    std::printf("Portal (player-placed exit, off the trace, within reach):\n");
+    {
+        Battle b = makeArena({1, 3}, {5, 3}, {spellid::Portal});
+        int po = slotOf(b, P, spellid::Portal);
+        // Exit (5,6): off the eastward caster->entry ray but Manhattan 3 ≤ the
+        // portal's reach (4). The enemy on the entry teleports there at cast.
+        b.cast(P, po, {5, 3}, Vec2i{5, 6});
+        check(b.unit(E).pos == Vec2i{5, 6}, "in-range explicit exit overrides the traced one");
+    }
+    std::printf("Portal (out-of-range exit falls back to the trace):\n");
+    {
+        Battle b = makeArena({1, 3}, {5, 3}, {spellid::Portal});
+        int po = slotOf(b, P, spellid::Portal);
+        // Exit (5,7)... use (2,6): Manhattan 6 > reach 4 → ignored; the eastward
+        // trace exit (9,3) is used instead, transporting the enemy there.
+        b.cast(P, po, {5, 3}, Vec2i{2, 6});
+        check(b.unit(E).pos == Vec2i{9, 3}, "an exit beyond reach reverts to the traced exit");
+    }
     std::printf("Portal (trace clamps at the arena edge):\n");
     {
         Battle b = makeArena({8, 3}, {1, 1}, {spellid::Portal});

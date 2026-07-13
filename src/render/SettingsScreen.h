@@ -21,6 +21,8 @@ public:
         SetTheme,    // picked() names themes/<name>.json ("" = built-in defaults)
         SetPack,     // picked() names packs/<name>     ("" = primitives, no pack)
         ReloadTheme, // re-read the current theme file (ricing: edit, then reload)
+        ScaleUp,     // nudge the UI scale up (resizable board)
+        ScaleDown,   // nudge the UI scale down
     };
 
     struct View {
@@ -29,6 +31,7 @@ public:
         std::vector<std::string> packs;  // names discovered under packs/
         std::string curTheme;            // "" = built-in defaults
         std::string curPack;             // "" = primitives
+        float uiScale = 1.0f;            // current board size multiplier
         std::string status;              // last apply result / load errors
     };
 

@@ -9,6 +9,30 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
+# ---------------------------------------------------------------------------
+# Version string — the single source of truth is the git tag. CI passes the
+# exact release version (-DATB_VERSION=v1.2.3); a bare local build derives it
+# from `git describe` (e.g. v1.2.3-4-gabc123 = 4 commits past the tag, or a
+# short SHA before the first tag); everything else falls back to "dev". It is
+# compiled into the client (see the tactical_battler target) so the running
+# binary — and the shipped VERSION.txt — always reports what it actually is.
+# ---------------------------------------------------------------------------
+if(NOT DEFINED ATB_VERSION OR ATB_VERSION STREQUAL "")
+    find_package(Git QUIET)
+    if(GIT_FOUND)
+        execute_process(
+            COMMAND ${GIT_EXECUTABLE} describe --tags --always --dirty
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            OUTPUT_VARIABLE ATB_VERSION
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET)
+    endif()
+endif()
+if(NOT ATB_VERSION)
+    set(ATB_VERSION "dev")
+endif()
+message(STATUS "ATB version: ${ATB_VERSION}")
+
 # Build the Raylib graphical client. Turn OFF for headless/server/CI builds:
 # `core/` + the demos need no graphics, so -DTB_BUILD_GUI=OFF skips Raylib
 # entirely (no fetch, no GL/X11) and builds in seconds.
@@ -315,6 +339,7 @@ add_executable(tactical_battler
     src/render/Theme.cpp
 )
 target_link_libraries(tactical_battler PRIVATE tb_core tb_transport raylib)
+target_compile_definitions(tactical_battler PRIVATE ATB_VERSION="${ATB_VERSION}")
 
 # On Linux, Raylib needs these system libs when built statically.
 if(UNIX AND NOT APPLE)

@@ -11,7 +11,8 @@ class MainMenuScreen {
 public:
     enum class Result { None, LocalMatch, PlayOnline, BuildEditor, Settings, Quit };
 
-    Result runFrame(int screenW, int screenH);
+    // `version` (e.g. the compiled ATB_VERSION) is shown in the footer.
+    Result runFrame(int screenW, int screenH, const char* version = "");
 };
 
 } // namespace tb::render

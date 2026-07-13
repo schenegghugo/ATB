@@ -38,15 +38,22 @@ struct Intent {
     enum class Kind : std::uint8_t { Move, Cast, EndTurn };
     Kind kind = Kind::EndTurn;
     int spellIdx = -1; // Cast only
-    Vec2i target{};    // Move: destination tile; Cast: target tile
+    Vec2i target{};    // Move: destination tile; Cast: target tile (portal: the ENTRY)
+    Vec2i target2{};   // Cast: optional second tile — the player-placed portal EXIT
+    bool hasTarget2 = false;
 
     static Intent move(Vec2i dest) { return {Kind::Move, -1, dest}; }
     static Intent cast(int slot, Vec2i tgt) { return {Kind::Cast, slot, tgt}; }
+    // A cast with a player-chosen second tile (portal: entry + explicit exit).
+    static Intent castTo(int slot, Vec2i entry, Vec2i exit) {
+        return {Kind::Cast, slot, entry, exit, true};
+    }
     static Intent endTurn() { return {Kind::EndTurn, -1, {}}; }
 
     [[nodiscard]] bool operator==(const Intent& o) const {
         return kind == o.kind && spellIdx == o.spellIdx && target.x == o.target.x &&
-               target.y == o.target.y;
+               target.y == o.target.y && hasTarget2 == o.hasTarget2 &&
+               (!hasTarget2 || (target2.x == o.target2.x && target2.y == o.target2.y));
     }
     [[nodiscard]] bool operator!=(const Intent& o) const { return !(*this == o); }
 };
