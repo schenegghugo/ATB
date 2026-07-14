@@ -94,8 +94,11 @@ What a surface *does* on its own, split between the two existing hooks.
 | `Oil`      | apply `Oiled` + halve remaining MP this step                 |
 | `Steam`    | apply `Wet`                                                  |
 
-**On tick** (`tickGround`, once per turn at the owner-order boundary — surfaces
-age here already):
+**On tick** — the per-element effects below hit a unit standing in a surface at
+the start of *its own* turn (`surfaceTick`). Surface **aging** is separate:
+`remainingTurns` is decremented in `tickGround`, which runs on **champion** turns
+only — so a surface's (and any ground effect's) lifetime is independent of how
+many non-champions (bombs, summons) share the initiative order.
 
 | Element    | On tick (to units standing in it)                            |
 |------------|-------------------------------------------------------------|

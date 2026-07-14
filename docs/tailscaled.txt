@@ -1,0 +1,52 @@
+[hugo@Homeboi ATB]$ journalctl -u tailscaled -n 50 --no-pager
+Jul 14 12:25:18 Homeboi tailscaled[6804]: deleting [-j ts-postrouting] in nat/POSTROUTING: running [/usr/bin/iptables -t nat -D POSTROUTING -j ts-postrouting --wait]: exit status 4: iptables v1.8.13 (nf_tables): Could not fetch rule set generation id: Invalid argument
+Jul 14 12:25:18 Homeboi tailscaled[6804]: flushing filter/ts-input: running [/usr/bin/iptables -t filter -N ts-input --wait]: exit status 4: iptables v1.8.13 (nf_tables): Could not fetch rule set generation id: Invalid argument
+Jul 14 12:25:18 Homeboi tailscaled[6804]: flushing filter/ts-forward: running [/usr/bin/iptables -t filter -N ts-forward --wait]: exit status 4: iptables v1.8.13 (nf_tables): Could not fetch rule set generation id: Invalid argument
+Jul 14 12:25:18 Homeboi tailscaled[6804]: flushing nat/ts-postrouting: running [/usr/bin/iptables -t nat -N ts-postrouting --wait]: exit status 4: iptables v1.8.13 (nf_tables): Could not fetch rule set generation id: Invalid argument
+Jul 14 12:25:18 Homeboi tailscaled[6804]: linuxfw: clear ip6tables: deleting [-j ts-input] in filter/INPUT: running [/usr/bin/ip6tables -t filter -D INPUT -j ts-input --wait]: exit status 4: ip6tables v1.8.13 (nf_tables): Could not fetch rule set generation id: Invalid argument
+Jul 14 12:25:18 Homeboi tailscaled[6804]: deleting [-j ts-forward] in filter/FORWARD: running [/usr/bin/ip6tables -t filter -D FORWARD -j ts-forward --wait]: exit status 4: ip6tables v1.8.13 (nf_tables): Could not fetch rule set generation id: Invalid argument
+Jul 14 12:25:18 Homeboi tailscaled[6804]: deleting [-j ts-postrouting] in nat/POSTROUTING: running [/usr/bin/ip6tables -t nat -D POSTROUTING -j ts-postrouting --wait]: exit status 4: ip6tables v1.8.13 (nf_tables): Could not fetch rule set generation id: Invalid argument
+Jul 14 12:25:18 Homeboi tailscaled[6804]: flushing filter/ts-input: running [/usr/bin/ip6tables -t filter -N ts-input --wait]: exit status 4: ip6tables v1.8.13 (nf_tables): Could not fetch rule set generation id: Invalid argument
+Jul 14 12:25:18 Homeboi tailscaled[6804]: flushing filter/ts-forward: running [/usr/bin/ip6tables -t filter -N ts-forward --wait]: exit status 4: ip6tables v1.8.13 (nf_tables): Could not fetch rule set generation id: Invalid argument
+Jul 14 12:25:18 Homeboi tailscaled[6804]: flushing nat/ts-postrouting: running [/usr/bin/ip6tables -t nat -N ts-postrouting --wait]: exit status 4: ip6tables v1.8.13 (nf_tables): Could not fetch rule set generation id: Invalid argument
+Jul 14 12:25:18 Homeboi tailscaled[6804]: cleanup: list tables: netlink receive: invalid argument
+Jul 14 12:25:18 Homeboi systemd[1]: Started Tailscale node agent.
+Jul 14 12:25:18 Homeboi tailscaled[6804]: wgengine.NewUserspaceEngine(tun "tailscale0") ...
+Jul 14 12:25:18 Homeboi tailscaled[6804]: Linux kernel version: 7.0.2-arch1-1
+Jul 14 12:25:18 Homeboi tailscaled[6804]: is CONFIG_TUN enabled in your kernel? `modprobe tun` failed with: modprobe: FATAL: Module tun not found in directory /lib/modules/7.0.2-arch1-1
+Jul 14 12:25:18 Homeboi tailscaled[6804]: kernel/drivers/net/tun.ko found on disk, but not for current kernel; are you in middle of a system update and haven't rebooted? found: /lib/modules/7.1.3-arch1-2/kernel/drivers/net/tun.ko.zst
+Jul 14 12:25:18 Homeboi tailscaled[6804]: wgengine.NewUserspaceEngine(tun "tailscale0") error: tstun.New("tailscale0"): no such device
+Jul 14 12:25:18 Homeboi tailscaled[6804]: flushing log.
+Jul 14 12:25:18 Homeboi tailscaled[6804]: logger closing down
+Jul 14 12:25:18 Homeboi tailscaled[6804]: getLocalBackend error: createEngine: tstun.New("tailscale0"): no such device
+Jul 14 12:25:18 Homeboi systemd[1]: tailscaled.service: Main process exited, code=exited, status=1/FAILURE
+Jul 14 12:25:18 Homeboi tailscaled[6850]: TPM: successfully read all properties
+Jul 14 12:25:18 Homeboi tailscaled[6850]: logtail started
+Jul 14 12:25:18 Homeboi tailscaled[6850]: Program starting: v1.98.8, Go 1.26.4-X:nodwarf5: []string{"/usr/sbin/tailscaled", "--cleanup"}
+Jul 14 12:25:18 Homeboi tailscaled[6850]: LogID: 5f3289197886d62d9f5d0fc899c9eac1ca0cfd48188d7169549946c152c12ac8
+Jul 14 12:25:18 Homeboi tailscaled[6850]: logpolicy: using $STATE_DIRECTORY, "/var/lib/tailscale"
+Jul 14 12:25:18 Homeboi tailscaled[6850]: dns: [rc=nm resolved=nss nm-resolved=yes nm-resolved=no ret=direct]
+Jul 14 12:25:18 Homeboi tailscaled[6850]: dns: using "direct" mode
+Jul 14 12:25:18 Homeboi tailscaled[6850]: dns: using *dns.directManager
+Jul 14 12:25:18 Homeboi tailscaled[6850]: dns: inotify: NewDirWatcher: context canceled
+Jul 14 12:25:18 Homeboi tailscaled[6850]: linuxfw: clear iptables: deleting [-j ts-input] in filter/INPUT: running [/usr/bin/iptables -t filter -D INPUT -j ts-input --wait]: exit status 4: iptables v1.8.13 (nf_tables): Could not fetch rule set generation id: Invalid argument
+Jul 14 12:25:18 Homeboi tailscaled[6850]: deleting [-j ts-forward] in filter/FORWARD: running [/usr/bin/iptables -t filter -D FORWARD -j ts-forward --wait]: exit status 4: iptables v1.8.13 (nf_tables): Could not fetch rule set generation id: Invalid argument
+Jul 14 12:25:18 Homeboi tailscaled[6850]: deleting [-j ts-postrouting] in nat/POSTROUTING: running [/usr/bin/iptables -t nat -D POSTROUTING -j ts-postrouting --wait]: exit status 4: iptables v1.8.13 (nf_tables): Could not fetch rule set generation id: Invalid argument
+Jul 14 12:25:18 Homeboi tailscaled[6850]: flushing filter/ts-input: running [/usr/bin/iptables -t filter -N ts-input --wait]: exit status 4: iptables v1.8.13 (nf_tables): Could not fetch rule set generation id: Invalid argument
+Jul 14 12:25:18 Homeboi tailscaled[6850]: flushing filter/ts-forward: running [/usr/bin/iptables -t filter -N ts-forward --wait]: exit status 4: iptables v1.8.13 (nf_tables): Could not fetch rule set generation id: Invalid argument
+Jul 14 12:25:18 Homeboi tailscaled[6850]: flushing nat/ts-postrouting: running [/usr/bin/iptables -t nat -N ts-postrouting --wait]: exit status 4: iptables v1.8.13 (nf_tables): Could not fetch rule set generation id: Invalid argument
+Jul 14 12:25:18 Homeboi tailscaled[6850]: linuxfw: clear ip6tables: deleting [-j ts-input] in filter/INPUT: running [/usr/bin/ip6tables -t filter -D INPUT -j ts-input --wait]: exit status 4: ip6tables v1.8.13 (nf_tables): Could not fetch rule set generation id: Invalid argument
+Jul 14 12:25:18 Homeboi tailscaled[6850]: deleting [-j ts-forward] in filter/FORWARD: running [/usr/bin/ip6tables -t filter -D FORWARD -j ts-forward --wait]: exit status 4: ip6tables v1.8.13 (nf_tables): Could not fetch rule set generation id: Invalid argument
+Jul 14 12:25:18 Homeboi tailscaled[6850]: deleting [-j ts-postrouting] in nat/POSTROUTING: running [/usr/bin/ip6tables -t nat -D POSTROUTING -j ts-postrouting --wait]: exit status 4: ip6tables v1.8.13 (nf_tables): Could not fetch rule set generation id: Invalid argument
+Jul 14 12:25:18 Homeboi tailscaled[6850]: flushing filter/ts-input: running [/usr/bin/ip6tables -t filter -N ts-input --wait]: exit status 4: ip6tables v1.8.13 (nf_tables): Could not fetch rule set generation id: Invalid argument
+Jul 14 12:25:18 Homeboi tailscaled[6850]: flushing filter/ts-forward: running [/usr/bin/ip6tables -t filter -N ts-forward --wait]: exit status 4: ip6tables v1.8.13 (nf_tables): Could not fetch rule set generation id: Invalid argument
+Jul 14 12:25:18 Homeboi tailscaled[6850]: flushing nat/ts-postrouting: running [/usr/bin/ip6tables -t nat -N ts-postrouting --wait]: exit status 4: ip6tables v1.8.13 (nf_tables): Could not fetch rule set generation id: Invalid argument
+Jul 14 12:25:18 Homeboi tailscaled[6850]: cleanup: list tables: netlink receive: invalid argument
+Jul 14 12:25:18 Homeboi tailscaled[6850]: flushing log.
+Jul 14 12:25:18 Homeboi tailscaled[6850]: logger closing down
+Jul 14 12:25:18 Homeboi systemd[1]: tailscaled.service: Failed with result 'exit-code'.
+Jul 14 12:25:19 Homeboi systemd[1]: tailscaled.service: Scheduled restart job, restart counter is at 5.
+Jul 14 12:25:19 Homeboi systemd[1]: tailscaled.service: Start request repeated too quickly.
+Jul 14 12:25:19 Homeboi systemd[1]: tailscaled.service: Failed with result 'start-limit-hit'.
+Jul 14 12:25:19 Homeboi systemd[1]: Failed to start Tailscale node agent.
+[hugo@Homeboi ATB]$

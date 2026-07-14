@@ -27,7 +27,7 @@ constexpr Preset kPresets[] = {
 };
 constexpr int kNumPresets = static_cast<int>(sizeof(kPresets) / sizeof(kPresets[0]));
 
-net::MatchFormat formatFrom(int preset, bool rated) {
+net::MatchFormat formatFrom(int preset, bool rated, int teamSize) {
     const Preset& p = kPresets[preset];
     net::MatchFormat f;
     f.time = p.time;
@@ -35,16 +35,20 @@ net::MatchFormat formatFrom(int preset, bool rated) {
     f.mainSec = p.mainSec;
     f.incSec = p.inc;
     f.rated = rated;
-    f.teamSize = 1;
+    f.teamSize = teamSize;
     return f;
 }
 
-// A one-word tag for a format, for list rows (e.g. "Unlimited rated").
+// A one-word tag for a format, for list rows (e.g. "2v2 Unlimited rated"). The
+// NvN prefix is shown whenever it isn't a plain 1v1 so team seeks stand out.
 std::string formatTag(const net::MatchFormat& f) {
-    std::string s = f.time == net::MatchFormat::Time::Unlimited ? "Unlimited"
-                    : f.time == net::MatchFormat::Time::PerMove
-                        ? (std::to_string(f.perMoveSec) + "s/move")
-                        : (std::to_string(f.mainSec / 60) + "+" + std::to_string(f.incSec));
+    std::string s;
+    if (f.teamSize > 1)
+        s = std::to_string(f.teamSize) + "v" + std::to_string(f.teamSize) + " ";
+    s += f.time == net::MatchFormat::Time::Unlimited ? "Unlimited"
+         : f.time == net::MatchFormat::Time::PerMove
+             ? (std::to_string(f.perMoveSec) + "s/move")
+             : (std::to_string(f.mainSec / 60) + "+" + std::to_string(f.incSec));
     s += f.rated ? " rated" : " casual";
     return s;
 }
@@ -122,20 +126,28 @@ LobbyScreen::Result LobbyScreen::runFrame(int screenW, int screenH, net::LobbySe
     DrawText(buildLabel.c_str(), static_cast<int>(W - margin - 320), 72, 14, kMuted);
     if (button({W - margin - 130, 70, 130, 30}, "Edit build", m, kPanel)) result = Result::EditBuild;
 
-    // Format bar: rated toggle + clock presets.
+    // Format bar: rated toggle + team size (1v1/2v2/3v3) + clock presets, all in one row.
     float y = 104.0f;
     DrawText("FORMAT", static_cast<int>(margin), static_cast<int>(y) - 20, 14, kMuted);
     Rectangle ratedBtn{margin, y, 120, 32};
     if (button(ratedBtn, rated_ ? "Rated: ON" : "Rated: OFF", m, rated_ ? kAccent : kPanel,
                ratedAvailable))
         rated_ = !rated_;
+    // Team size: 1v1 / 2v2 / 3v3 — seeks/challenges only pair with the same size.
     float px = margin + 136;
+    for (int t = 1; t <= 3; ++t) {
+        Rectangle b{px, y, 54, 32};
+        const char* label = t == 1 ? "1v1" : t == 2 ? "2v2" : "3v3";
+        if (button(b, label, m, t == teamSize_ ? kAccent : kPanel)) teamSize_ = t;
+        px += 58;
+    }
+    px += 12; // gap between the team selector and the clock presets
     for (int i = 0; i < kNumPresets; ++i) {
         Rectangle b{px, y, 118, 32};
         if (button(b, kPresets[i].label, m, i == preset_ ? kAccent : kPanel)) preset_ = i;
         px += 124;
     }
-    const net::MatchFormat fmt = formatFrom(preset_, rated_);
+    const net::MatchFormat fmt = formatFrom(preset_, rated_, teamSize_);
 
     // Two columns.
     y = 172.0f;

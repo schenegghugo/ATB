@@ -108,7 +108,7 @@ jobs:
           mkdir -p stage/ATB
           cp build/tactical_battler stage/ATB/
           cp -r data packs themes stage/ATB/
-          cp LICENSE README.md stage/ATB/
+          cp LICENSE README.md CONNECT.md stage/ATB/
           printf '%s %s\n' "$ATB_VERSION" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > stage/ATB/VERSION.txt
           tar -C stage -czf "ATB-${ATB_VERSION}-linux-x64.tar.gz" ATB
 
@@ -153,7 +153,7 @@ jobs:
           mkdir -p stage/ATB
           cp build/tactical_battler.exe stage/ATB/
           cp -r data packs themes stage/ATB/
-          cp LICENSE README.md stage/ATB/
+          cp LICENSE README.md CONNECT.md stage/ATB/
           printf '%s %s\n' "$ATB_VERSION" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > stage/ATB/VERSION.txt
           cd stage && zip -r "../ATB-${ATB_VERSION}-windows-x64.zip" ATB
 

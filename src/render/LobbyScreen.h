@@ -49,6 +49,7 @@ private:
 
     bool rated_ = false;
     int preset_ = 0; // index into the clock presets
+    int teamSize_ = 1; // 1/2/3 → 1v1 / 2v2 / 3v3 (seeks match same team size)
     bool queued_ = false; // in the quick-match queue
 
     std::vector<net::SeekInfo> seeks_;

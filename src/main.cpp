@@ -8,15 +8,17 @@
 // Characters are materialised from CharacterBuilds against the SpellCatalog (the
 // skill dictionary); all rules live in core/.
 //
-//   Battle controls:
-//     Left click   : move the active player unit along the shortest path
-//     Right click  : cast the SELECTED spell at the hovered tile
-//     1..9         : select a spell from the active unit's loadout
+//   Battle controls (unified, left-click driven — Dofus-style):
+//     Left click   : with NO spell selected, move along the shortest path; with a
+//                    spell selected, cast it at the clicked (green) tile. Clicking a
+//                    spell-bar button selects it (clicking it again deselects).
+//     1..9         : select a spell from the loadout (press again to deselect)
+//     Right click  : cancel — drop a half-placed portal, else deselect the spell
 //     Space/Enter  : end the player's turn
 //     R            : regenerate the arena (keep builds)
 //     Tab          : return to the build editor
-//     Esc          : open the pause menu (Resume / Settings / GitHub / Quit);
-//                    in battle it first cancels a half-placed portal or decoy
+//     Esc          : open the pause menu (Resume / Settings / GitHub / Quit); in
+//                    battle it first cancels a portal/decoy, then a selected spell
 //
 #include "core/Battle.h"
 #include "core/Build.h"
@@ -394,7 +396,10 @@ int main() {
     std::unique_ptr<render::MatchSource> source;
     render::Animator animator; // per-entity event-clip playback (cast flashes, §2.4)
     std::string status;
-    int selectedSpell = 0;
+    // The active-unit spell slot being aimed, or nullopt for "no spell selected"
+    // (Dofus-style): with none selected, left-click moves; select a spell to reveal
+    // its castable tiles, then left-click an eligible tile to cast.
+    std::optional<int> selectedSpell;
     int spellRotation = 0;         // wheel-driven 90° turns for a Line spell (Shelter walls)
     // Which battle-layout grip is being dragged (board corner / column dividers).
     enum class LayoutDrag { None, Board, Clock, Chat } layoutDrag = LayoutDrag::None;
@@ -446,10 +451,10 @@ int main() {
         spectating = false;  // likewise set after by the lobby Watch route
         pendingDecoy.reset();
         animator.reset();
-        selectedSpell = 0;
+        selectedSpell.reset();
         spellRotation = 0;
         logScroll = 0;
-        status = "Player turn — left-click move, click a spell (or 1-9), right-click cast, Tab=editor.";
+        status = "Player turn — left-click to move; pick a spell (click or 1-9) then left-click a green tile to cast; Tab=editor.";
         state = AppState::Battle;
     };
 
@@ -541,6 +546,9 @@ int main() {
             } else if (state == AppState::Battle && pendingDecoy) {
                 pendingDecoy.reset();
                 status = "Decoy cast cancelled.";
+            } else if (state == AppState::Battle && selectedSpell) {
+                selectedSpell.reset(); // deselect the aimed spell → back to move mode
+                status = "Spell deselected — left-click to move.";
             } else if (state == AppState::Paused) {
                 state = pauseReturn; // Esc closes the pause menu
             } else if (state == AppState::Settings) {
@@ -893,7 +901,7 @@ int main() {
             source = newLocalMatch();
             onlineMatch = false;
             animator.reset();
-            selectedSpell = 0;
+            selectedSpell.reset();
             spellRotation = 0;
             logScroll = 0;
             status = "New arena. Player turn.";
@@ -1008,13 +1016,17 @@ int main() {
 
         if (playerControl && !chatFocused && !pendingDecoy && !draggingLayout) {
             const EntityId me = active;
-            const int selBefore = selectedSpell; // reset aim rotation if this changes
+            const std::optional<int> selBefore = selectedSpell; // reset aim rotation if this changes
             const int spellCount = static_cast<int>(source->battle().unit(me).spells.size());
+            // Digit hotkeys select a slot; pressing the selected slot's digit again
+            // deselects it (back to move mode).
             for (int k = 0; k < spellCount && k < 9; ++k)
-                if (IsKeyPressed(KEY_ONE + k)) selectedSpell = k;
-            if (selectedSpell >= spellCount) selectedSpell = 0;
+                if (IsKeyPressed(KEY_ONE + k))
+                    selectedSpell = (selectedSpell == k) ? std::optional<int>{} : std::optional<int>{k};
+            if (selectedSpell && *selectedSpell >= spellCount) selectedSpell.reset();
             // Switching off the portal spell abandons a half-placed portal.
-            if (portalPending && !isPortalSpell(source->battle().unit(me).spells[selectedSpell]))
+            if (portalPending &&
+                (!selectedSpell || !isPortalSpell(source->battle().unit(me).spells[*selectedSpell])))
                 portalPending.reset();
 
             // Hit-test the spell buttons against the same rects the renderer draws.
@@ -1025,68 +1037,87 @@ int main() {
                     break;
                 }
 
-            // Spell bar is hit-tested *before* the board so a HUD click selects a
-            // spell instead of being read as a move. Selection is pure UI state; the
-            // move/cast/endTurn actions go to the seam as Intents.
+            // Unified left-click (Dofus-style): a HUD spell button toggles selection;
+            // otherwise, with a spell selected the click CASTS at the tile, and with
+            // none selected it MOVES. The bar is hit-tested first so a HUD click is
+            // never misread as a board action.
             if (hoveredSpell >= 0 && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-                selectedSpell = hoveredSpell;
-                status = TextFormat("Selected %s.",
-                                    source->battle().unit(me).spells[selectedSpell].name.c_str());
+                if (selectedSpell == hoveredSpell) {
+                    selectedSpell.reset();
+                    status = "Spell deselected — left-click to move.";
+                } else {
+                    selectedSpell = hoveredSpell;
+                    status = TextFormat("Selected %s — left-click a green tile to cast.",
+                                        source->battle().unit(me).spells[*selectedSpell].name.c_str());
+                }
             } else if (hoveredValid && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-                portalPending.reset(); // moving abandons a half-placed portal
-                if (auto s = source->submit(net::Intent::move(hovered))) status = *s;
+                if (!selectedSpell) {
+                    portalPending.reset(); // moving abandons a half-placed portal
+                    if (auto s = source->submit(net::Intent::move(hovered))) status = *s;
+                } else {
+                    const Spell& sel = source->battle().unit(me).spells[*selectedSpell];
+                    if (isPortalSpell(sel)) {
+                        // Two clicks: the first places the ENTRY (a legal cast tile), the
+                        // second the EXIT (any walkable tile within reach) and fires the
+                        // cast — the core teleports whoever stands on the entry.
+                        if (!portalPending) {
+                            if (source->battle().canCast(me, *selectedSpell, hovered)) {
+                                portalPending = hovered;
+                                status = "Portal entry placed — left-click the exit tile (Esc cancels).";
+                            } else {
+                                status = "Can't open a portal there.";
+                            }
+                        } else if (source->battle().grid().isWalkable(hovered) &&
+                                   hovered != *portalPending &&
+                                   manhattan(*portalPending, hovered) <= portalReach(sel)) {
+                            if (auto s = source->submit(
+                                    net::Intent::castTo(*selectedSpell, *portalPending, hovered)))
+                                status = *s;
+                            portalPending.reset();
+                        } else {
+                            status = "Pick a walkable exit within the portal's reach (Esc cancels).";
+                        }
+                    } else {
+                        const net::Intent in = net::Intent::cast(*selectedSpell, hovered, spellRotation);
+                        // A decoy cast commits to a hidden choice up-front (CR.6) — prompt
+                        // for it instead of submitting straight away.
+                        if (source->needsDecoyChoice(in)) {
+                            pendingDecoy = in;
+                            status = "Decoy: commit your secret — stay the ORIGINAL or swap to the TWIN.";
+                        } else if (auto s = source->submit(in)) {
+                            status = *s;
+                        }
+                    }
+                }
             }
             // Selecting a different spell drops any accumulated aim rotation.
             if (selectedSpell != selBefore) spellRotation = 0;
 
-            // Mouse wheel rotates a Line spell's footprint (Shelter walls) in 90°
-            // steps while aiming over the board — the core takes spellRotation mod 4.
+            // Mouse wheel rotates a selected Line spell's footprint (Shelter walls) in
+            // 90° steps while aiming over the board — the core takes spellRotation mod 4.
             // Consuming it here keeps the wheel from also scrolling the combat log.
-            const bool rotatable = selectedSpell < spellCount &&
-                source->battle().unit(me).spells[selectedSpell].shape == TargetShape::Line;
+            const bool rotatable = selectedSpell &&
+                source->battle().unit(me).spells[*selectedSpell].shape == TargetShape::Line;
             if (rotatable && hoveredValid && wheelDelta != 0) {
                 spellRotation += wheelDelta;
                 wheelConsumed = true;
                 status = TextFormat("%s facing: %d",
-                                    source->battle().unit(me).spells[selectedSpell].name.c_str(),
+                                    source->battle().unit(me).spells[*selectedSpell].name.c_str(),
                                     ((spellRotation % 4) + 4) % 4);
             }
 
-            if (hoveredValid && IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
-                const Spell& sel = source->battle().unit(me).spells[selectedSpell];
-                if (isPortalSpell(sel)) {
-                    // Two clicks: the first right-click places the ENTRY (a legal
-                    // cast tile), the second places the EXIT (any walkable tile) and
-                    // fires the cast — the core teleports whoever stands on the entry.
-                    if (!portalPending) {
-                        if (source->battle().canCast(me, selectedSpell, hovered)) {
-                            portalPending = hovered;
-                            status = "Portal entry placed — right-click the exit tile (Esc cancels).";
-                        } else {
-                            status = "Can't open a portal there.";
-                        }
-                    } else if (source->battle().grid().isWalkable(hovered) &&
-                               hovered != *portalPending &&
-                               manhattan(*portalPending, hovered) <= portalReach(sel)) {
-                        if (auto s = source->submit(
-                                net::Intent::castTo(selectedSpell, *portalPending, hovered)))
-                            status = *s;
-                        portalPending.reset();
-                    } else {
-                        status = "Pick a walkable exit within the portal's reach (Esc cancels).";
-                    }
-                } else {
-                    const net::Intent in = net::Intent::cast(selectedSpell, hovered, spellRotation);
-                    // A decoy cast commits to a hidden choice up-front (CR.6) — prompt
-                    // for it instead of submitting straight away.
-                    if (source->needsDecoyChoice(in)) {
-                        pendingDecoy = in;
-                        status = "Decoy: commit your secret — stay the ORIGINAL or swap to the TWIN.";
-                    } else if (auto s = source->submit(in)) {
-                        status = *s;
-                    }
+            // Right-click is the quick cancel: drop a half-placed portal first, else
+            // deselect the aimed spell (back to move mode).
+            if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
+                if (portalPending) {
+                    portalPending.reset();
+                    status = "Portal cancelled.";
+                } else if (selectedSpell) {
+                    selectedSpell.reset();
+                    status = "Spell deselected — left-click to move.";
                 }
             }
+
             if (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER)) {
                 portalPending.reset();
                 source->submit(net::Intent::endTurn());
@@ -1146,16 +1177,19 @@ int main() {
                 reachableWithin(source->battle().grid(), u.pos, u.mp, source->battle().occupancy(me));
             view.showLosToHover = true;
             view.showSpellBar = true;
-            view.selectedSpell = selectedSpell;
-            // Hovering a button previews *that* spell; otherwise show the selected one.
-            view.spellLabel = spellLabel(u, hoveredSpell >= 0 ? hoveredSpell : selectedSpell);
+            view.selectedSpell = selectedSpell.value_or(-1); // -1 = nothing highlighted
+            // Hovering a button previews *that* spell; otherwise show the selected one
+            // (or nothing when no spell is selected — spellLabel returns "" for -1).
+            view.spellLabel = spellLabel(u, hoveredSpell >= 0 ? hoveredSpell : selectedSpell.value_or(-1));
             for (const Spell& sp : u.spells) view.spellIconKeys.push_back(catalogKey(session.catalog, sp.name));
-            if (selectedSpell < static_cast<int>(u.spells.size())) {
+            // Castable green field + AoE preview only appear once a spell is selected.
+            if (selectedSpell && *selectedSpell < static_cast<int>(u.spells.size())) {
+                const int sel = *selectedSpell;
                 const Grid& g = source->battle().grid();
                 if (portalPending) {
                     // Exit placement: green = every walkable tile within the portal's
                     // reach of the entry (matching the core cap); mark the entry.
-                    const int reach = portalReach(u.spells[selectedSpell]);
+                    const int reach = portalReach(u.spells[sel]);
                     for (int y = 0; y < g.height(); ++y)
                         for (int x = 0; x < g.width(); ++x)
                             if (g.isWalkable({x, y}) && Vec2i{x, y} != *portalPending &&
@@ -1167,14 +1201,14 @@ int main() {
                     // Green field: every tile the selected spell may legally target.
                     for (int y = 0; y < g.height(); ++y)
                         for (int x = 0; x < g.width(); ++x)
-                            if (source->battle().canCast(me, selectedSpell, {x, y}))
+                            if (source->battle().canCast(me, sel, {x, y}))
                                 view.castable.push_back({x, y});
                 }
-            }
-            if (!portalPending && hoveredValid && selectedSpell < static_cast<int>(u.spells.size())) {
-                view.spellCastable = source->battle().canCast(me, selectedSpell, hovered);
-                view.spellZone = source->battle().affectedTiles(u.spells[selectedSpell], u.pos, hovered,
-                                                                spellRotation);
+                if (!portalPending && hoveredValid) {
+                    view.spellCastable = source->battle().canCast(me, sel, hovered);
+                    view.spellZone =
+                        source->battle().affectedTiles(u.spells[sel], u.pos, hovered, spellRotation);
+                }
             }
         }
 

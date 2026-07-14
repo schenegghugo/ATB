@@ -102,6 +102,9 @@ Color kBtnCooldown{38, 42, 52, 255};   // recharging
 Color kBtnPoor{72, 48, 52, 255};       // not enough AP
 Color kBtnSelected{235, 200, 90, 255}; // selected-button border
 Color kBtnCdText{232, 150, 80, 255};   // cooldown counter
+Color kPopupDamage{240, 90, 80, 255};  // floating "-N" damage number
+Color kPopupHeal{120, 210, 140, 255};  // floating "+N" heal number
+Color kPopupShield{110, 205, 225, 255}; // floating shield-gain number
 
 Rectangle tileRect(const Layout& l, Vec2i p) {
     return Rectangle{static_cast<float>(l.originX + p.x * l.tileSize),
@@ -554,6 +557,30 @@ void drawFrame(const Layout& l, const Battle& battle, const ViewState& view,
         for (std::size_t s = 0; s < e.statuses.size(); ++s) {
             DrawRectangle(static_cast<int>(c.x) - 12 + static_cast<int>(s) * 8,
                           static_cast<int>(c.y) - l.tileSize / 2 - 6, 6, 6, kStatusDot);
+        }
+    }
+
+    // --- Floating combat numbers (damage / heal / shield) --------------------
+    // Rise + fade over the tile where the event landed; drawn above units so they
+    // read over the board. Fed off the same event stream as the log (§2.4).
+    if (anim) {
+        for (std::size_t i = 0; i < anim->popups().size(); ++i) {
+            const Animator::Popup& p = anim->popups()[i];
+            const float k = 1.0f - static_cast<float>((now - p.t0) / Animator::kPopupLife);
+            if (k <= 0.0f) continue;
+            const Color base = p.kind == Animator::PopupKind::Damage ? kPopupDamage
+                             : p.kind == Animator::PopupKind::Heal   ? kPopupHeal
+                                                                     : kPopupShield;
+            const int fs = std::max(14, l.tileSize / 2);
+            const Vector2 c = tileCenter(l, p.tile);
+            // Per-popup horizontal jitter so stacked hits on one tile don't overlap.
+            const float jitter = static_cast<float>((i * 37) % 7 - 3) * (l.tileSize * 0.06f);
+            const int tw = MeasureText(p.text.c_str(), fs);
+            const int px = static_cast<int>(c.x - tw / 2.0f + jitter);
+            const int py = static_cast<int>(c.y - l.tileSize * 0.5f - (1.0f - k) * l.tileSize);
+            const unsigned char a = static_cast<unsigned char>(std::clamp(k, 0.0f, 1.0f) * 255.0f);
+            DrawText(p.text.c_str(), px + 1, py + 1, fs, Color{0, 0, 0, static_cast<unsigned char>(a * 0.7f)});
+            DrawText(p.text.c_str(), px, py, fs, Color{base.r, base.g, base.b, a});
         }
     }
 

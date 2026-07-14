@@ -114,6 +114,26 @@ g++ -std=c++20 -O2 -Isrc \
 ./tb_headless
 ```
 
+## Play online with friends
+
+Multiplayer is **self-hosted**: one person runs `tb_server` and friends connect
+their clients to it. To do this without exposing a home IP or forwarding router
+ports, connect everyone through **[Tailscale](https://tailscale.com)** (a free mesh
+VPN) and bind the server to its tailnet address. Full host + connect walkthrough:
+**[CONNECT.md](CONNECT.md)**.
+
+The GUI's **"Play Online"** button connects to the **`tb_lobby`** daemon (the Online
+Home); `tb_server` is only the direct-matchmaking variant.
+
+```bash
+# Host (build the GUI-free lobby daemon, bind it to the tailnet IP):
+cmake --build build --target tb_lobby -j
+./build/tb_lobby 5555 "$(tailscale ip -4)" data/rules.json data/rules.ranked.json
+
+# Player (point the client at the host's tailnet IP):
+ATB_CONNECT=100.x.y.z:5555 ATB_USER=alice ATB_PASS=... ./build/tactical_battler
+```
+
 ## Screens
 
 The app opens on the **Build Editor** and flips to the **Battle** when you hit

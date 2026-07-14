@@ -446,6 +446,53 @@ int main() {
         check(b.unit(P).pos == Vec2i{13, 3}, "exit clamps to the last walkable tile");
     }
 
+    // --- Ground lifetime is independent of spawned non-champions ------------
+    // Regression: ground effects used to age on EVERY unit's turn, so a bomb or
+    // summon (which joins the initiative order) silently accelerated the decay of
+    // portals, glyphs and walls. They now age on champion turns only, so a portal
+    // survives the same number of rounds no matter how many non-champions share
+    // the field.
+    std::printf("Ground lifetime unaffected by a spawned non-champion:\n");
+    {
+        // A freshly-cast portal (duration 3) must still be standing when its caster
+        // comes back around one full initiative cycle later. The number of extra
+        // non-champions in the order must NOT change that — the player-facing bug was
+        // that a bomb/summon burned the portal away before the caster could reuse it.
+        auto portalUpNextPlayerTurn = [](Battle& b) {
+            int guard = 0;
+            do { b.endTurn(); } while (b.activeUnit() != P && guard++ < 500);
+            for (const GroundEffect& g : b.groundEffects())
+                if (g.kind == GroundKind::Portal) return true;
+            return false;
+        };
+
+        // Baseline: a plain 1v1 (two champions).
+        Battle base = makeArena({1, 3}, {12, 3}, {spellid::Portal});
+        base.cast(P, slotOf(base, P, spellid::Portal), {3, 3});
+        const bool baseUp = portalUpNextPlayerTurn(base);
+
+        // Same, but with an extra non-champion (an inert Object) parked in the
+        // initiative order, far from the champions and with no fuse so it persists.
+        std::vector<Entity> roster;
+        roster.push_back(makeUnit("P", Faction::Player, {1, 3}, {spellid::Portal}));
+        roster.push_back(makeUnit("E", Faction::Enemy, {12, 3}, {spellid::Attack}));
+        Entity obj;
+        obj.name = "dummy";
+        obj.kind = EntityKind::Object;
+        obj.team = Faction::Player;
+        obj.pos = {6, 6};
+        obj.maxHp = obj.hp = 999; // long-lived, no fuse/ignition → stays in the order
+        obj.initiative = 1;       // acts after the champions
+        roster.push_back(std::move(obj));
+        Battle withObj(Grid(14, 7), std::move(roster));
+        withObj.cast(P, slotOf(withObj, P, spellid::Portal), {3, 3});
+        const bool objUp = portalUpNextPlayerTurn(withObj);
+
+        check(baseUp, "baseline portal survives to the caster's next turn");
+        check(objUp == baseUp,
+              "a non-champion in initiative does not shorten the portal's lifetime");
+    }
+
     // --- Invisible: hidden from AI target acquisition -----------------------
     std::printf("Invisible (hidden from AI):\n");
     {

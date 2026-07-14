@@ -378,11 +378,15 @@ frame for a given time). Two sources drive them:
   reports that event, then the sprite reverts to ambient / static.
 
 The event trigger rides the **combat event stream** (§2): `render/Animator`
-consumes new `Cast` events off `battle.events()` each frame and stamps the actor's
+consumes new events off `battle.events()` each frame. A `Cast` stamps the actor's
 trigger time; `SpritePack::drawSprite`'s frame-aware overload then picks *cast
 clip while running → ambient loop → static rect*, and the renderer routes unit
-sprites through it. Animation state is transient frontend memory — it lives in
-`render/`, never `core/`, because it's cosmetic and touches no resolution.
+sprites through it. A `Damage` stamps the victim (a short **hit shake + red
+flash**) and spawns a **floating combat number** — `Damage`/`Heal`/`Shield`
+events become rising, fading `-N`/`+N`/`N` popups drawn over the struck tile, so
+damage/healing reads on the board instead of only in the log. Animation state is
+transient frontend memory — it lives in `render/`, never `core/`, because it's
+cosmetic and touches no resolution.
 
 Because clips are just rects on the already-bound atlas, animation costs **no
 extra texture loads or binds**. Static-only packs are fully valid — a still sprite
@@ -422,15 +426,20 @@ hotkey digit stays drawn on each button, so the keyboard path still works.
 Each slot's visual state is fully derivable from the `Entity` the renderer
 already receives (`spells[i]`, `spellCooldowns[i]`, current `ap`):
 
-- **selected** — highlighted border (the spell right-click will cast)
+- **selected** — highlighted border (a left-click on a green tile will cast it)
 - **affordable** — enough AP *and* off cooldown
 - **unaffordable** — dimmed
 - **on cooldown** — greyed with the remaining-turn count overlaid
 - hovering a button shows the spell's tooltip (name, AP, range, cooldown).
 
-Casting is unchanged — right-click the target tile. The bar only replaces the
-*selection* gesture, which is the smallest change that removes the
-memorise-the-numbers burden.
+Controls are **unified and left-click driven** (Dofus-style). Selection is a
+*mode*, not just a highlight: with **no** spell selected, a left-click *moves* the
+active unit along the shortest path; **select** a spell (click its bar button or
+press `1`–`9`) to reveal its castable (green) tiles, then **left-click a green
+tile to cast**. Clicking the selected button again, pressing its digit again,
+right-click, or Esc **deselects** (back to move mode). This removes both the
+memorise-the-numbers burden and the old move-vs-cast button split (previously
+left-click moved and right-click cast the selected spell).
 
 **Icon resolution** follows the same fallback ladder as everything else, so the
 bar is usable with zero custom art. The icon is just the spell's atlas sprite
@@ -465,9 +474,10 @@ off the active `Entity`.
 
 - **Shipped**: atlas-based packs (static `rect` per key) + palette, manifest-driven,
   fallback to primitives; the clickable spell bar with procedural-badge fallback
-  for icons; the combat log (§2); and **animations** — ambient `anim` + the `cast`
-  event clip, driven off the event stream.
-- **Later**: more event clips (`hit` / `death`), ambient idle loops once packs
+  for icons; the combat log (§2); **floating combat numbers** + the hit shake/flash;
+  and **animations** — ambient `anim` + the `cast` event clip, driven off the event
+  stream.
+- **Later**: pack-authored `hit` / `death` clips, ambient idle loops once packs
   supply frames, multi-page atlases, ground-effect + status-marker pack routing,
   editor-card icons, hot-reload, runtime packing of loose PNGs, particles, and
   sound packs (the same key→asset manifest idea, mapping "fireball cast" → a

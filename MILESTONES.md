@@ -7,55 +7,47 @@ Legend: **◐ in progress · ☐ todo**.
 
 ---
 
-## 0.0.2 — Elemental surfaces (Divinity/BG3-style) — headline feature
+## 0.1.0 — Team Play (2v2 / 3v3) — headline feature
 
-**Status: code-complete, all slices validated (full CI green, determinism
-fingerprint unchanged); pending commit + release.** Design locked in
-[`docs/elements.md`](docs/elements.md).
+**Status: in progress.** 0.0.2 (elemental surfaces) shipped. Numbered **0.1.0**
+(not 0.0.3): the ground-tick fix changes combat timing, so 0.0.2 replays /
+scoresheets no longer re-sim identically — a compatibility break, which bumps the
+minor in 0.x. This release adds multi-human team matches (backend in progress),
+plus two control/feedback UX wins and the terrain-lifetime fix, already landed on
+the working branch.
 
-Turn `Glyph` from a bespoke trap into a **neutral surface** that elemental
-spells paint and combine (fire · electric · poison · water · ice · heal · oil).
-Built on the existing `GroundEffect` + `tickGround()` + `onEnterTile()` substrate
-(`Battle.cpp`): a new **element axis**, a deterministic **reaction table**, and
-content. Every reaction re-sims identically from notation (verify-don't-host):
-resolution order is canonical (row-major zone, ground spawn order, units by id)
-and chains are capped one-per-tile-per-cast.
+The crux: the engine is 2-faction (`Faction{Player,Enemy}`) and the whole net
+stack authorizes intents on a single `Faction seat`. 2v2/3v3 stays **two sides**
+but needs a **controller-seat identity orthogonal to `Faction`** — a human owns a
+subset of a faction's champions; the Arbiter authorizes by seat-ownership, not
+faction. NOT a factions overhaul: `Ruleset.teamSize` (1–8) + `buildMatch` already
+build N champions per side, and `MatchFormat.teamSize` already rides the wire.
+Design decisions locked: **design-for-N** (ship 2v2 + 3v3 together), **separate
+2v2 / 3v3 Elo ladders**, ready-check **shows partners' builds**.
 
-- ✅ **E.0 Design lock** — [`docs/elements.md`](docs/elements.md): roster, the
-  `(surface × incoming) → (result, burst)` matrix, canonical resolution order,
-  the one-reaction-per-tile chain cap, notation/determinism impact. All design
-  calls closed (Oil in, Glyph repel retired, Electric = persistent surface,
-  Frozen=root / Stunned=skip).
-- ✅ **E.1 Surface substrate** — `enum Element` + `GroundSpec.element` +
-  `GroundEffect.element/blocksLos`; `SpellEnums.h` rows + count bumps; `SpellJson`
-  + `Snapshot` (`Net.cpp`) in/out. `element` is optional so pre-0.0.2 data
-  round-trips byte-identical (no schema bump needed).
-- ✅ **E.2 Passive behaviour** — `surfaceEnter`/`surfaceTick` per element; new
-  statuses `Wet`/`Burning`/`Frozen`/`Stunned`/`Oiled`; `stepTo` gates on Frozen,
-  `startTurnFor` ticks Burning + zeroes a Stunned turn. Deterministic.
-- ✅ **E.3 Reaction engine** — the matrix in core, tile-local (one
-  `GroundEffect` per painted tile), first-match spawn order, one reaction per
-  tile per cast. Steam sets `blocksLos` (wired into LOS). Truth-table tested.
-- ✅ **E.4 Effect vocabulary** — `Effect::Type::PaintSurface` (element + duration
-  in `amount`) + `TargetShape::Cone` (reuses the 0.0.1 wheel facing via
-  `affectedTiles` rotation). *Delayed second stage reuses the existing
-  `onDeath`/`fuse` object — no `DelayedArea` type needed.*
-- ✅ **E.5 Elemental spell set** — `Storm` (rain via `PaintSurface(Water)` +
-  fused `stormcloud` creature whose `onDeath` paints Electric on the wet zone),
-  `Blizzard` (Cone: damage + Frozen + Ice), and painters `Ignite`/`Puddle`/
-  `Electrify`. Catalog regen'd (25 spells, v1.2.0), creatures v1.1.0.
-- ✅ **E.6 AI awareness** — `element` into `featurize()`; evaluator prices
-  Burning as DoT, Stunned/Frozen attackers as reduced threat, and a
-  surface-hazard term (avoid fire, value a heal pool). *Painters read "AI-unused"
-  in sims — the planner doesn't yet set up multi-turn combos (future work).*
-- ✅ **E.7 Render + narration** — element palette + surface draw in
-  `Renderer.cpp`, `statusWord` names the new statuses. (Client boots + renders
-  the new catalog; in-battle surface tint not screenshot-verified — no input
-  injection here. Theming the palette + a Storm telegraph are follow-ups.)
-- ✅ **E.8 Ship gate** — `tb_balance` clean (Storm/Blizzard balanced), determinism
-  fingerprint **unchanged** (no re-lock needed), elemental determinism guard +
-  reaction truth-table tests, full `scripts/run_ci_checks.sh` green. Ready to tag
-  0.0.2 (commit + release are Hugo's to drive).
+- ✅ **Lobby GUI + matchmaking surface** — `1v1 / 2v2 / 3v3` selector in the
+  format row (`LobbyScreen`); seeks/challenges/queue post & pair by team size
+  (`sameFormat` keys on `teamSize`, already on the wire).
+- ☐ **Engine seat-ownership** — per-unit owner tag, ownership-aware `controlFor` +
+  intent authorization, generalized win check. Core-only, test-covered, defaults
+  from `Faction` so 1v1 is unchanged. *Next step.*
+- ☐ **Protocol/Arbiter/MirrorSession** carry `seat = (faction, slot)` not bare
+  `Faction`.
+- ☐ **Lobby party formation** — group N players, assign seats, group ready-check.
+- ☐ **`AccountStore`** per-format ratings (1v1/2v2/3v3) + `schema.sql` migration.
+- ☐ **GUI** — party UI, team-aware `ReadyCheckScreen`, board ownership tinting.
+- ☐ **Ground aging → true per-round model** (with a deliberate balance pass) once
+  team turn order lands — supersedes the interim champion-only tick below.
+- ✅ **Unified Dofus-style controls** — left-click driven: no spell selected →
+  move; select (bar click / `1`–`9`) → green castable tiles → left-click to cast;
+  right-click / Esc / re-press digit → deselect (`main.cpp`). Pending release.
+- ✅ **Floating combat numbers** — `Damage`/`Heal`/`Shield` events become rising,
+  fading `-N`/`+N`/`N` popups over the board (`Animator` + `Renderer`), so hits
+  read without watching the log. Pending release.
+- ✅ **Ground-effect lifetime fix** — terrain (portals/glyphs/walls/surfaces) aged
+  on *every* unit-turn, so bombs/summons joining the initiative order silently
+  shortened it (NOT the summon cap). `tickGround` now runs on **champion** turns
+  only — balance-neutral in 1v1. Regression test in `tests/spells_demo.cpp`.
 
 ## Online hardening — the gate to a public, non-VPN launch
 

@@ -232,8 +232,14 @@ void Battle::startTurnFor(EntityId id) {
     for (int& cd : e.spellCooldowns)
         if (cd > 0) --cd;
 
-    // Age battlefield features once per turn.
-    tickGround();
+    // Age battlefield features on CHAMPION turns only. Ground lifetime is denominated
+    // in champion-turns so that spawning non-champions (bombs, summons) — which join
+    // the initiative order — cannot silently accelerate the decay of portals, glyphs,
+    // walls, and elemental surfaces. In a 1v1 (one champion per side) this is exactly
+    // the old two-ticks-per-round cadence, so ground durations are unchanged; it only
+    // removes the bug where lobbing a bomb shortened your own portal. (The full
+    // per-round model arrives with team play — see the 2v2/3v3 engine work.)
+    if (e.isChampion()) tickGround();
 
     // Closing ring: bleed any unit caught outside the shrinking safe square.
     if (e.alive() && inStorm(e.pos)) applyDamage(id, storm_.damage, DamageSource::Storm);
