@@ -64,6 +64,12 @@ struct ViewState {
     int selectedSpell = -1;                 // highlighted button (matches the digit hotkey)
     std::vector<std::string> spellIconKeys; // catalog key per active-unit spell (icons land in 2.2)
 
+    // Player-identity nameplates drawn above each champion: the account username of
+    // whoever controls that side. Empty falls back to the champion's own name (build
+    // name) — so local/AI matches still label sensibly. (Cosmetic name styling and
+    // per-owner names in 2v2/3v3 layer on top of this — see the display-name plan.)
+    std::string nameP, nameE; // Player-faction / Enemy-faction display name
+
     // Combat log panel (drawn in the empty column right of the board, if it fits).
     int windowW = 0, windowH = 0; // actual window size (the board uses Layout::screen*)
     int logScroll = 0;            // lines scrolled up from the newest (0 = autoscroll to bottom)

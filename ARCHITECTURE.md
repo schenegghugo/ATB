@@ -605,6 +605,37 @@ canonical content. Then:
 6. **Reconnect + spectate** (free from snapshots) and **replays** (free from
    `seed + intents`, roadmap #7).
 
+### Client onboarding: the connection flight check (shipped)
+
+Self-hosting over Tailscale (see `CONNECT.md`) is a power-user path; to make
+**"Play Online"** approachable, the client ships a **flight check** that diagnoses
+the local networking setup by process of elimination. It follows the layering rule:
+the engine knows nothing about it, and even the transport stays dumb — the check is
+a thin diagnostic layer that *reads* state and *guides*, it never changes the game.
+
+- **`net/TailscaleProbe`** (in `tb_transport`) — runs `tailscale status --json` and
+  parses it with the project's own `data/Json` (no new dependency) into a
+  `TsStatus { installed, daemonUp, backend, tailnet, peers[] }`. The parse step is
+  **pure and fixture-tested** headlessly (`tests/tailscale_demo.cpp`, including a
+  captured live tailnet and a `NoState` regression); the probe + TCP poke are the
+  only side-effecting parts. `flightStepFor()` reduces a status to the *first unmet*
+  requirement: `Install → StartService → SignIn → JoinNetwork → HostOffline →
+  HostUnreachable → Ready`.
+- **`net/Subprocess`** (in `tb_transport`) — a tiny, shell-free process helper
+  (fork/exec on POSIX, `CreateProcess` + `CREATE_NO_WINDOW` on Windows so no console
+  flashes) used to run the CLI and to open the browser / Tailscale app.
+- **`render/FlightCheckScreen`** — the immediate-mode ladder UI; runs the probe in a
+  `std::future` so the frame never blocks, and re-runs on "Check again". On `Ready`
+  it auto-detects the host's tailnet IP and prefills the Connect screen.
+
+The **robust "is my host on this network" signal is peer presence** — the target
+address appearing as an *online* peer in `status --json` — not a tailnet-name match:
+it answers the only question that matters (can this client reach the server now) and
+doubles as IP auto-detection. The hard boundary: the client **detects and guides**
+but cannot install Tailscale or sign a user in (privileged, per-user browser auth) —
+those steps get a button (open page / launch app / copy command), not automation.
+The truly zero-Tailscale path for non-power users is a future **hosted relay**.
+
 ---
 
 ## 8. What the server stores (it is small)

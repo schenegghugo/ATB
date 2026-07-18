@@ -8,12 +8,40 @@
 namespace tb::render {
 
 // The human-facing codename for the current release (shown beside the version).
-inline constexpr const char* kVersionCodename = "Team Play";
+inline constexpr const char* kVersionCodename = "Build Books";
 
 // Player-facing changelog, newest release first. Plain text, one item per line
 // (kept under ~72 cols so it fits without wrapping).
 inline constexpr const char* kPatchNotes =
-    R"(0.1.0  —  "Team Play"
+    R"(0.1.1  —  "Build Books"
+
+Share your builds, read every spell at a glance, and smoother casting.
+
+BUILD BOOKS (save and share your builds)
+  - Your saved builds now persist between sessions in a local build book,
+    so the roster you author is still there next launch.
+  - Load any saved build straight into a slot from the editor (Load button).
+  - Copy code / Paste code: export a build to your clipboard and hand the
+    code to a friend - they paste it right into their editor. Trade whole
+    "build books" with zero fuss.
+
+CLEARER SPELLS (the editor tells you what a spell does)
+  - Every spell popup now shows its DAMAGE up front, plus a one-line, plain-
+    language description of how it actually plays.
+  - Surface spells finally read properly - Storm, for one, now explains its
+    soak-then-lightning combo instead of looking like it does nothing.
+
+SMOOTHER CASTING
+  - Casting a spell now automatically deselects it and drops you back to move
+    mode - no more accidental re-casts or a stray right-click to cancel.
+
+FIXES
+  - Bombs ride portals now: a bomb summoned onto - or shoved onto - a portal
+    entry is teleported to the exit, just like a unit walking in. Lob or
+    knock your bombs through a portal onto the enemy backline.
+
+
+0.1.0  —  "Team Play"
 
 Reworked controls, damage you can read at a glance, a terrain fix, and the
 first online groundwork for 2v2 / 3v3.

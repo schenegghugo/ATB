@@ -40,6 +40,7 @@
 #include "render/Animator.h"
 #include "render/BuildEditorScreen.h"
 #include "render/ConnectScreen.h"
+#include "render/FlightCheckScreen.h"
 #include "render/ContentPaths.h"
 #include "render/CorrespondenceMatchSource.h"
 #include "render/LobbyScreen.h"
@@ -80,7 +81,7 @@ using namespace tb;
 
 namespace {
 
-enum class AppState { Menu, Editor, Connect, Lobby, ReadyCheck, Waiting, Battle, Settings, Paused, PatchNotes };
+enum class AppState { Menu, Editor, FlightCheck, Connect, Lobby, ReadyCheck, Waiting, Battle, Settings, Paused, PatchNotes };
 
 // The in-game pause menu (Esc anywhere) links out to the project page.
 inline constexpr const char* kGithubUrl = "https://github.com/schenegghugo/ATB";
@@ -108,7 +109,9 @@ struct Session {
     Ruleset ruleset = makeDefaultRuleset();                 // economy + ring + arena + format
     std::optional<Ruleset> rankedRuleset;                   // data/rules.ranked.json (rated online)
     std::optional<Grid> staticArena;                        // set when rules.arena.map is used
-    std::unique_ptr<BuildRepository> repo = std::make_unique<InMemoryBuildRepository>();
+    // Persistent local "build book": one file per saved build under ./builds, so
+    // authored builds survive across launches and can be shared file-to-file.
+    std::unique_ptr<BuildRepository> repo = std::make_unique<FileBuildRepository>("builds");
 };
 
 // Two starter presets so the editor and enemy picker have content (stands in for
@@ -245,8 +248,12 @@ int main() {
                  session.staticArena->width(), session.staticArena->height());
     }
 
-    session.repo->save(pyromancerBuild()); // seed the store (stands in for the DB)
-    session.repo->save(bruiserBuild());
+    // Seed two starter presets only on a fresh install (empty build book), so we
+    // never clobber the player's own edits to a same-named build on later launches.
+    if (session.repo->list().empty()) {
+        session.repo->save(pyromancerBuild());
+        session.repo->save(bruiserBuild());
+    }
 
     // Player preferences (settings.json beside the app, hand-editable): the
     // picked UI theme + sprite pack. Absent file = defaults; a malformed one is
@@ -380,6 +387,7 @@ int main() {
     render::PatchNotesScreen patchNotes;
     std::vector<std::string> themesList, packsList; // rescanned on entering Settings
     render::LobbyScreen lobbyScreen;
+    render::FlightCheckScreen flightCheck; // "Play Online" connection wizard
     render::ReadyCheckScreen readyScreen;
     std::unique_ptr<net::LobbySession> lobby; // live lobby connection (Online Home)
     std::string lobbyHost = "127.0.0.1";      // parsed from the connect form on join
@@ -410,6 +418,18 @@ int main() {
     AppState patchNotesReturn = AppState::Menu; // where Patch Notes "Back" returns to
     int logScroll = 0;             // combat-log scrollback (0 = pinned to newest)
     bool onlineMatch = false;      // this battle came from the lobby (→ end screen returns there)
+    // Player-identity nameplates: the account username shown above each side's
+    // champions. Empty → the renderer falls back to the champion's build name (local
+    // / AI / replay). Faction-aligned (P = Player seat, E = Enemy seat).
+    std::string faceNameP, faceNameE;
+    auto setFaces = [&](Faction seat, const std::string& me, const std::string& opp) {
+        faceNameP = seat == Faction::Player ? me : opp;
+        faceNameE = seat == Faction::Player ? opp : me;
+    };
+    // A live match joins off-thread and enters battle later (PendingJoin), where
+    // enterBattleWith clears the names — so stash them here and re-apply on arrival.
+    Faction pendingFaceSeat = Faction::Player;
+    std::string pendingFaceMe, pendingFaceOpp;
     float turnClock = 0.0f;        // seconds left in the active seat's move (timed matches)
     EntityId lastActive = 0;       // detect turn changes to reset turnClock
     std::string chatDraft;         // in-match chat being typed
@@ -454,6 +474,8 @@ int main() {
         selectedSpell.reset();
         spellRotation = 0;
         logScroll = 0;
+        faceNameP.clear(); // online entry points set these right after; local → build names
+        faceNameE.clear();
         status = "Player turn — left-click to move; pick a spell (click or 1-9) then left-click a green tile to cast; Tab=editor.";
         state = AppState::Battle;
     };
@@ -464,8 +486,11 @@ int main() {
     // the ranked ruleset (which must be loaded locally). `resume` = a cold resume of
     // an existing correspondence game: replay the server's log (and my persisted
     // decoy secrets) instead of starting fresh.
-    auto routePairing = [&](const net::PairedInfo& pi, bool resume = false) {
+    auto routePairing = [&](const net::PairedInfo& pi, bool resume = false,
+                            const std::string& opponentHint = "") {
         onlineMatch = true; // → the end-of-match screen returns to the lobby
+        const std::string me = lobby ? lobby->account().user : "";
+        const std::string opp = opponentHint.empty() ? pi.opponent : opponentHint;
         const Ruleset& rs =
             (pi.rated && session.rankedRuleset) ? *session.rankedRuleset : session.ruleset;
         if (pi.live) {
@@ -483,6 +508,9 @@ int main() {
                 pj->done = true;
             }).detach();
             pendingJoin = std::move(pj);
+            pendingFaceSeat = pi.seat; // applied when the join completes (enterBattleWith)
+            pendingFaceMe = me;
+            pendingFaceOpp = opp;
             state = AppState::Waiting;
         } else {
             net::CorrespondenceSetup setup{rs, session.catalog, session.creatures, pi.seed, pi.player,
@@ -507,6 +535,7 @@ int main() {
             enterBattleWith(std::make_unique<render::CorrespondenceMatchSource>(
                 std::move(cs), lobby.get(), pi.game, pi.seat, pi.rated, lobby->account().user,
                 secretsPath));
+            setFaces(pi.seat, me, opp); // after enterBattleWith (which clears the names)
         }
     };
 
@@ -600,7 +629,14 @@ int main() {
             EndDrawing();
             switch (r) {
                 case render::MainMenuScreen::Result::LocalMatch:  editorMode = EMode::Local; editorReturn = AppState::Menu; state = AppState::Editor; break;
-                case render::MainMenuScreen::Result::PlayOnline:  state = AppState::Connect; break; // → login → lobby
+                case render::MainMenuScreen::Result::PlayOnline: // first time → flight check, else straight to login
+                    if (prefs.onlineChecked) {
+                        state = AppState::Connect;
+                    } else {
+                        flightCheck.open(connect.params().host);
+                        state = AppState::FlightCheck;
+                    }
+                    break;
                 case render::MainMenuScreen::Result::BuildEditor: editorMode = EMode::Edit; editorReturn = AppState::Menu; state = AppState::Editor; break;
                 case render::MainMenuScreen::Result::Settings:
                     // Rescan on entry so a pack/theme dropped in while the game
@@ -694,6 +730,25 @@ int main() {
             continue;
         }
 
+        if (state == AppState::FlightCheck) {
+            BeginDrawing();
+            const auto r = flightCheck.runFrame(GetScreenWidth(), GetScreenHeight());
+            EndDrawing();
+            if (r == render::FlightCheckScreen::Result::Back) {
+                state = AppState::Menu;
+            } else if (r == render::FlightCheckScreen::Result::Proceed) {
+                // Passed (or skipped) once — don't nag again; but keep it reachable
+                // from the Connect screen. Prefill the auto-detected host if any.
+                if (!flightCheck.detectedServer().empty()) connect.setHost(flightCheck.detectedServer());
+                if (!prefs.onlineChecked) {
+                    prefs.onlineChecked = true;
+                    savePrefsToFile(prefs, "settings.json");
+                }
+                state = AppState::Connect;
+            }
+            continue;
+        }
+
         if (state == AppState::Connect) {
             // An async login finished? Adopt (or report) it before drawing.
             if (pendingConnect) {
@@ -727,6 +782,10 @@ int main() {
             if (r == render::ConnectScreen::Result::Back) {
                 pendingConnect.reset(); // abandon any in-flight attempt
                 state = AppState::Menu;
+            } else if (r == render::ConnectScreen::Result::Check) {
+                pendingConnect.reset();
+                flightCheck.open(connect.params().host); // re-run the wizard on the current host
+                state = AppState::FlightCheck;
             } else if (r == render::ConnectScreen::Result::Connect && !pendingConnect) {
                 // Connect to the lobby (the Online Home) OFF-THREAD — a dead host
                 // would otherwise freeze the UI for the whole TCP timeout.
@@ -768,6 +827,7 @@ int main() {
                 if (got) {
                     onlineMatch = true;
                     enterBattleWith(std::make_unique<render::RemoteMatchSource>(std::move(got)));
+                    setFaces(pendingFaceSeat, pendingFaceMe, pendingFaceOpp); // names stashed at pairing
                 } else {
                     lobbyScreen.setStatus("Join failed: " + (err.empty() ? "abandoned" : err));
                     state = lobby ? AppState::Lobby : AppState::Menu;
@@ -835,6 +895,8 @@ int main() {
                         enterBattleWith(std::make_unique<render::SpectateMatchSource>(
                             std::move(mirror), lobby.get(), g.id, cursor));
                         spectating = true;
+                        faceNameP = g.userP; // spectate names are already faction-aligned
+                        faceNameE = g.userE;
                         status = "SPECTATING " + g.userP + " vs " + g.userE + " — Tab returns to the lobby.";
                     } else {
                         lobbyScreen.setStatus("Can't watch that game (its log is unavailable).");
@@ -850,7 +912,8 @@ int main() {
                                                 editor.playerTeam().front());
             EndDrawing();
             if (r == render::ReadyCheckScreen::Result::Matched) {
-                routePairing(readyScreen.pairing()); // → Battle
+                routePairing(readyScreen.pairing(), /*resume=*/false,
+                             lobbyScreen.readyCheck().opponent); // → Battle
             } else if (r == render::ReadyCheckScreen::Result::Cancelled) {
                 state = AppState::Lobby;
             } else if (r == render::ReadyCheckScreen::Result::EditBuild) {
@@ -1074,6 +1137,7 @@ int main() {
                                     net::Intent::castTo(*selectedSpell, *portalPending, hovered)))
                                 status = *s;
                             portalPending.reset();
+                            selectedSpell.reset(); // portal fired → back to move mode
                         } else {
                             status = "Pick a walkable exit within the portal's reach (Esc cancels).";
                         }
@@ -1083,9 +1147,15 @@ int main() {
                         // for it instead of submitting straight away.
                         if (source->needsDecoyChoice(in)) {
                             pendingDecoy = in;
+                            selectedSpell.reset(); // aim locked; the a/b choice commits it
                             status = "Decoy: commit your secret — stay the ORIGINAL or swap to the TWIN.";
-                        } else if (auto s = source->submit(in)) {
-                            status = *s;
+                        } else {
+                            // A cast deselects the spell (Dofus-style: back to move mode),
+                            // but only when it actually fires — a rejected click keeps it
+                            // selected so you can re-aim.
+                            const bool willFire = source->battle().canCast(me, *selectedSpell, hovered);
+                            if (auto s = source->submit(in)) status = *s;
+                            if (willFire) selectedSpell.reset();
                         }
                     }
                 }
@@ -1142,6 +1212,8 @@ int main() {
         view.hoveredTile = hovered;
         view.hoveredValid = hoveredValid;
         view.statusLine = status;
+        view.nameP = faceNameP; // username nameplates (empty → champion build names)
+        view.nameE = faceNameE;
         view.windowW = GetScreenWidth();
         view.windowH = GetScreenHeight();
         view.logScroll = logScroll;

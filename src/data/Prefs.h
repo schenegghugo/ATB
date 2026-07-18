@@ -24,6 +24,11 @@ struct Prefs {
     float uiScale = 1.0f;      // board tile-size multiplier
     int clockHeight = 68;      // clock strip height, px
     float chatFraction = 0.5f; // chat's share of the column below the clock (rest = log)
+
+    // "Play Online" connection flight check: shown once (first click), then skipped
+    // — the user can still summon it from the Connect screen. Persists so a proven
+    // setup isn't re-nagged across launches.
+    bool onlineChecked = false;
 };
 
 struct PrefsLoad {

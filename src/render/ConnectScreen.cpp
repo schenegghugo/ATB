@@ -26,10 +26,10 @@ void textCentered(const char* s, Rectangle r, int size, Color c) {
              static_cast<int>(r.y + (r.height - size) / 2), size, c);
 }
 
-bool button(Rectangle r, const char* label, Vector2 m, Color base) {
+bool button(Rectangle r, const char* label, Vector2 m, Color base, Color fg = kText) {
     DrawRectangleRec(r, hovered(r, m) ? kPanelHot : base);
     DrawRectangleLinesEx(r, 1.0f, kLine);
-    textCentered(label, r, 18, kText);
+    textCentered(label, r, 18, fg);
     return pressed(r, m);
 }
 
@@ -95,8 +95,14 @@ ConnectScreen::Result ConnectScreen::runFrame(int screenW, int screenH) {
         (IsKeyPressed(KEY_ENTER) && !p_.host.empty()))
         result = Result::Connect;
 
+    // Persistent entry back into the flight check — "connection help" for when a
+    // connect fails or the setup changed.
+    Rectangle checkBtn{x, y + 50, panelW, 30};
+    if (button(checkBtn, "Trouble connecting?  Run the connection check", m, kPanel, kMuted))
+        result = Result::Check;
+
     if (!status_.empty())
-        DrawText(status_.c_str(), static_cast<int>(x), static_cast<int>(y) + 50, 15, kBad);
+        DrawText(status_.c_str(), static_cast<int>(x), static_cast<int>(y) + 90, 15, kBad);
 
     // Clicking empty space drops focus (so typing doesn't hit a stale field).
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && result == Result::None) {

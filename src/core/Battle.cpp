@@ -649,7 +649,8 @@ void Battle::spawnCreature(const std::string& key, Faction team, Vec2i at) {
         Entity e = proto;
         e.team = team;
         e.pos = at;
-        spawnEntity(std::move(e));
+        const EntityId id = spawnEntity(std::move(e));
+        teleportIfOnPortal(id); // a bomb summoned onto a portal entry rides it
         return;
     }
 }
@@ -719,10 +720,28 @@ void Battle::onEnterTile(EntityId who) {
             return;
         }
         if (g.kind == GroundKind::Portal) {
-            if (grid_.isWalkable(g.exit) && !unitAt(g.exit)) e.pos = g.exit; // no chain
+            teleportIfOnPortal(who); // no chain
             return;
         }
     }
+}
+
+bool Battle::teleportIfOnPortal(EntityId who) {
+    Entity& e = units_[who];
+    if (!e.alive()) return false;
+    const Vec2i here = e.pos;
+    for (const GroundEffect& g : ground_) {
+        if (g.kind != GroundKind::Portal) continue;
+        for (Vec2i t : g.tiles)
+            if (t == here) {
+                if (grid_.isWalkable(g.exit) && !unitAt(g.exit)) {
+                    e.pos = g.exit;
+                    return true;
+                }
+                return false; // exit blocked — stays on the entry
+            }
+    }
+    return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -1008,10 +1027,13 @@ void Battle::applyForcedMove(EntityId who, Vec2i dir, int distance) {
         if (blocked) {
             const int remaining = distance - step;
             applyDamage(who, remaining * kCollisionDamagePerCell, DamageSource::Collision);
-            return;
+            break;
         }
         e.pos = next;
     }
+    // A portal under the resting tile still grabs a shoved unit or bomb. Only
+    // portals re-trigger on a forced move — glyphs deliberately don't (no loops).
+    teleportIfOnPortal(who);
 }
 
 } // namespace tb

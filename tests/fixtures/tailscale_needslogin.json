@@ -1,0 +1,9 @@
+{
+  "Version": "1.66.0",
+  "BackendState": "NeedsLogin",
+  "AuthURL": "",
+  "TailscaleIPs": null,
+  "Self": { "HostName": "thinkpad", "DNSName": "thinkpad.example.ts.net.", "TailscaleIPs": null, "Online": false },
+  "CurrentTailnet": null,
+  "Peer": null
+}

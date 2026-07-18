@@ -409,6 +409,34 @@ int main() {
         b.stepTo(P, {4, 3});                  // walk onto the entry -> teleport
         check(b.unit(P).pos == Vec2i{8, 3}, "entering the entry teleports to the traced exit");
     }
+
+    // --- Bomb rides a portal: spawned onto the entry ------------------------
+    std::printf("Bomb through portal (summoned onto the entry):\n");
+    {
+        Battle b = makeArena({1, 3}, {1, 6}, {spellid::Portal, spellid::Bomb});
+        b.setCreatures(makeDefaultCreatures()); // register the "bomb" prototype
+        b.cast(P, slotOf(b, P, spellid::Portal), {4, 3}); // entry (4,3), traced exit (8,3)
+        b.cast(P, slotOf(b, P, spellid::Bomb), {4, 3});   // summon a bomb ONTO the entry
+        const EntityId bomb = 2;                          // spawned after P(0), E(1)
+        check(b.unit(bomb).name == "bomb", "the bomb spawned");
+        check(b.unit(bomb).pos == Vec2i{8, 3},
+              "a bomb summoned onto the portal entry is teleported to the exit");
+    }
+
+    // --- Bomb rides a portal: shoved onto the entry -------------------------
+    std::printf("Bomb through portal (displaced onto the entry):\n");
+    {
+        Battle b = makeArena({2, 3}, {1, 6}, {spellid::Portal, spellid::Bomb, spellid::Knockback});
+        b.setCreatures(makeDefaultCreatures()); // register the "bomb" prototype
+        b.cast(P, slotOf(b, P, spellid::Portal), {8, 3}); // entry (8,3), traced exit (12,3)
+        b.cast(P, slotOf(b, P, spellid::Bomb), {4, 3});   // bomb lands off the portal, at (4,3)
+        const EntityId bomb = 2;
+        check(b.unit(bomb).pos == Vec2i{4, 3}, "bomb starts off the portal");
+        // Knockback shoves it 4 east: (4,3) -> lands on the entry (8,3) -> rides through.
+        b.cast(P, slotOf(b, P, spellid::Knockback), {4, 3});
+        check(b.unit(bomb).pos == Vec2i{12, 3},
+              "a bomb shoved onto the portal entry is teleported to the exit");
+    }
     std::printf("Portal (spawn-time transport):\n");
     {
         Battle b = makeArena({1, 3}, {5, 3}, {spellid::Portal});

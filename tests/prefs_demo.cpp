@@ -33,6 +33,7 @@ int main() {
         p.uiScale = 1.25f;      // exactly representable in binary → exact round-trip
         p.clockHeight = 80;
         p.chatFraction = 0.375f; // 3/8, exact in binary
+        p.onlineChecked = true;
         CHECK(savePrefsToFile(p, file), "saves");
         const PrefsLoad r = loadPrefsFromFile(file);
         CHECK(r.ok && !r.absent, "loads");
@@ -40,6 +41,7 @@ int main() {
         CHECK(r.prefs.uiScale == 1.25f, "uiScale round-trips");
         CHECK(r.prefs.clockHeight == 80 && r.prefs.chatFraction == 0.375f,
               "layout ratios round-trip");
+        CHECK(r.prefs.onlineChecked, "onlineChecked round-trips");
     }
 
     std::printf("Absent file = defaults, not an error (fresh install)\n");

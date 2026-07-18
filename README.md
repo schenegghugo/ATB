@@ -125,6 +125,17 @@ VPN) and bind the server to its tailnet address. Full host + connect walkthrough
 The GUI's **"Play Online"** button connects to the **`tb_lobby`** daemon (the Online
 Home); `tb_server` is only the direct-matchmaking variant.
 
+**Connection flight check.** The first time you click **Play Online**, the client
+runs a short, guided **connection check**: it reads your Tailscale state (via
+`tailscale status`) and walks you down a ladder — *installed → running → signed in →
+host on your network → host online → game reachable* — showing only the first thing
+that needs fixing, with a button to fix it (open the download page, launch the
+Tailscale app, or copy the command on Linux). When everything's green it
+auto-detects the host's tailnet IP and hands you straight to login. It only ever
+*detects and guides* — installing Tailscale and signing in are privileged, per-user
+steps the game can't do for you. It's reachable afterwards from the Connect screen
+("Trouble connecting?").
+
 ```bash
 # Host (build the GUI-free lobby daemon, bind it to the tailnet IP):
 cmake --build build --target tb_lobby -j

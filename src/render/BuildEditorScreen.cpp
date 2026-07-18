@@ -5,6 +5,9 @@
 #include "raylib.h"
 
 #include <algorithm>
+#include <optional>
+#include <string>
+#include <vector>
 
 namespace tb::render {
 
@@ -56,6 +59,86 @@ const char* shapeName(TargetShape s) {
 // --- Spell hover popup (build editor) ---------------------------------------
 std::string withSign(int v) { return (v >= 0 ? "+" : "") + std::to_string(v); }
 
+const char* elementName(Element el) {
+    switch (el) {
+        case Element::Fire: return "Fire";
+        case Element::Water: return "Water";
+        case Element::Ice: return "Ice";
+        case Element::Poison: return "Poison";
+        case Element::Electric: return "Electric";
+        case Element::Heal: return "Healing";
+        case Element::Oil: return "Oil";
+        case Element::Steam: return "Steam";
+        case Element::None: break;
+    }
+    return "elemental";
+}
+
+// A plain-language one-liner for how a spell actually plays — the "why", which
+// the mechanical effect list below can't convey (e.g. Storm's water+lightning
+// combo). Keyed by the catalog slug; blank for spells (or mods) without one, so
+// the popup simply omits it. Presentation-only — never touches the sim or hash.
+std::string spellBlurb(const std::string& key) {
+    if (key == "attack") return "Reliable short-range strike. Cheap, no cooldown.";
+    if (key == "fireball") return "Ranged blast that hits everything in a small circle.";
+    if (key == "poison") return "Hits on impact, then bleeds the target for more over several turns.";
+    if (key == "knockback")
+        return "Light hit that shoves the target back - slam them into walls or off their tile.";
+    if (key == "harpoon") return "Yanks the target toward you, then hits - drag foes out of cover.";
+    if (key == "bulwark") return "Shields an ally, soaking the next chunk of incoming damage.";
+    if (key == "mend") return "Restores health to an ally.";
+    if (key == "shelter") return "Raises a wall line that blocks both movement and line of sight.";
+    if (key == "invisible") return "Cloaks an ally - can't be directly targeted for a couple of turns.";
+    if (key == "portal")
+        return "Two tiles: whoever stands on or steps onto the entry - units AND bombs - is "
+               "teleported to the exit.";
+    if (key == "glyph") return "Marks tiles that shove away anyone who steps onto them.";
+    if (key == "rewind") return "Tags a unit; after a couple of turns it snaps back to where it was.";
+    if (key == "bomb")
+        return "Lobs a bomb that blows up on its 2nd turn (radius-1). Push, pull, or PORTAL it onto "
+               "enemies.";
+    if (key == "blocker") return "Summons a sturdy AI blocker (max 2 summons per team).";
+    if (key == "healer") return "Summons an AI healer that mends your team (max 2 summons per team).";
+    if (key == "brute") return "Summons an aggressive AI attacker (max 2 summons per team).";
+    if (key == "blind") return "Slashes the target's spell range for a few turns.";
+    if (key == "surge") return "Big AP boost now - but the unit crashes and loses AP a couple of turns later.";
+    if (key == "flux") return "Shifts movement points: speeds an ally, or slows a foe.";
+    if (key == "decoy") return "Swaps in an identical twin - enemies can't tell which is real until one acts.";
+    if (key == "storm")
+        return "Soaks a circle in water, then a stormcloud bursts and electrifies it: Water + "
+               "Electric = heavy shock across the whole pool.";
+    if (key == "blizzard") return "Ice cone: damages, freezes (roots) foes, and leaves an icy surface.";
+    if (key == "ignite") return "Sets tiles ablaze - Fire burns anyone standing in it.";
+    if (key == "puddle") return "Douses tiles with water - sets up Electric (shock) and Fire (steam) combos.";
+    if (key == "electrify")
+        return "Charges tiles with electricity - shocks anyone on them, and goes live on water.";
+    return "";
+}
+
+// Greedy word-wrap to a maximum pixel width at font size `size`.
+std::vector<std::string> wrapText(const std::string& text, int size, int maxW) {
+    std::vector<std::string> out;
+    std::string line, word;
+    auto flush = [&] {
+        if (word.empty()) return;
+        const std::string cand = line.empty() ? word : line + " " + word;
+        if (!line.empty() && MeasureText(cand.c_str(), size) > maxW) {
+            out.push_back(line);
+            line = word;
+        } else {
+            line = cand;
+        }
+        word.clear();
+    };
+    for (char c : text) {
+        if (c == ' ') flush();
+        else word.push_back(c);
+    }
+    flush();
+    if (!line.empty()) out.push_back(line);
+    return out;
+}
+
 std::string statusText(const StatusEffect& s, bool polarized) {
     const std::string t = " for " + std::to_string(s.remainingTurns) + " turns";
     switch (s.kind) {
@@ -93,14 +176,37 @@ std::string describeEffect(const Effect& fx) {
         }
         case Effect::Type::Summon: return "Summons a " + fx.creature;
         case Effect::Type::Decoy: return "Creates a decoy for " + std::to_string(fx.amount) + " turns";
+        case Effect::Type::PaintSurface:
+            return "Paints a " + std::string(elementName(fx.element)) + " surface (" +
+                   std::to_string(fx.amount) + " turns)";
     }
     return "";
+}
+
+// Total up-front damage a spell deals (sums its Damage effects; DoT is shown
+// separately in the effect list). 0 = the spell deals no direct damage.
+int directDamage(const Spell& sp) {
+    int dmg = 0;
+    for (const Effect& fx : sp.effects)
+        if (fx.type == Effect::Type::Damage) dmg += fx.amount;
+    return dmg;
 }
 
 // A floating info card for the hovered spell, anchored beside `card` and clamped
 // to the screen. Drawn last in the frame so it sits above every other widget.
 void drawSpellPopup(const SpellDef& d, Rectangle card, int screenW, int screenH) {
     const Spell& sp = d.spell;
+    const int titleSize = 18, lineSize = 13, pad = 12, lineH = 18, blurbW = 340;
+
+    // The plain-language "how it works" line, word-wrapped to a comfortable width.
+    const std::vector<std::string> blurb = wrapText(spellBlurb(d.key), lineSize, blurbW);
+
+    // A damage headline for spells that deal direct hits (so damage reads at a glance).
+    std::string headline;
+    if (const int dmg = directDamage(sp); dmg > 0)
+        headline = std::to_string(dmg) + " damage" +
+                   (sp.shape != TargetShape::Single ? " (to each in the area)" : "");
+
     std::vector<std::string> lines;
     lines.push_back("Build cost: " + std::to_string(d.buildCost) + " pts     AP cost: " +
                     std::to_string(sp.apCost));
@@ -117,11 +223,15 @@ void drawSpellPopup(const SpellDef& d, Rectangle card, int screenW, int screenH)
         if (!s.empty()) lines.push_back("- " + s);
     }
 
-    const int titleSize = 18, lineSize = 13, pad = 12, lineH = 18;
     int wNeed = MeasureText(sp.name.c_str(), titleSize);
+    if (!headline.empty()) wNeed = std::max(wNeed, MeasureText(headline.c_str(), lineSize));
+    for (const std::string& s : blurb) wNeed = std::max(wNeed, MeasureText(s.c_str(), lineSize));
     for (const std::string& s : lines) wNeed = std::max(wNeed, MeasureText(s.c_str(), lineSize));
     const int popW = wNeed + pad * 2;
-    const int popH = pad * 2 + titleSize + 8 + static_cast<int>(lines.size()) * lineH;
+    const int blurbBlock = static_cast<int>(blurb.size()) * lineH + (blurb.empty() ? 0 : 6);
+    const int headBlock = headline.empty() ? 0 : lineH + 2;
+    const int popH = pad * 2 + titleSize + 8 + headBlock + blurbBlock +
+                     static_cast<int>(lines.size()) * lineH;
 
     int px = static_cast<int>(card.x + card.width + 8); // prefer to the card's right
     int py = static_cast<int>(card.y);
@@ -133,6 +243,15 @@ void drawSpellPopup(const SpellDef& d, Rectangle card, int screenW, int screenH)
     DrawRectangleLines(px, py, popW, popH, kAccent);
     DrawText(sp.name.c_str(), px + pad, py + pad, titleSize, kText);
     int ly = py + pad + titleSize + 8;
+    if (!headline.empty()) {
+        DrawText(headline.c_str(), px + pad, ly, lineSize, kBad); // damage stands out
+        ly += lineH + 2;
+    }
+    for (const std::string& s : blurb) {
+        DrawText(s.c_str(), px + pad, ly, lineSize, kText);
+        ly += lineH;
+    }
+    if (!blurb.empty()) ly += 6;
     for (const std::string& s : lines) {
         DrawText(s.c_str(), px + pad, ly, lineSize, s.rfind("- ", 0) == 0 ? kGood : kMuted);
         ly += lineH;
@@ -388,14 +507,45 @@ BuildEditorScreen::Result BuildEditorScreen::runFrame(int screenW, int screenH, 
         if (!validateBuild(b, catalog_, ruleset_.economy, ruleset_.bannedSpells).ok) teamValid = false;
 
     const float by = H - 44;
-    Rectangle saveBtn{16, by, 130, 32};
-    Rectangle menuBtn{154, by, 110, 32};
-    Rectangle resetBtn{272, by, 110, 32};
+    Rectangle saveBtn{16, by, 96, 32};
+    Rectangle loadBtn{118, by, 92, 32};
+    Rectangle exportBtn{216, by, 104, 32};
+    Rectangle importBtn{326, by, 104, 32};
+    Rectangle menuBtn{436, by, 84, 32};
+    Rectangle resetBtn{526, by, 84, 32};
 
-    if (button(saveBtn, "Save Slot", m, kPanel, val.ok)) {
+    if (button(saveBtn, "Save", m, kPanel, val.ok)) {
         repo_.save(cur());
         refreshSaved();
-        statusMsg_ = "Saved '" + cur().name + "'.";
+        statusMsg_ = "Saved '" + cur().name + "' to your build book.";
+    }
+    // Load pulls the next build from the local build book into this slot; click
+    // again to cycle through them.
+    if (button(loadBtn, "Load >", m, kPanel, !savedNames_.empty())) {
+        loadIdx_ %= static_cast<int>(savedNames_.size());
+        if (auto b = repo_.load(savedNames_[loadIdx_])) {
+            cur() = *b;
+            editingName_ = false;
+            statusMsg_ = "Loaded '" + savedNames_[loadIdx_] + "' (" + std::to_string(loadIdx_ + 1) +
+                         "/" + std::to_string(savedNames_.size()) + ") - click Load for the next.";
+            loadIdx_ = (loadIdx_ + 1) % static_cast<int>(savedNames_.size());
+        }
+    }
+    // Export/Import a single build as a shareable code via the clipboard — the
+    // low-friction way to swap "build books" with a friend (paste into chat).
+    if (button(exportBtn, "Copy code", m, kPanel)) {
+        SetClipboardText(serializeBuild(cur()).c_str());
+        statusMsg_ = "Copied '" + cur().name + "' to the clipboard - share the code with a friend.";
+    }
+    if (button(importBtn, "Paste code", m, kPanel)) {
+        const char* clip = GetClipboardText();
+        if (std::optional<CharacterBuild> b = clip ? deserializeBuild(clip) : std::nullopt) {
+            cur() = *b;
+            editingName_ = false;
+            statusMsg_ = "Imported build '" + cur().name + "' from the clipboard.";
+        } else {
+            statusMsg_ = "Clipboard doesn't hold a valid build code.";
+        }
     }
     if (button(menuBtn, "< Menu", m, kPanel)) result = Result::Menu;
     // Reset: hand every spent point back at once (clears spells + stat upgrades,

@@ -1,0 +1,36 @@
+{
+  "Version": "1.96.4",
+  "BackendState": "Running",
+  "CurrentTailnet": {
+    "Name": "schenegghugo.github"
+  },
+  "Self": {
+    "HostName": "thinkpad",
+    "DNSName": "thinkpad.tail21ee73.ts.net.",
+    "TailscaleIPs": [
+      "100.64.92.51",
+      "fd7a:115c:a1e0::1e3b:5c34"
+    ],
+    "Online": true
+  },
+  "Peer": {
+    "peer-1": {
+      "HostName": "DESKTOP-LK8R3DL",
+      "DNSName": "desktop-lk8r3dl.tail21ee73.ts.net.",
+      "TailscaleIPs": [
+        "100.121.136.25",
+        "fd7a:115c:a1e0::c53b:881a"
+      ],
+      "Online": true
+    },
+    "peer-2": {
+      "HostName": "Homeboi",
+      "DNSName": "homeboi.tail21ee73.ts.net.",
+      "TailscaleIPs": [
+        "100.81.97.122",
+        "fd7a:115c:a1e0::6c01:61db"
+      ],
+      "Online": true
+    }
+  }
+}

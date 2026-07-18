@@ -558,6 +558,21 @@ void drawFrame(const Layout& l, const Battle& battle, const ViewState& view,
             DrawRectangle(static_cast<int>(c.x) - 12 + static_cast<int>(s) * 8,
                           static_cast<int>(c.y) - l.tileSize / 2 - 6, 6, 6, kStatusDot);
         }
+        // Player nameplate above each champion: the controlling player's username
+        // (view.nameP/E), falling back to the champion's own name. Only champions —
+        // summons/objects aren't "owned" by a player in the identity sense.
+        if (e.kind == EntityKind::Champion) {
+            const std::string& nameOverride = e.team == Faction::Player ? view.nameP : view.nameE;
+            const std::string label = nameOverride.empty() ? e.name : nameOverride;
+            if (!label.empty()) {
+                const int fs = std::max(11, l.tileSize / 4);
+                const int tw = MeasureText(label.c_str(), fs);
+                const int nx = static_cast<int>(c.x) - tw / 2;
+                const int ny = static_cast<int>(c.y) - l.tileSize / 2 - 6 - fs - 3;
+                DrawText(label.c_str(), nx + 1, ny + 1, fs, Color{0, 0, 0, 180}); // shadow
+                DrawText(label.c_str(), nx, ny, fs, color);
+            }
+        }
     }
 
     // --- Floating combat numbers (damage / heal / shield) --------------------

@@ -13,7 +13,7 @@ namespace tb::render {
 
 class ConnectScreen {
 public:
-    enum class Result { None, Connect, Back };
+    enum class Result { None, Connect, Back, Check };
 
     struct Params {
         std::string host = "127.0.0.1:5555"; // host[:port]
@@ -29,6 +29,7 @@ public:
 
     [[nodiscard]] const Params& params() const { return p_; }
     void setStatus(std::string s) { status_ = std::move(s); } // e.g. a connect error to show
+    void setHost(std::string h) { p_.host = std::move(h); }   // prefill (e.g. flight-check IP)
 
 private:
     Params p_;

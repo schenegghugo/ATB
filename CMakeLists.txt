@@ -198,11 +198,18 @@ add_library(tb_transport STATIC
     src/net/Correspondence.cpp
     src/net/Lobby.cpp
     src/net/Spectate.cpp
+    src/net/Subprocess.cpp     # process spawn for the online flight check
+    src/net/TailscaleProbe.cpp # tailnet-state probe behind "Play Online"
 )
 target_link_libraries(tb_transport PUBLIC tb_core)
 if(WIN32)
-    target_link_libraries(tb_transport PUBLIC ws2_32) # winsock (Socket.cpp)
+    target_link_libraries(tb_transport PUBLIC ws2_32)  # winsock (Socket.cpp)
+    target_link_libraries(tb_transport PUBLIC shell32) # ShellExecute (Subprocess.cpp)
 endif()
+
+# Online flight-check probe (parse + step ladder) — pure, fixture-tested headlessly.
+add_executable(tb_tailscale_demo tests/tailscale_demo.cpp)
+target_link_libraries(tb_tailscale_demo PRIVATE tb_transport)
 
 add_executable(tb_mailbox_demo tests/mailbox_demo.cpp)
 target_link_libraries(tb_mailbox_demo PRIVATE tb_transport Threads::Threads)
@@ -329,6 +336,7 @@ add_executable(tactical_battler
     src/render/BuildEditorScreen.cpp
     src/render/ConnectScreen.cpp
     src/render/ContentPaths.cpp
+    src/render/FlightCheckScreen.cpp
     src/render/LobbyScreen.cpp
     src/render/MainMenuScreen.cpp
     src/render/MatchSource.cpp

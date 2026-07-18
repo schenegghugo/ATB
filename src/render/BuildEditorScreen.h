@@ -56,6 +56,7 @@ private:
     int playerSlot_ = 0;                     // which player slot is being edited
     std::vector<int> enemyPicks_;            // index into savedNames_ per enemy slot
     std::vector<std::string> savedNames_;
+    int loadIdx_ = 0; // which saved build the "Load" button will pull next
     bool editingName_ = false;
     int filter_ = 0; // category filter: 0=All 1=Damage 2=Effects 3=Support 4=Summon
     std::string statusMsg_;

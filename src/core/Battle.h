@@ -199,6 +199,11 @@ private:
     // Only voluntary steps trigger; the resulting forced move / teleport does
     // not re-trigger, so chains can't loop.
     void onEnterTile(EntityId who);
+    // If `who` stands on a live portal's entry, send it to the exit (when free).
+    // Shared by walk-in (onEnterTile), displacement (push/pull/repel), and spawning
+    // — so a bomb dropped or shoved onto a portal rides it like a walking unit.
+    // Returns true if it teleported. Does not chain into further ground effects.
+    bool teleportIfOnPortal(EntityId who);
     // Tick this unit's pending Rewind (if any); restore the snapshot when it
     // elapses, or fizzle if the unit is dead. Called at its turn start.
     void rewindTick(EntityId id);
