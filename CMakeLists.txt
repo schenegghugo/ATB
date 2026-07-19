@@ -268,11 +268,36 @@ target_link_libraries(tb_lobby_persist_demo PRIVATE tb_transport Threads::Thread
 add_executable(tb_queue_demo tests/queue_demo.cpp)
 target_link_libraries(tb_queue_demo PRIVATE tb_transport Threads::Threads)
 
+# Team pre-game redesign slice 1: party formation (invite/accept/leave/disband).
+add_executable(tb_lobby_party_demo tests/lobby_party_demo.cpp)
+target_link_libraries(tb_lobby_party_demo PRIVATE tb_transport Threads::Threads)
+
+# Team pre-game redesign slice 2: team seek/challenge → a draft between two parties.
+add_executable(tb_lobby_draft_pairing_demo tests/lobby_draft_pairing_demo.cpp)
+target_link_libraries(tb_lobby_draft_pairing_demo PRIVATE tb_transport Threads::Threads)
+
+# Team pre-game redesign slice 3: the snake draft engine (pick loop + reveal + timeout).
+add_executable(tb_lobby_draft_engine_demo tests/lobby_draft_engine_demo.cpp)
+target_link_libraries(tb_lobby_draft_engine_demo PRIVATE tb_transport Threads::Threads)
+
+# Team pre-game redesign slice 4: completed draft → live team pairing (seat/controller).
+add_executable(tb_lobby_draft_finalize_demo tests/lobby_draft_finalize_demo.cpp)
+target_link_libraries(tb_lobby_draft_finalize_demo PRIVATE tb_transport Threads::Threads)
+
+# Team pre-game redesign slice 5: a live 2v2 played over the network (champion routing).
+add_executable(tb_team_match_demo tests/team_match_demo.cpp)
+target_link_libraries(tb_team_match_demo PRIVATE tb_transport Threads::Threads)
+
+# Team pre-game redesign: the draft flow at teamSize 3 (snake order + seat maps at N≠2).
+add_executable(tb_lobby_draft_3v3_demo tests/lobby_draft_3v3_demo.cpp)
+target_link_libraries(tb_lobby_draft_3v3_demo PRIVATE tb_transport Threads::Threads)
+
 add_executable(tb_server tools/server_main.cpp)
 target_link_libraries(tb_server PRIVATE tb_transport)
 
 add_executable(tb_lobby tools/lobby_main.cpp)
 target_link_libraries(tb_lobby PRIVATE tb_transport Threads::Threads)
+target_compile_definitions(tb_lobby PRIVATE ATB_VERSION="${ATB_VERSION}") # sent in the hello
 
 add_executable(tb_net_transport_demo tests/net_transport_demo.cpp)
 target_link_libraries(tb_net_transport_demo PRIVATE tb_transport Threads::Threads)
@@ -336,6 +361,7 @@ add_executable(tactical_battler
     src/render/BuildEditorScreen.cpp
     src/render/ConnectScreen.cpp
     src/render/ContentPaths.cpp
+    src/render/DraftScreen.cpp
     src/render/FlightCheckScreen.cpp
     src/render/LobbyScreen.cpp
     src/render/MainMenuScreen.cpp

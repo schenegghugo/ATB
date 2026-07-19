@@ -71,4 +71,13 @@ Battle buildMatch(const Ruleset& rules, const std::vector<CharacterBuild>& playe
     return battle;
 }
 
+std::vector<EntityId> championSeats(const Battle& battle, Faction faction) {
+    std::vector<EntityId> seats;
+    for (EntityId id = 0; id < static_cast<EntityId>(battle.unitCount()); ++id) {
+        const Entity& e = battle.unit(id);
+        if (e.kind == EntityKind::Champion && e.team == faction) seats.push_back(id);
+    }
+    return seats;
+}
+
 } // namespace tb

@@ -25,4 +25,10 @@ namespace tb {
                                 std::vector<Entity> creatures = {},
                                 const Grid* staticArena = nullptr);
 
+// The champion EntityIds of `faction`, in SEAT order (the order they were passed to
+// buildMatch — index i is controller seat i). Excludes summons/objects. Deterministic
+// across the server and every client mirror (same builds + seed → same roster), so it
+// maps a controller seat ↔ its champion consistently for turn routing in team play.
+[[nodiscard]] std::vector<EntityId> championSeats(const Battle& battle, Faction faction);
+
 } // namespace tb

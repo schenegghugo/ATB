@@ -1,0 +1,6 @@
+name=Chronomancer
+hp=0
+ap=1
+mp=1
+init=1
+spells=9,20,10,13,2,25

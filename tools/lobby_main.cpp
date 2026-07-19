@@ -35,6 +35,10 @@
 #include <fstream>
 #include <string>
 
+#ifndef ATB_VERSION
+#define ATB_VERSION "dev"
+#endif
+
 using namespace tb;
 using namespace tb::net;
 
@@ -92,6 +96,7 @@ int main(int argc, char** argv) {
     if (!loadRules(casualFile, cfg.casualRules, /*required=*/argc > 3)) return 1;
     if (!loadRules(rankedFile, cfg.rankedRules, /*required=*/argc > 4)) return 1;
     cfg.contentHash = contentHashOf(cfg.catalog);
+    cfg.version = ATB_VERSION; // echoed to clients so a stale build warns loudly
 
     // Persistent accounts + Elo (ranked play + non-guest login). Passwords are in
     // the clear on the wire — put this behind TLS/VPN before exposing it publicly.

@@ -25,21 +25,50 @@ MirrorSession::fromWelcome(Connection conn, const Ruleset& ruleset, const SpellC
     const std::optional<proto::Msg> m = proto::parse(*first);
     if (!m) return fail("unparseable server reply");
     if (m->type == "error") return fail(m->field("message"));
-    if (m->type != "welcome") return fail("unexpected reply: " + m->type);
+    const bool team = m->type == "welcomeTeam";
+    if (m->type != "welcome" && !team) return fail("unexpected reply: " + m->type);
 
     const std::optional<Faction> seat = proto::factionParse(m->field("seat"));
     if (!seat) return fail("bad seat in welcome");
     const int seed = m->intField("seed", 0);
-    const std::optional<CharacterBuild> pB = deserializeBuild(m->field("playerBuild"));
-    const std::optional<CharacterBuild> eB = deserializeBuild(m->field("enemyBuild"));
-    if (!pB || !eB) return fail("bad setup builds in welcome");
+    const int controllerSeat = m->intField("controllerSeat", 0);
 
-    // Build the identical initial Battle the server built, and mirror its runner.
-    Battle battle =
-        buildMatch(ruleset, {*pB}, {*eB}, catalog, static_cast<unsigned>(seed), creatures);
+    // Rebuild the identical initial Battle the server built (both full rosters + seed),
+    // then mirror its runner. 1v1 carries single builds; a team match carries arrays.
+    std::vector<CharacterBuild> playerTeam, enemyTeam;
+    if (team) {
+        auto readTeam = [&](const char* key, std::vector<CharacterBuild>& out) {
+            const json::Value* arr = m->body.find(key);
+            if (!arr || !arr->isArray()) return false;
+            for (const json::Value& b : arr->asArray()) {
+                if (!b.isString()) return false;
+                std::optional<CharacterBuild> cb = deserializeBuild(b.asString());
+                if (!cb) return false;
+                out.push_back(*cb);
+            }
+            return !out.empty();
+        };
+        if (!readTeam("playerTeam", playerTeam) || !readTeam("enemyTeam", enemyTeam))
+            return fail("bad team rosters in welcome");
+    } else {
+        const std::optional<CharacterBuild> pB = deserializeBuild(m->field("playerBuild"));
+        const std::optional<CharacterBuild> eB = deserializeBuild(m->field("enemyBuild"));
+        if (!pB || !eB) return fail("bad setup builds in welcome");
+        playerTeam = {*pB};
+        enemyTeam = {*eB};
+    }
+
+    Battle battle = buildMatch(ruleset, playerTeam, enemyTeam, catalog,
+                               static_cast<unsigned>(seed), creatures);
     MatchRunner runner(std::move(battle), Seat::Human, Seat::Human);
     std::unique_ptr<MirrorSession> s(
         new MirrorSession(std::move(conn), std::move(runner), *seat, m->intField("clockSec", 0)));
+    s->controllerSeat_ = controllerSeat;
+    // My champion's EntityId: the controllerSeat-th champion of my faction (0 for 1v1).
+    const std::vector<EntityId> mine = championSeats(s->runner_.battle(), *seat);
+    if (controllerSeat < 0 || controllerSeat >= static_cast<int>(mine.size()))
+        return fail("controller seat out of range");
+    s->myUnit_ = mine[static_cast<std::size_t>(controllerSeat)];
     s->mainSec_ = m->intField("mainSec", 0);
     s->incSec_ = m->intField("incSec", 0);
     s->bankP_ = s->bankE_ = static_cast<float>(s->mainSec_);

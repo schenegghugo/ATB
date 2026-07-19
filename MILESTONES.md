@@ -7,47 +7,41 @@ Legend: **◐ in progress · ☐ todo**.
 
 ---
 
-## 0.1.0 — Team Play (2v2 / 3v3) — headline feature
+## 0.2.0 — Team Play & the Draft (2v2 / 3v3) — SHIPPED
 
-**Status: in progress.** 0.0.2 (elemental surfaces) shipped. Numbered **0.1.0**
-(not 0.0.3): the ground-tick fix changes combat timing, so 0.0.2 replays /
-scoresheets no longer re-sim identically — a compatibility break, which bumps the
-minor in 0.x. This release adds multi-human team matches (backend in progress),
-plus two control/feedback UX wins and the terrain-lifetime fix, already landed on
-the working branch.
+**Status: shipped** (backend fully test-covered; GUI compiles + boots). Real
+two-humans-per-side 2v2 / 3v3 with a turn-by-turn **draft** pre-game.
 
-The crux: the engine is 2-faction (`Faction{Player,Enemy}`) and the whole net
-stack authorizes intents on a single `Faction seat`. 2v2/3v3 stays **two sides**
-but needs a **controller-seat identity orthogonal to `Faction`** — a human owns a
-subset of a faction's champions; the Arbiter authorizes by seat-ownership, not
-faction. NOT a factions overhaul: `Ruleset.teamSize` (1–8) + `buildMatch` already
-build N champions per side, and `MatchFormat.teamSize` already rides the wire.
-Design decisions locked: **design-for-N** (ship 2v2 + 3v3 together), **separate
-2v2 / 3v3 Elo ladders**, ready-check **shows partners' builds**.
+The approach diverged from the original plan: the engine stays **2-faction** —
+instead of a per-unit owner tag, a turn routes to the active champion's pilot at
+the **transport** layer (`runAdmittedTeamMatch`'s `activeConn`) and in the client
+mirror (`MirrorSession::myUnit_` + controller-aware `awaitingMe()`).
+`MatchFormat.teamSize` + `buildMatch`'s N-champion teams did the rest;
+`welcomeTeam` carries the `controllerSeat`. So `MatchRunner`/`Arbiter` never
+learned about teams — the lockstep replay is unchanged.
 
-- ✅ **Lobby GUI + matchmaking surface** — `1v1 / 2v2 / 3v3` selector in the
-  format row (`LobbyScreen`); seeks/challenges/queue post & pair by team size
-  (`sameFormat` keys on `teamSize`, already on the wire).
-- ☐ **Engine seat-ownership** — per-unit owner tag, ownership-aware `controlFor` +
-  intent authorization, generalized win check. Core-only, test-covered, defaults
-  from `Faction` so 1v1 is unchanged. *Next step.*
-- ☐ **Protocol/Arbiter/MirrorSession** carry `seat = (faction, slot)` not bare
-  `Faction`.
-- ☐ **Lobby party formation** — group N players, assign seats, group ready-check.
-- ☐ **`AccountStore`** per-format ratings (1v1/2v2/3v3) + `schema.sql` migration.
-- ☐ **GUI** — party UI, team-aware `ReadyCheckScreen`, board ownership tinting.
-- ☐ **Ground aging → true per-round model** (with a deliberate balance pass) once
-  team turn order lands — supersedes the interim champion-only tick below.
-- ✅ **Unified Dofus-style controls** — left-click driven: no spell selected →
-  move; select (bar click / `1`–`9`) → green castable tiles → left-click to cast;
-  right-click / Esc / re-press digit → deselect (`main.cpp`). Pending release.
-- ✅ **Floating combat numbers** — `Damage`/`Heal`/`Shield` events become rising,
-  fading `-N`/`+N`/`N` popups over the board (`Animator` + `Renderer`), so hits
-  read without watching the log. Pending release.
-- ✅ **Ground-effect lifetime fix** — terrain (portals/glyphs/walls/surfaces) aged
-  on *every* unit-turn, so bombs/summons joining the initiative order silently
-  shortened it (NOT the summon cap). `tickGround` now runs on **champion** turns
-  only — balance-neutral in 1v1. Regression test in `tests/spells_demo.cpp`.
+Shipped: party formation (invite/accept/leave/disband), team seek/challenge, the
+snake **draft** (withhold-until-lock reveal, per-pick clock + timeout auto-lock,
+scout board), `DraftScreen` (embedded editor with an always-on countdown — fixes
+the "no clock while editing" gripe), live 2v2 / 3v3 match routing, and the party
+panel in `LobbyScreen`. Headless suite: `tb_lobby_party` / `_draft_pairing` /
+`_draft_engine` / `_draft_finalize` / `_draft_3v3` / `tb_team_match` (a 2v2 played
+to a winner over the network).
+
+Still open (deferred out of this release):
+- ☐ **Team Elo** — per-format ratings (1v1 / 2v2 / 3v3) + `AccountStore` schema
+  migration; team games are **casual-only** for now.
+- ☐ **Correspondence team play** — the draft + match are live-only; Unlimited
+  (async) team formats aren't wired.
+- ☐ **Captain seat assignment** — seats are join-order today; the design's
+  "captain picks who drafts first / last" lever isn't built.
+- ☐ **`cancelDraft` RPC** — leaving a draft relies on the server's pick timeout (a
+  brief zombie pairing); an explicit cancel is cleaner.
+- ☐ **Team spectate** — `listGames` + `SpectatorMirror` are 1v1-only.
+- ☐ **Ground aging → true per-round model** (with a deliberate balance pass) —
+  the interim champion-only tick still stands.
+- ☐ **End-to-end GUI verification** — the draft/party screens compile + boot but
+  aren't pixel-tested (no input injection); needs a live `tb_lobby` + N clients.
 
 ## Online hardening — the gate to a public, non-VPN launch
 

@@ -65,8 +65,16 @@ public:
     // A seat's remaining bank right now: the last authoritative value from the
     // server, ticked down locally while that seat is the one deciding.
     [[nodiscard]] float bankSeconds(Faction f) const;
-    // The local seat holds the active unit (its input is live).
-    [[nodiscard]] bool awaitingMe() const { return !finished() && runner_.awaitingSeat() == seat_; }
+    // MY champion holds the active unit (its input is live). In team play a faction has
+    // several champions piloted by different humans, so this is finer than "my faction
+    // is awaited": only the pilot of the ACTIVE champion may act. (1v1: myUnit_ is the
+    // sole champion, so this reduces to "my faction is awaited".)
+    [[nodiscard]] bool awaitingMe() const {
+        return !finished() && runner_.awaitingSeat() == seat_ &&
+               runner_.battle().activeUnit() == myUnit_;
+    }
+    // Which champion within my faction I pilot (0..teamSize-1); 0 for 1v1.
+    [[nodiscard]] int controllerSeat() const { return controllerSeat_; }
 
     // Send one action for our unit to the server (authoritative). The mirror only
     // advances when the server echoes it back through pump().
@@ -95,6 +103,8 @@ private:
     Connection conn_;
     MatchRunner runner_;
     Faction seat_ = Faction::Player;
+    int controllerSeat_ = 0; // which champion of my faction I pilot (team play)
+    EntityId myUnit_ = 0;    // the EntityId of that champion (for awaitingMe)
     bool ended_ = false;
     std::optional<Faction> forfeitWinner_;
     int clockSec_ = 0;

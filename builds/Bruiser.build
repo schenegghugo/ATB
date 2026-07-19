@@ -1,0 +1,6 @@
+name=Bruiser
+hp=4
+ap=0
+mp=1
+init=0
+spells=1,4,5

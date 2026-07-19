@@ -125,6 +125,15 @@ VPN) and bind the server to its tailnet address. Full host + connect walkthrough
 The GUI's **"Play Online"** button connects to the **`tb_lobby`** daemon (the Online
 Home); `tb_server` is only the direct-matchmaking variant.
 
+**Team play (2v2 / 3v3).** Pick a team size in the Online Home, invite a partner
+into your **party**, and post a seek or challenge as a team — two humans a side for
+2v2, three for 3v3, each piloting their own champion. A team game opens with a
+**draft**: players lock their champion one at a time in snake order, every lock is
+revealed so a later pick can **scout** the enemy and counter-build, and a per-pick
+countdown stays on screen while you author. In the match, a champion's turn goes to
+the player who controls it — on a teammate's turn you watch and plan, on yours you
+act. (Team games are casual for now; ranked team ladders are a follow-up.)
+
 **Connection flight check.** The first time you click **Play Online**, the client
 runs a short, guided **connection check**: it reads your Tailscale state (via
 `tailscale status`) and walks you down a ladder — *installed → running → signed in →
@@ -160,19 +169,24 @@ through the repository, cycle **Enemy** to choose the opponent preset, and
 
 ### Battle controls
 
-| Input         | Action                                              |
-|---------------|-----------------------------------------------------|
-| Left click    | Move active unit along shortest path (1 MP / tile)  |
-| `1`–`9`       | Select a spell from the active unit's loadout       |
-| Right click   | Cast the **selected** spell at the hovered tile     |
-| Space / Enter | End player turn                                     |
-| R             | Rematch (new arena, same builds)                    |
-| Tab           | Return to the build editor                          |
-| Esc           | Quit                                                |
+Modal and left-click-driven (Dofus-style): with **no spell selected** the board is
+in *move* mode; selecting a spell switches to *aim* mode until you cast or cancel.
 
-Blue tint = reachable tiles. Orange tint = the selected spell's blast zone (red
-if it can't be cast there). The sightline to the cursor is gold when clear, red
-when a Wall blocks it. Pink ticks above a unit are active status effects.
+| Input         | Action                                                          |
+|---------------|-----------------------------------------------------------------|
+| Left click    | Move the active unit (shortest path, 1 MP/tile) — or, with a spell selected, cast it at the hovered tile |
+| `1`–`9` / bar | Select a spell from the loadout (press the digit / click it again to deselect) |
+| Right click   | Cancel — undo a half-placed portal, else deselect the spell (back to move mode) |
+| Mouse wheel   | Rotate a Line spell (e.g. Shelter) 90° while aiming; otherwise scroll the combat log |
+| Space / Enter | End your turn                                                    |
+| R             | Rematch — a fresh local arena with the same builds              |
+| Tab           | Return to the build editor                                      |
+| Esc           | Deselect the aimed spell, else open the pause menu              |
+
+Blue tint = reachable tiles (movement range). Green tiles = where the selected
+spell can be cast; the blast-zone preview at the cursor is green when it will fire,
+red when it can't. The sightline to the cursor is gold when clear, red when a Wall
+blocks it. Pink ticks above a unit are active status effects.
 
 ## Rules implemented
 

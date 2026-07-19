@@ -48,6 +48,7 @@
 #include "render/PatchNotesScreen.h"
 #include "render/Theme.h"
 #include "render/MatchSource.h"
+#include "render/DraftScreen.h"
 #include "render/ReadyCheckScreen.h"
 #include "render/RemoteMatchSource.h"
 #include "render/Renderer.h"
@@ -81,7 +82,7 @@ using namespace tb;
 
 namespace {
 
-enum class AppState { Menu, Editor, FlightCheck, Connect, Lobby, ReadyCheck, Waiting, Battle, Settings, Paused, PatchNotes };
+enum class AppState { Menu, Editor, FlightCheck, Connect, Lobby, ReadyCheck, Draft, Waiting, Battle, Settings, Paused, PatchNotes };
 
 // The in-game pause menu (Esc anywhere) links out to the project page.
 inline constexpr const char* kGithubUrl = "https://github.com/schenegghugo/ATB";
@@ -389,6 +390,7 @@ int main() {
     render::LobbyScreen lobbyScreen;
     render::FlightCheckScreen flightCheck; // "Play Online" connection wizard
     render::ReadyCheckScreen readyScreen;
+    render::DraftScreen draftScreen; // NvN draft/scout pre-game
     std::unique_ptr<net::LobbySession> lobby; // live lobby connection (Online Home)
     std::string lobbyHost = "127.0.0.1";      // parsed from the connect form on join
     uint16_t lobbyPort = 5555;
@@ -872,6 +874,9 @@ int main() {
             } else if (r == render::LobbyScreen::Result::ReadyCheck) {
                 readyScreen.begin(lobbyScreen.readyCheck());
                 state = AppState::ReadyCheck;
+            } else if (r == render::LobbyScreen::Result::Draft) {
+                draftScreen.begin(lobbyScreen.draftInfo());
+                state = AppState::Draft;
             } else if (r == render::LobbyScreen::Result::Resume) {
                 routePairing(lobbyScreen.resumeGame(), /*resume=*/true);
             } else if (r == render::LobbyScreen::Result::Watch) {
@@ -920,6 +925,20 @@ int main() {
                 editorMode = EMode::Online;
                 editorReturn = AppState::ReadyCheck; // resume the ready check afterwards
                 state = AppState::Editor;
+            }
+            continue;
+        }
+
+        if (state == AppState::Draft) {
+            BeginDrawing();
+            // The DraftScreen drives the shared editor itself (Draft mode) on your turn,
+            // so the per-pick clock is always on screen while you author.
+            const auto r = draftScreen.runFrame(GetScreenWidth(), GetScreenHeight(), *lobby, editor);
+            EndDrawing();
+            if (r == render::DraftScreen::Result::Matched) {
+                routePairing(draftScreen.pairing(), /*resume=*/false); // → the live team match
+            } else if (r == render::DraftScreen::Result::Cancelled) {
+                state = AppState::Lobby;
             }
             continue;
         }

@@ -21,7 +21,7 @@ namespace tb::render {
 
 class LobbyScreen {
 public:
-    enum class Result { None, ReadyCheck, Back, EditBuild, Watch, Resume };
+    enum class Result { None, ReadyCheck, Draft, Back, EditBuild, Watch, Resume };
 
     // `session` is the live lobby connection; `myBuild` shows the current build (the
     // one you'll ready with); `ratedAvailable` gates the rated toggle (false for
@@ -31,6 +31,8 @@ public:
                     const CharacterBuild& myBuild, bool ratedAvailable);
 
     [[nodiscard]] const net::ReadyCheckInfo& readyCheck() const { return rc_; }
+    // The NvN draft we just entered (valid when Draft returned).
+    [[nodiscard]] const net::DraftInfo& draftInfo() const { return draft_; }
     // The live game picked from the "Live games" list (valid when Watch returned).
     [[nodiscard]] const net::LiveGameInfo& watchGame() const { return watch_; }
     // The correspondence game picked for cold resume (valid when Resume returned).
@@ -41,6 +43,7 @@ private:
     void refresh(net::LobbySession& session);
 
     net::ReadyCheckInfo rc_;
+    net::DraftInfo draft_;
     net::LiveGameInfo watch_;
     net::PairedInfo resume_;
     std::string status_;
@@ -51,6 +54,13 @@ private:
     int preset_ = 0; // index into the clock presets
     int teamSize_ = 1; // 1/2/3 → 1v1 / 2v2 / 3v3 (seeks match same team size)
     bool queued_ = false; // in the quick-match queue
+
+    // Party (team play): my current roster + incoming invites + the invite draft. The
+    // party panel shows only for 2v2/3v3 (teamSize_ > 1); a team seek needs a full party.
+    net::PartyInfo party_;
+    std::vector<net::PartyInviteInfo> partyInvites_;
+    std::string partyInvitee_;
+    bool partyFocus_ = false;
 
     std::vector<net::SeekInfo> seeks_;
     std::vector<net::ChallengeInfo> challenges_;

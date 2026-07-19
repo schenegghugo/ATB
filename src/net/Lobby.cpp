@@ -117,6 +117,20 @@ json::Value cancelledObj(const std::string& reason) {
     o.set("message", reason);
     return o;
 }
+
+// The snake draft order over 2N seats (N per team), laid out [A0..A(N-1), B0..B(N-1)].
+// Alternates with the reversing "double pick" (A B B A A B …) so neither side holds
+// both final informed picks. Returns seat indices into that layout. e.g. 2v2 →
+// [0,2,3,1] (A0,B0,B1,A1); 3v3 → [0,3,4,1,2,5] (A0,B0,B1,A1,A2,B2).
+std::vector<int> snakeOrder(int n) {
+    std::vector<int> order;
+    int aNext = 0, bNext = 0;
+    for (int i = 0; i < 2 * n; ++i) {
+        const bool teamA = (((i + 1) / 2) % 2) == 0; // 0→A 1→B 2→B 3→A 4→A 5→B …
+        order.push_back(teamA ? aNext++ : n + bNext++);
+    }
+    return order;
+}
 std::string simpleMsg(const char* type) {
     json::Value o = json::Value::makeObject();
     o.set("type", type);
@@ -137,6 +151,7 @@ struct Seek {
     int rating = kDefaultRating;
     MatchFormat fmt;
     bool guest = false;
+    std::vector<std::string> team; // full party roster for a team seek (empty = 1v1)
 };
 struct Challenge {
     int id = 0;
@@ -144,6 +159,7 @@ struct Challenge {
     int fromRating = kDefaultRating;
     MatchFormat fmt;
     bool fromGuest = false;
+    std::vector<std::string> team; // challenger's full party roster (empty = 1v1)
 };
 // A quick-match queue slot: paired automatically once another slot with the SAME
 // format sits within the (time-widening) Elo band.
@@ -157,6 +173,20 @@ bool sameFormat(const MatchFormat& a, const MatchFormat& b) {
     return a.time == b.time && a.perMoveSec == b.perMoveSec && a.mainSec == b.mainSec &&
            a.incSec == b.incSec && a.rated == b.rated && a.teamSize == b.teamSize;
 }
+// A party: one side of a future NvN match. leader == members.front(); joiners append
+// in seat order. Polled by members (no push) — membership is re-fetched via partyInfo.
+struct Party {
+    int id = 0;
+    std::vector<std::string> members; // leader first, then joiners
+};
+// A pending party invite (leader → target). Withdrawn when either party disbands or
+// the target/leader disconnects.
+struct PartyInvite {
+    int id = 0;
+    int partyId = 0;
+    std::string from; // the inviting leader
+    std::string to;
+};
 // A pairing awaiting BOTH players to submit a build + READY within the window.
 struct ReadyCheck {
     int id = 0;
@@ -166,6 +196,27 @@ struct ReadyCheck {
     bool readyP = false, readyE = false;
     std::chrono::steady_clock::time_point deadline;
 };
+// One champion seat in a pending NvN draft (the build/locked fields are filled by the
+// pick loop in slice 3).
+struct DraftSeat {
+    Faction faction = Faction::Player;
+    int index = 0;
+    std::string user;
+    CharacterBuild build;
+    bool locked = false;
+};
+// Two full parties DRAFTING their builds (Player = seek/challenge poster's party,
+// Enemy = acceptor's party). Seats laid out [Player 0..N-1, Enemy 0..N-1]; pickOrder
+// is the snake reveal order. The pick loop (currentPick / deadline) is slice 3.
+struct DraftCheck {
+    int id = 0;
+    MatchFormat fmt;
+    std::vector<DraftSeat> seats;
+    std::vector<int> pickOrder;
+    int currentPick = 0;                            // indexes pickOrder (the seat picking now)
+    bool complete = false;                          // every seat locked → the match can form
+    std::chrono::steady_clock::time_point deadline; // per-pick window
+};
 // A confirmed LIVE pairing waiting for both players to open their match conn.
 struct Pairing {
     MatchFormat fmt;
@@ -173,6 +224,18 @@ struct Pairing {
     CharacterBuild buildP, buildE;
     Connection connP, connE;
     bool haveP = false, haveE = false, started = false;
+};
+// A confirmed LIVE TEAM pairing (NvN, from a completed draft): 2N seats each with a
+// join token + locked build, awaiting all 2N match conns (filled in slice 5). Seats are
+// laid out [Player 0..N-1, Enemy 0..N-1]; the parallel vectors index by seat.
+struct TeamPairing {
+    MatchFormat fmt;
+    std::string gameId;
+    std::vector<DraftSeat> seats;    // faction/index/user/build (all locked)
+    std::vector<std::string> tokens; // one per seat
+    std::vector<Connection> conns;   // filled as players join (slice 5)
+    std::vector<bool> have;          // arrival flags (slice 5)
+    bool started = false;
 };
 // A live match in progress — listed by `listGames`, watchable via `watch`. Its
 // broadcast stream (welcome/applied/end) is logged in the Mailbox under the game
@@ -198,14 +261,20 @@ struct LobbyState {
     std::vector<Seek> seeks;
     std::vector<Challenge> challenges;
     std::vector<QueueEntry> queue; // quick-match queue (widening Elo band)
+    std::unordered_map<int, Party> parties;       // party id → party (team play)
+    std::unordered_map<std::string, int> partyOf; // user → party id (one party per user)
+    std::vector<PartyInvite> partyInvites;        // pending party invites
     std::unordered_map<int, ReadyCheck> readyChecks;                   // id → pending ready check
+    std::unordered_map<int, DraftCheck> drafts;                        // id → pending NvN draft
     std::unordered_map<std::string, LiveGame> liveGames;               // game id → live match
     std::unordered_map<std::string, std::shared_ptr<Pairing>> byToken; // both tokens → pairing
+    std::unordered_map<std::string, std::shared_ptr<TeamPairing>> teamByToken; // token → team pairing
     std::unordered_map<std::string, CorrGame> corrGames;               // game id → correspondence
     std::unordered_map<std::string, std::vector<json::Value>> events;  // user → async events
     Mailbox mailbox;                        // correspondence move logs (per game id)
     std::unique_ptr<Arbiter> arbiter;       // rated-correspondence ranking (null on casual servers)
     int readySeconds = 30;                  // ready-check window (from LobbyConfig)
+    int draftPickSec = 60;                  // per-pick draft window (from LobbyConfig)
 
     // Lobby-wide chat (4.6): a capped rolling log addressed by ABSOLUTE index
     // (base = the index of front(), so cursors stay valid across trimming), plus
@@ -375,6 +444,167 @@ void openQueueReadyCheck(LobbyState& st, const MatchFormat& fmt, const QueueEntr
     st.events[e.user].push_back(std::move(evE));
 }
 
+// If `user` leads a party of EXACTLY `size`, return its roster; else nullopt with a
+// reason in `why`. The gate for posting/accepting a team seek or challenge. Caller
+// holds mu.
+std::optional<std::vector<std::string>> fullPartyRoster(LobbyState& st, const std::string& user,
+                                                        int size, std::string& why) {
+    auto it = st.partyOf.find(user);
+    if (it == st.partyOf.end()) { why = "you need a party for team play"; return std::nullopt; }
+    const Party& p = st.parties[it->second];
+    if (p.members.empty() || p.members.front() != user) {
+        why = "only the party leader can do that";
+        return std::nullopt;
+    }
+    if (static_cast<int>(p.members.size()) != size) {
+        why = "your party needs exactly " + std::to_string(size) + " members for this format";
+        return std::nullopt;
+    }
+    return p.members;
+}
+
+// A draft payload (reply tagged "type", event tagged "kind" by the caller), stamped
+// with the recipient's own seat index.
+json::Value draftInfoObj(const DraftCheck& dc, int mySeat) {
+    json::Value o = json::Value::makeObject();
+    o.set("id", dc.id);
+    o.set("format", formatToJson(dc.fmt));
+    o.set("mySeat", mySeat);
+    json::Value seats = json::Value::makeArray();
+    for (const DraftSeat& s : dc.seats) {
+        json::Value so = json::Value::makeObject();
+        so.set("faction", proto::factionName(s.faction));
+        so.set("index", s.index);
+        so.set("user", s.user);
+        seats.push_back(std::move(so));
+    }
+    o.set("seats", std::move(seats));
+    json::Value order = json::Value::makeArray();
+    for (int i : dc.pickOrder) order.push_back(i);
+    o.set("pickOrder", std::move(order));
+    return o;
+}
+
+// Open a draft from two full rosters (teamA = Player, teamB = Enemy). Stamps every
+// player's DraftInfo (their own mySeat); the acceptor (`replyUser`) gets it back as
+// the reply, everyone else via a poll event. Returns the acceptor's reply. Caller
+// holds mu.
+std::string openDraftCheck(LobbyState& st, const MatchFormat& fmt,
+                           const std::vector<std::string>& teamA,
+                           const std::vector<std::string>& teamB, const std::string& replyUser) {
+    DraftCheck dc;
+    dc.id = st.nextId++;
+    dc.fmt = fmt;
+    const int n = static_cast<int>(teamA.size());
+    for (int i = 0; i < n; ++i) dc.seats.push_back({Faction::Player, i, teamA[i], {}, false});
+    for (int i = 0; i < n; ++i) dc.seats.push_back({Faction::Enemy, i, teamB[i], {}, false});
+    dc.pickOrder = snakeOrder(n);
+    dc.deadline = std::chrono::steady_clock::now() + std::chrono::seconds(st.draftPickSec);
+    std::string reply;
+    for (int s = 0; s < static_cast<int>(dc.seats.size()); ++s) {
+        json::Value info = draftInfoObj(dc, s);
+        if (dc.seats[s].user == replyUser) {
+            info.set("type", "draft");
+            reply = json::dump(info, false);
+        } else {
+            info.set("kind", "draft");
+            st.events[dc.seats[s].user].push_back(std::move(info));
+        }
+    }
+    st.drafts[dc.id] = std::move(dc);
+    return reply;
+}
+
+// Cancel + notify every seat of a pending draft (idempotent). Caller holds mu.
+void cancelDraft(LobbyState& st, int id, const std::string& reason) {
+    auto it = st.drafts.find(id);
+    if (it == st.drafts.end()) return;
+    for (const DraftSeat& s : it->second.seats) {
+        json::Value ev = cancelledObj(reason);
+        ev.set("kind", "cancelled");
+        st.events[s.user].push_back(std::move(ev));
+    }
+    st.drafts.erase(it);
+}
+
+// Lock the current seat's build, REVEAL it (it's now in the polled state), and advance
+// the snake pointer; the last lock marks the draft complete. Resets the per-pick
+// deadline. Caller holds mu.
+void advanceDraft(DraftCheck& dc, const CharacterBuild& build, int pickSec) {
+    const int seat = dc.pickOrder[dc.currentPick];
+    dc.seats[seat].build = build;
+    dc.seats[seat].locked = true;
+    ++dc.currentPick;
+    if (dc.currentPick >= static_cast<int>(dc.pickOrder.size())) dc.complete = true;
+    dc.deadline = std::chrono::steady_clock::now() + std::chrono::seconds(pickSec);
+}
+
+// The per-player payload for a completed team draft: this seat's join token + faction +
+// which champion (index within the faction) they pilot, plus BOTH rosters by seat index
+// so the client can show the matchup. Tagged "kind":"paired" by the caller.
+json::Value teamPairedObj(const TeamPairing& tp, int mySeat) {
+    const DraftSeat& me = tp.seats[mySeat];
+    json::Value o = json::Value::makeObject();
+    o.set("live", true);
+    o.set("token", tp.tokens[mySeat]);
+    o.set("seat", proto::factionName(me.faction));
+    o.set("controllerSeat", me.index);
+    o.set("rated", tp.fmt.rated);
+    json::Value pteam = json::Value::makeArray(), eteam = json::Value::makeArray();
+    for (const DraftSeat& s : tp.seats) { // seats are in [Player…, Enemy…] index order
+        if (s.faction == Faction::Player) pteam.push_back(serializeBuild(s.build));
+        else eteam.push_back(serializeBuild(s.build));
+    }
+    o.set("playerTeam", std::move(pteam));
+    o.set("enemyTeam", std::move(eteam));
+    return o;
+}
+
+// Turn a COMPLETED draft into a live team pairing: mint a join token per seat, register
+// the TeamPairing (slice 5 runs the 2N-conn match), hand every player their PairedInfo
+// via a poll event, and drop the draft. Caller holds mu.
+void finalizeDraft(LobbyState& st, int id) {
+    auto it = st.drafts.find(id);
+    if (it == st.drafts.end()) return;
+    DraftCheck& dc = it->second;
+    auto tp = std::make_shared<TeamPairing>();
+    tp->fmt = dc.fmt;
+    tp->gameId = st.mintGameId();
+    tp->seats = dc.seats;
+    const int total = static_cast<int>(dc.seats.size());
+    tp->tokens.resize(static_cast<std::size_t>(total));
+    tp->conns.resize(static_cast<std::size_t>(total));
+    tp->have.assign(static_cast<std::size_t>(total), false);
+    for (int s = 0; s < total; ++s) {
+        tp->tokens[s] = st.mintToken();
+        st.teamByToken[tp->tokens[s]] = tp;
+    }
+    for (int s = 0; s < total; ++s) {
+        json::Value pi = teamPairedObj(*tp, s);
+        pi.set("kind", "paired");
+        st.events[dc.seats[s].user].push_back(std::move(pi));
+    }
+    st.drafts.erase(it);
+}
+
+// Auto-lock a minimal legal default (a bare Attack — legal under every shipped ruleset)
+// for any draft whose current pick ran out of time. Lazy — called on poll/lock, like
+// reapReadyChecks. Advances at most one seat per call (each pick keeps its own window);
+// a pick that COMPLETES the draft finalizes it into a team pairing. Caller holds mu.
+void reapDrafts(LobbyState& st) {
+    const auto now = std::chrono::steady_clock::now();
+    std::vector<int> completed;
+    for (auto& [id, dc] : st.drafts) {
+        if (dc.complete || now < dc.deadline) continue;
+        CharacterBuild dflt;
+        dflt.name = "(auto)";
+        dflt.spellIds = {spellid::Attack};
+        advanceDraft(dc, dflt, st.draftPickSec);
+        if (dc.complete) completed.push_back(id);
+    }
+    for (int id : completed) finalizeDraft(st, id);
+}
+
 // Pair queued players whose formats match and whose Elo gap fits inside the wider
 // of the two time-widened bands (a long wait relaxes the match). Lazy — run on
 // queue joins and polls, like reapReadyChecks. Caller holds mu.
@@ -425,8 +655,31 @@ void reapReadyChecks(LobbyState& st) {
     for (int id : expired) cancelReadyCheck(st, id, "ready check timed out");
 }
 
+// Remove `user` from their party. The LEADER (members.front()) leaving DISBANDS the
+// party for everyone and withdraws its pending invites; a member just drops out.
+// Does NOT touch invites addressed TO `user` (those stay actionable). Caller holds mu.
+void leaveParty(LobbyState& st, const std::string& user) {
+    auto pit = st.partyOf.find(user);
+    if (pit == st.partyOf.end()) return;
+    const int pid = pit->second;
+    st.partyOf.erase(pit);
+    auto party = st.parties.find(pid);
+    if (party == st.parties.end()) return; // dangling index — already cleaned
+    auto& mem = party->second.members;
+    const bool isLeader = !mem.empty() && mem.front() == user;
+    if (isLeader) {
+        for (const std::string& u : mem) st.partyOf.erase(u); // drop everyone (user already gone)
+        st.parties.erase(party);
+        st.partyInvites.erase(std::remove_if(st.partyInvites.begin(), st.partyInvites.end(),
+                                             [&](const PartyInvite& i) { return i.partyId == pid; }),
+                              st.partyInvites.end());
+    } else {
+        mem.erase(std::remove(mem.begin(), mem.end(), user), mem.end());
+    }
+}
+
 // Drop a departed user's open seek + queue slot + challenges + pending ready
-// checks + events.
+// checks + party + events.
 void withdrawUser(LobbyState& st, const std::string& user) {
     std::lock_guard<std::mutex> lk(st.mu);
     auto& sk = st.seeks;
@@ -444,6 +697,20 @@ void withdrawUser(LobbyState& st, const std::string& user) {
     for (const auto& [id, rc] : st.readyChecks)
         if (rc.userP == user || rc.userE == user) mine.push_back(id);
     for (int id : mine) cancelReadyCheck(st, id, "opponent disconnected");
+    // Cancel any pending draft they were a seat in (notifies the other 2N-1 players).
+    std::vector<int> myDrafts;
+    for (const auto& [id, dc] : st.drafts)
+        if (!dc.complete)
+            for (const DraftSeat& s : dc.seats)
+                if (s.user == user) { myDrafts.push_back(id); break; }
+    for (int id : myDrafts) cancelDraft(st, id, "a player disconnected");
+    // Leave their party (disbanding it if they led it), then drop invites naming them.
+    leaveParty(st, user);
+    st.partyInvites.erase(std::remove_if(st.partyInvites.begin(), st.partyInvites.end(),
+                                         [&](const PartyInvite& i) {
+                                             return i.from == user || i.to == user;
+                                         }),
+                          st.partyInvites.end());
     st.events.erase(user);
 }
 
@@ -456,10 +723,17 @@ void handleRequest(const proto::Msg& m, Connection& conn, const std::string& use
         const MatchFormat fmt = formatFromJson(proto::objField(m, "format"));
         if (fmt.rated && guest) { conn.send(err("rated play needs login")); return; }
         std::lock_guard<std::mutex> lk(st.mu);
+        std::vector<std::string> team; // a team seek carries the poster's full roster
+        if (fmt.teamSize > 1) {
+            std::string why;
+            std::optional<std::vector<std::string>> roster = fullPartyRoster(st, user, fmt.teamSize, why);
+            if (!roster) { conn.send(err(why)); return; }
+            team = std::move(*roster);
+        }
         st.seeks.erase(std::remove_if(st.seeks.begin(), st.seeks.end(),
                                       [&](const Seek& s) { return s.user == user; }),
                        st.seeks.end()); // one open seek per session
-        st.seeks.push_back({st.nextId++, user, rating, fmt, guest});
+        st.seeks.push_back({st.nextId++, user, rating, fmt, guest, std::move(team)});
         conn.send(ok());
         return;
     }
@@ -481,6 +755,11 @@ void handleRequest(const proto::Msg& m, Connection& conn, const std::string& use
                 o.set("user", s.user);
                 o.set("rating", s.rating);
                 o.set("format", formatToJson(s.fmt));
+                if (!s.team.empty()) {
+                    json::Value team = json::Value::makeArray();
+                    for (const std::string& u : s.team) team.push_back(u);
+                    o.set("team", std::move(team));
+                }
                 list.push_back(std::move(o));
             }
         }
@@ -498,6 +777,25 @@ void handleRequest(const proto::Msg& m, Connection& conn, const std::string& use
         if (it == st.seeks.end()) { conn.send(err("no such seek")); return; }
         if (it->user == user) { conn.send(err("can't accept your own seek")); return; }
         if (it->fmt.rated && guest) { conn.send(err("rated play needs login")); return; }
+        if (it->fmt.teamSize > 1) { // team seek → a draft between two full parties
+            std::string why;
+            std::optional<std::vector<std::string>> accRoster =
+                fullPartyRoster(st, user, it->fmt.teamSize, why);
+            if (!accRoster) { conn.send(err(why)); return; }
+            // Re-validate the seeker still leads a full party (it may have broken since).
+            std::string whyP;
+            std::optional<std::vector<std::string>> posterRoster =
+                fullPartyRoster(st, it->user, it->fmt.teamSize, whyP);
+            if (!posterRoster) {
+                st.seeks.erase(it);
+                conn.send(err("the seeker's party is no longer ready"));
+                return;
+            }
+            const std::string reply = openDraftCheck(st, it->fmt, *posterRoster, *accRoster, user);
+            st.seeks.erase(it);
+            conn.send(reply);
+            return;
+        }
         const std::string reply = openReadyCheck(st, it->fmt, it->user, user);
         st.seeks.erase(it);
         conn.send(reply);
@@ -529,7 +827,14 @@ void handleRequest(const proto::Msg& m, Connection& conn, const std::string& use
         if (to.empty()) { conn.send(err("bad challenge")); return; }
         if (fmt.rated && guest) { conn.send(err("rated play needs login")); return; }
         std::lock_guard<std::mutex> lk(st.mu);
-        st.challenges.push_back({st.nextId++, user, to, rating, fmt, guest});
+        std::vector<std::string> team; // a team challenge carries the challenger's roster
+        if (fmt.teamSize > 1) {
+            std::string why;
+            std::optional<std::vector<std::string>> roster = fullPartyRoster(st, user, fmt.teamSize, why);
+            if (!roster) { conn.send(err(why)); return; }
+            team = std::move(*roster);
+        }
+        st.challenges.push_back({st.nextId++, user, to, rating, fmt, guest, std::move(team)});
         conn.send(ok());
         return;
     }
@@ -544,6 +849,11 @@ void handleRequest(const proto::Msg& m, Connection& conn, const std::string& use
                 o.set("from", c.from);
                 o.set("rating", c.fromRating);
                 o.set("format", formatToJson(c.fmt));
+                if (!c.team.empty()) {
+                    json::Value team = json::Value::makeArray();
+                    for (const std::string& u : c.team) team.push_back(u);
+                    o.set("team", std::move(team));
+                }
                 list.push_back(std::move(o));
             }
         }
@@ -560,6 +870,24 @@ void handleRequest(const proto::Msg& m, Connection& conn, const std::string& use
                                [&](const Challenge& c) { return c.id == id; });
         if (it == st.challenges.end() || it->to != user) { conn.send(err("no such challenge")); return; }
         if (it->fmt.rated && guest) { conn.send(err("rated play needs login")); return; }
+        if (it->fmt.teamSize > 1) { // team challenge → a draft between two full parties
+            std::string why;
+            std::optional<std::vector<std::string>> accRoster =
+                fullPartyRoster(st, user, it->fmt.teamSize, why);
+            if (!accRoster) { conn.send(err(why)); return; }
+            std::string whyC;
+            std::optional<std::vector<std::string>> challengerRoster =
+                fullPartyRoster(st, it->from, it->fmt.teamSize, whyC);
+            if (!challengerRoster) {
+                st.challenges.erase(it);
+                conn.send(err("the challenger's party is no longer ready"));
+                return;
+            }
+            const std::string reply = openDraftCheck(st, it->fmt, *challengerRoster, *accRoster, user);
+            st.challenges.erase(it);
+            conn.send(reply);
+            return;
+        }
         const std::string reply = openReadyCheck(st, it->fmt, it->from, user);
         st.challenges.erase(it);
         conn.send(reply);
@@ -576,6 +904,186 @@ void handleRequest(const proto::Msg& m, Connection& conn, const std::string& use
         conn.send(ok());
         return;
     }
+    // --- parties (team play) -------------------------------------------------
+    if (t == "partyInvite") {
+        const std::string to = m.field("to");
+        if (to.empty() || to == user) { conn.send(err("bad invite")); return; }
+        std::lock_guard<std::mutex> lk(st.mu);
+        // If I already lead a party, keep using it; if I'm a non-leader member, refuse
+        // (leadership is checked before the target so the inviter's own problem wins).
+        int pid = 0;
+        if (auto mine = st.partyOf.find(user); mine != st.partyOf.end()) {
+            pid = mine->second;
+            const Party& p = st.parties[pid];
+            if (p.members.empty() || p.members.front() != user) {
+                conn.send(err("only the party leader can invite"));
+                return;
+            }
+        }
+        if (st.partyOf.count(to)) { conn.send(err("that player is already in a party")); return; }
+        if (pid == 0) { // auto-create my party (me = leader) on the first invite
+            pid = st.nextId++;
+            st.parties[pid] = Party{pid, {user}};
+            st.partyOf[user] = pid;
+        }
+        for (const PartyInvite& i : st.partyInvites) // no duplicate pending invite
+            if (i.partyId == pid && i.to == to) { conn.send(ok()); return; }
+        st.partyInvites.push_back({st.nextId++, pid, user, to});
+        conn.send(ok());
+        return;
+    }
+    if (t == "partyAccept") {
+        const int id = m.intField("id");
+        std::lock_guard<std::mutex> lk(st.mu);
+        if (st.partyOf.count(user)) { conn.send(err("leave your current party first")); return; }
+        auto it = std::find_if(st.partyInvites.begin(), st.partyInvites.end(),
+                               [&](const PartyInvite& i) { return i.id == id && i.to == user; });
+        if (it == st.partyInvites.end()) { conn.send(err("no such invite")); return; }
+        auto party = st.parties.find(it->partyId);
+        if (party == st.parties.end()) { // leader disbanded meanwhile
+            st.partyInvites.erase(it);
+            conn.send(err("that party no longer exists"));
+            return;
+        }
+        party->second.members.push_back(user);
+        st.partyOf[user] = it->partyId;
+        // I'm in a party now — drop every invite addressed to me.
+        st.partyInvites.erase(std::remove_if(st.partyInvites.begin(), st.partyInvites.end(),
+                                             [&](const PartyInvite& i) { return i.to == user; }),
+                              st.partyInvites.end());
+        conn.send(ok());
+        return;
+    }
+    if (t == "partyDecline") {
+        const int id = m.intField("id");
+        std::lock_guard<std::mutex> lk(st.mu);
+        st.partyInvites.erase(
+            std::remove_if(st.partyInvites.begin(), st.partyInvites.end(),
+                           [&](const PartyInvite& i) { return i.id == id && i.to == user; }),
+            st.partyInvites.end());
+        conn.send(ok());
+        return;
+    }
+    if (t == "partyLeave") {
+        std::lock_guard<std::mutex> lk(st.mu);
+        leaveParty(st, user);
+        conn.send(ok());
+        return;
+    }
+    if (t == "partyInfo") {
+        json::Value o = json::Value::makeObject();
+        o.set("type", "party");
+        {
+            std::lock_guard<std::mutex> lk(st.mu);
+            auto mine = st.partyOf.find(user);
+            json::Value mem = json::Value::makeArray();
+            if (mine != st.partyOf.end() && st.parties.count(mine->second)) {
+                const Party& p = st.parties[mine->second];
+                o.set("id", p.id);
+                for (const std::string& u : p.members) mem.push_back(u);
+            } else {
+                o.set("id", 0);
+            }
+            o.set("members", std::move(mem));
+        }
+        conn.send(json::dump(o, false));
+        return;
+    }
+    if (t == "partyInvites") { // incoming invites addressed to me
+        json::Value list = json::Value::makeArray();
+        {
+            std::lock_guard<std::mutex> lk(st.mu);
+            for (const PartyInvite& i : st.partyInvites) {
+                if (i.to != user) continue;
+                json::Value o = json::Value::makeObject();
+                o.set("id", i.id);
+                o.set("partyId", i.partyId);
+                o.set("from", i.from);
+                json::Value mem = json::Value::makeArray();
+                auto p = st.parties.find(i.partyId);
+                if (p != st.parties.end())
+                    for (const std::string& u : p->second.members) mem.push_back(u);
+                o.set("members", std::move(mem));
+                list.push_back(std::move(o));
+            }
+        }
+        json::Value reply = json::Value::makeObject();
+        reply.set("type", "partyinvites");
+        reply.set("list", std::move(list));
+        conn.send(json::dump(reply, false));
+        return;
+    }
+
+    // --- draft (the snake pick loop) -----------------------------------------
+    if (t == "draftLock") {
+        const int id = m.intField("id");
+        const std::optional<CharacterBuild> b = deserializeBuild(m.field("build"));
+        if (!b) { conn.send(err("malformed build")); return; }
+        std::lock_guard<std::mutex> lk(st.mu);
+        reapDrafts(st); // a timed-out pick may have auto-advanced past someone
+        auto it = st.drafts.find(id);
+        if (it == st.drafts.end()) { conn.send(simpleMsg("cancelled")); return; }
+        DraftCheck& dc = it->second;
+        if (dc.complete) { conn.send(err("draft already complete")); return; }
+        const int seat = dc.pickOrder[dc.currentPick];
+        if (dc.seats[seat].user != user) { conn.send(err("not your turn")); return; }
+        // Validate against the format's ruleset — an illegal build is refused (re-pick).
+        const Ruleset& rs = dc.fmt.rated ? cfg.rankedRules : cfg.casualRules;
+        if (!validateBuild(*b, cfg.catalog, rs.economy, rs.bannedSpells).ok) {
+            conn.send(notReadyMsg("that build is illegal for this format"));
+            return;
+        }
+        advanceDraft(dc, *b, st.draftPickSec);
+        const int cp = dc.currentPick; // capture before finalize erases the draft
+        const bool done = dc.complete;
+        json::Value reply = json::Value::makeObject();
+        reply.set("type", "locked");
+        reply.set("currentPick", cp);
+        reply.set("complete", done);
+        // The last lock finalizes the draft; everyone (this locker included) learns of the
+        // resulting pairing via a poll `paired` event, so the reply is just the ack.
+        if (done) finalizeDraft(st, id);
+        conn.send(json::dump(reply, false));
+        return;
+    }
+    if (t == "draftPoll") {
+        const int id = m.intField("id");
+        json::Value o = json::Value::makeObject();
+        {
+            std::lock_guard<std::mutex> lk(st.mu);
+            reapDrafts(st);
+            auto it = st.drafts.find(id);
+            if (it == st.drafts.end()) { conn.send(err("no such draft")); return; }
+            const DraftCheck& dc = it->second;
+            bool participant = false;
+            for (const DraftSeat& s : dc.seats)
+                if (s.user == user) { participant = true; break; }
+            if (!participant) { conn.send(err("not your draft")); return; }
+            o.set("type", "draftstate");
+            o.set("currentPick", dc.currentPick);
+            o.set("complete", dc.complete);
+            const int secsLeft =
+                dc.complete ? 0
+                            : std::max(0, static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(
+                                                               dc.deadline - std::chrono::steady_clock::now())
+                                                               .count()));
+            o.set("secondsLeft", secsLeft);
+            json::Value seats = json::Value::makeArray();
+            for (const DraftSeat& s : dc.seats) {
+                json::Value so = json::Value::makeObject();
+                so.set("faction", proto::factionName(s.faction));
+                so.set("index", s.index);
+                so.set("user", s.user);
+                so.set("locked", s.locked);
+                if (s.locked) so.set("build", serializeBuild(s.build)); // revealed on lock
+                seats.push_back(std::move(so));
+            }
+            o.set("seats", std::move(seats));
+        }
+        conn.send(json::dump(o, false));
+        return;
+    }
+
     if (t == "ready") {
         const int rcId = m.intField("id");
         const std::optional<CharacterBuild> b = deserializeBuild(m.field("build"));
@@ -762,6 +1270,7 @@ void handleRequest(const proto::Msg& m, Connection& conn, const std::string& use
         {
             std::lock_guard<std::mutex> lk(st.mu);
             reapReadyChecks(st);
+            reapDrafts(st);      // auto-lock any pick whose window elapsed
             matchQueue(st, cfg); // widening bands may have crossed since the join
             auto it = st.events.find(user);
             if (it != st.events.end()) {
@@ -871,6 +1380,7 @@ void sessionLoop(Connection conn, const proto::Msg& login, const LobbyConfig& cf
     hello.set("rating", acct.rating);
     hello.set("wins", acct.wins);
     hello.set("losses", acct.losses);
+    hello.set("server", cfg.version); // client warns loudly if this != its own ATB_VERSION
     conn.send(json::dump(hello, false));
 
     while (true) {
@@ -883,9 +1393,70 @@ void sessionLoop(Connection conn, const proto::Msg& login, const LobbyConfig& cf
     withdrawUser(st, user);
 }
 
-// A `joinMatch` connection: park it in its pairing; the second arrival runs the match.
+// Build the server-enforced clock from a format (shared by 1v1 and team matches).
+MatchClock clockFromFormat(const MatchFormat& fmt) {
+    MatchClock clock;
+    switch (fmt.time) {
+        case MatchFormat::Time::PerMove: clock.perMoveSec = std::max(1, fmt.perMoveSec); break;
+        case MatchFormat::Time::Chess:
+            clock.mainSec = std::max(1, fmt.mainSec);
+            clock.incSec = std::max(0, fmt.incSec);
+            break;
+        case MatchFormat::Time::Unlimited: break;
+    }
+    return clock;
+}
+
+// Once all 2N players of a team pairing have joined, run the NvN match on this thread.
+// conns/builds are parallel to tp->seats (seat order [Player 0..N-1, Enemy 0..N-1]).
+// Team ranking is a separate ladder (not wired here) — no Elo is recorded.
+void runTeamPairing(const std::shared_ptr<TeamPairing>& tp, const LobbyConfig& cfg) {
+    const MatchConfig mc = makeMatchConfig(cfg, tp->fmt);
+    const MatchClock clock = clockFromFormat(tp->fmt);
+    const int readTo = clock.chess() ? clock.mainSec + clock.incSec + 30
+                       : clock.perMoveSec > 0 ? clock.perMoveSec + 30
+                                              : 300;
+    for (Connection& c : tp->conns) c.setReadTimeout(readTo);
+    std::vector<CharacterBuild> builds;
+    builds.reserve(tp->seats.size());
+    for (const DraftSeat& s : tp->seats) builds.push_back(s.build);
+    const int n = static_cast<int>(tp->seats.size()) / 2;
+    runAdmittedTeamMatch(std::move(tp->conns), std::move(builds), n, mc, clock);
+}
+
+// A `joinMatch` connection: park it in its pairing; the final arrival runs the match.
+// Handles both 1v1 pairings (byToken) and NvN team pairings (teamByToken).
 void matchJoin(Connection conn, const proto::Msg& join, const LobbyConfig& cfg, LobbyState& st) {
     const std::string token = join.field("token");
+    // Team pairing (NvN)? Park this seat's conn; the last of 2N to arrive drives it.
+    {
+        std::shared_ptr<TeamPairing> tp;
+        bool runNow = false;
+        {
+            std::lock_guard<std::mutex> lk(st.mu);
+            if (auto it = st.teamByToken.find(token); it != st.teamByToken.end()) {
+                tp = it->second;
+                int seat = -1;
+                for (int s = 0; s < static_cast<int>(tp->tokens.size()); ++s)
+                    if (tp->tokens[s] == token) { seat = s; break; }
+                if (seat >= 0 && !tp->have[static_cast<std::size_t>(seat)]) {
+                    tp->conns[static_cast<std::size_t>(seat)] = std::move(conn);
+                    tp->have[static_cast<std::size_t>(seat)] = true;
+                }
+                bool all = true;
+                for (bool h : tp->have) all = all && h;
+                if (all && !tp->started) {
+                    tp->started = true;
+                    for (const std::string& tk : tp->tokens) st.teamByToken.erase(tk);
+                    runNow = true;
+                }
+            }
+        }
+        if (tp) {                    // it was a team token
+            if (runNow) runTeamPairing(tp, cfg);
+            return;                  // parked (or ran) — done either way
+        }
+    }
     std::shared_ptr<Pairing> p;
     bool runNow = false;
     {
@@ -908,15 +1479,7 @@ void matchJoin(Connection conn, const proto::Msg& join, const LobbyConfig& cfg, 
     // The server-enforced clock: a Per-move format is a fixed window per decision;
     // Chess is a true accumulating bank (main + increment, 6.3) — idling simply
     // burns the bank until the flag falls.
-    MatchClock clock;
-    switch (p->fmt.time) {
-        case MatchFormat::Time::PerMove: clock.perMoveSec = std::max(1, p->fmt.perMoveSec); break;
-        case MatchFormat::Time::Chess:
-            clock.mainSec = std::max(1, p->fmt.mainSec);
-            clock.incSec = std::max(0, p->fmt.incSec);
-            break;
-        case MatchFormat::Time::Unlimited: break; // not a live match
-    }
+    const MatchClock clock = clockFromFormat(p->fmt);
     // Socket read timeout = a generous ceiling over the clock (the deadline loop in
     // runAdmittedMatch does the real enforcement; this only catches a wedged link).
     const int readTo = clock.chess() ? clock.mainSec + clock.incSec + 30
@@ -966,6 +1529,7 @@ void serveLobby(Listener& listener, const LobbyConfig& cfg, int maxConns, int re
     if (cfg.accounts)
         st.arbiter = std::make_unique<Arbiter>(*cfg.accounts, cfg.rankedRules, cfg.catalog, cfg.creatures);
     st.readySeconds = cfg.readyCheckSec;
+    st.draftPickSec = cfg.draftPickSec;
     // Persistence: reload the correspondence state (game registry + move logs) so
     // open games survive the restart; every future change lands on disk too.
     if (!cfg.persistDir.empty()) {
@@ -1025,6 +1589,7 @@ std::unique_ptr<LobbySession> LobbySession::connect(const std::string& host, uin
 
     std::unique_ptr<LobbySession> s(new LobbySession(std::move(*conn)));
     s->guest_ = user.empty();
+    s->serverVersion_ = m->field("server"); // "" from a server predating the version field
     s->acct_.user = m->field("user");
     s->acct_.rating = m->intField("rating", kDefaultRating);
     s->acct_.wins = m->intField("wins");
@@ -1050,6 +1615,17 @@ std::optional<PairedInfo> pairedFromObj(const json::Value& o, std::string* error
     if (pi.live) {
         pi.token = proto::strOf(o, "token");
         if (pi.token.empty()) { if (error) *error = "missing match token"; return std::nullopt; }
+        // Team pairing (NvN): controller seat + both rosters (absent/empty for 1v1).
+        pi.controllerSeat = proto::intOf(o, "controllerSeat", 0);
+        auto readTeam = [&](const char* key, std::vector<CharacterBuild>& out) {
+            if (const json::Value* arr = o.find(key); arr && arr->isArray())
+                for (const json::Value& b : arr->asArray())
+                    if (b.isString())
+                        if (std::optional<CharacterBuild> cb = deserializeBuild(b.asString()))
+                            out.push_back(*cb);
+        };
+        readTeam("playerTeam", pi.playerTeam);
+        readTeam("enemyTeam", pi.enemyTeam);
     } else {
         pi.game = proto::strOf(o, "game");
         pi.seed = static_cast<unsigned>(proto::intOf(o, "seed"));
@@ -1078,6 +1654,34 @@ std::optional<ReadyCheckInfo> readyCheckFromObj(const json::Value& o) {
     rc.format = formatFromJson(o.find("format"));
     rc.seconds = proto::intOf(o, "seconds", 30);
     return rc;
+}
+// Pull a JSON string array (of usernames) into a vector.
+std::vector<std::string> membersFrom(const json::Value* arr) {
+    std::vector<std::string> out;
+    if (arr && arr->isArray())
+        for (const json::Value& e : arr->asArray())
+            if (e.isString()) out.push_back(e.asString());
+    return out;
+}
+// Parse a `draft` object (reply body or event) into DraftInfo.
+std::optional<DraftInfo> draftInfoFromObj(const json::Value& o) {
+    DraftInfo d;
+    d.id = proto::intOf(o, "id");
+    if (d.id == 0) return std::nullopt;
+    d.format = formatFromJson(o.find("format"));
+    d.mySeat = proto::intOf(o, "mySeat", -1);
+    if (const json::Value* seats = o.find("seats"); seats && seats->isArray())
+        for (const json::Value& s : seats->asArray()) {
+            DraftSeatInfo si;
+            si.faction = proto::factionParse(proto::strOf(s, "faction")).value_or(Faction::Player);
+            si.index = proto::intOf(s, "index");
+            si.user = proto::strOf(s, "user");
+            d.seats.push_back(std::move(si));
+        }
+    if (const json::Value* order = o.find("pickOrder"); order && order->isArray())
+        for (const json::Value& i : order->asArray())
+            if (i.isNumber()) d.pickOrder.push_back(static_cast<int>(i.asNumber()));
+    return d;
 }
 } // namespace
 
@@ -1117,6 +1721,7 @@ std::optional<std::vector<SeekInfo>> LobbySession::listSeeks() {
             s.user = proto::strOf(e, "user");
             s.rating = proto::intOf(e, "rating", kDefaultRating);
             s.format = formatFromJson(e.find("format"));
+            s.team = membersFrom(e.find("team"));
             out.push_back(std::move(s));
         }
     return out;
@@ -1134,6 +1739,20 @@ std::optional<ReadyCheckInfo> LobbySession::acceptSeek(int seekId, std::string* 
         return std::nullopt;
     }
     return readyCheckFromObj(m->body);
+}
+
+std::optional<DraftInfo> LobbySession::acceptSeekTeam(int seekId, std::string* error) {
+    json::Value o = json::Value::makeObject();
+    o.set("type", "acceptSeek");
+    o.set("id", seekId);
+    const std::optional<std::string> raw = rpc(json::dump(o, false));
+    if (!raw) { if (error) *error = "link failed"; return std::nullopt; }
+    const std::optional<proto::Msg> m = proto::parse(*raw);
+    if (!m || m->type != "draft") {
+        if (error) *error = m ? m->field("message") : "bad reply";
+        return std::nullopt;
+    }
+    return draftInfoFromObj(m->body);
 }
 
 bool LobbySession::queueJoin(const MatchFormat& fmt, std::string* error) {
@@ -1185,6 +1804,7 @@ std::optional<std::vector<ChallengeInfo>> LobbySession::listChallenges() {
             c.from = proto::strOf(e, "from");
             c.fromRating = proto::intOf(e, "rating", kDefaultRating);
             c.format = formatFromJson(e.find("format"));
+            c.team = membersFrom(e.find("team"));
             out.push_back(std::move(c));
         }
     return out;
@@ -1204,6 +1824,20 @@ std::optional<ReadyCheckInfo> LobbySession::acceptChallenge(int id, std::string*
     return readyCheckFromObj(m->body);
 }
 
+std::optional<DraftInfo> LobbySession::acceptChallengeTeam(int id, std::string* error) {
+    json::Value o = json::Value::makeObject();
+    o.set("type", "acceptChallenge");
+    o.set("id", id);
+    const std::optional<std::string> raw = rpc(json::dump(o, false));
+    if (!raw) { if (error) *error = "link failed"; return std::nullopt; }
+    const std::optional<proto::Msg> m = proto::parse(*raw);
+    if (!m || m->type != "draft") {
+        if (error) *error = m ? m->field("message") : "bad reply";
+        return std::nullopt;
+    }
+    return draftInfoFromObj(m->body);
+}
+
 bool LobbySession::declineChallenge(int id) {
     json::Value o = json::Value::makeObject();
     o.set("type", "decline");
@@ -1211,6 +1845,139 @@ bool LobbySession::declineChallenge(int id) {
     const std::optional<std::string> raw = rpc(json::dump(o, false));
     const std::optional<proto::Msg> m = raw ? proto::parse(*raw) : std::nullopt;
     return m && m->type == "ok";
+}
+
+// --- parties (team play) -----------------------------------------------------
+bool LobbySession::partyInvite(const std::string& toUser, std::string* error) {
+    json::Value o = json::Value::makeObject();
+    o.set("type", "partyInvite");
+    o.set("to", toUser);
+    const std::optional<std::string> raw = rpc(json::dump(o, false));
+    if (!raw) { if (error) *error = "link failed"; return false; }
+    const std::optional<proto::Msg> m = proto::parse(*raw);
+    if (m && m->type == "ok") return true;
+    if (error) *error = m ? m->field("message") : "bad reply";
+    return false;
+}
+
+bool LobbySession::partyAccept(int inviteId, std::string* error) {
+    json::Value o = json::Value::makeObject();
+    o.set("type", "partyAccept");
+    o.set("id", inviteId);
+    const std::optional<std::string> raw = rpc(json::dump(o, false));
+    if (!raw) { if (error) *error = "link failed"; return false; }
+    const std::optional<proto::Msg> m = proto::parse(*raw);
+    if (m && m->type == "ok") return true;
+    if (error) *error = m ? m->field("message") : "bad reply";
+    return false;
+}
+
+bool LobbySession::partyDecline(int inviteId) {
+    json::Value o = json::Value::makeObject();
+    o.set("type", "partyDecline");
+    o.set("id", inviteId);
+    const std::optional<std::string> raw = rpc(json::dump(o, false));
+    const std::optional<proto::Msg> m = raw ? proto::parse(*raw) : std::nullopt;
+    return m && m->type == "ok";
+}
+
+bool LobbySession::partyLeave() {
+    json::Value o = json::Value::makeObject();
+    o.set("type", "partyLeave");
+    const std::optional<std::string> raw = rpc(json::dump(o, false));
+    const std::optional<proto::Msg> m = raw ? proto::parse(*raw) : std::nullopt;
+    return m && m->type == "ok";
+}
+
+std::optional<PartyInfo> LobbySession::partyInfo() {
+    json::Value o = json::Value::makeObject();
+    o.set("type", "partyInfo");
+    const std::optional<std::string> raw = rpc(json::dump(o, false));
+    if (!raw) return std::nullopt;
+    const std::optional<proto::Msg> m = proto::parse(*raw);
+    if (!m || m->type != "party") return std::nullopt;
+    PartyInfo pi;
+    pi.id = proto::intOf(m->body, "id");
+    pi.members = membersFrom(m->body.find("members"));
+    if (!pi.members.empty()) pi.leader = pi.members.front();
+    return pi;
+}
+
+std::optional<std::vector<PartyInviteInfo>> LobbySession::listPartyInvites() {
+    json::Value o = json::Value::makeObject();
+    o.set("type", "partyInvites");
+    const std::optional<std::string> raw = rpc(json::dump(o, false));
+    if (!raw) return std::nullopt;
+    const std::optional<proto::Msg> m = proto::parse(*raw);
+    if (!m || m->type != "partyinvites") return std::nullopt;
+    std::vector<PartyInviteInfo> out;
+    const json::Value* list = m->body.find("list");
+    if (list && list->isArray())
+        for (const json::Value& e : list->asArray()) {
+            PartyInviteInfo i;
+            i.id = proto::intOf(e, "id");
+            i.partyId = proto::intOf(e, "partyId");
+            i.from = proto::strOf(e, "from");
+            i.members = membersFrom(e.find("members"));
+            out.push_back(std::move(i));
+        }
+    return out;
+}
+
+std::optional<DraftState> LobbySession::draftPoll(int draftId) {
+    json::Value o = json::Value::makeObject();
+    o.set("type", "draftPoll");
+    o.set("id", draftId);
+    const std::optional<std::string> raw = rpc(json::dump(o, false));
+    if (!raw) return std::nullopt;
+    const std::optional<proto::Msg> m = proto::parse(*raw);
+    if (!m || m->type != "draftstate") return std::nullopt;
+    DraftState ds;
+    ds.currentPick = proto::intOf(m->body, "currentPick");
+    ds.secondsLeft = proto::intOf(m->body, "secondsLeft");
+    if (const json::Value* comp = m->body.find("complete"); comp && comp->isBool())
+        ds.complete = comp->asBool();
+    if (const json::Value* seats = m->body.find("seats"); seats && seats->isArray())
+        for (const json::Value& s : seats->asArray()) {
+            DraftSeatState ss;
+            ss.faction = proto::factionParse(proto::strOf(s, "faction")).value_or(Faction::Player);
+            ss.index = proto::intOf(s, "index");
+            ss.user = proto::strOf(s, "user");
+            if (const json::Value* lk = s.find("locked"); lk && lk->isBool()) ss.locked = lk->asBool();
+            if (ss.locked)
+                if (std::optional<CharacterBuild> b = deserializeBuild(proto::strOf(s, "build")))
+                    ss.build = *b;
+            ds.seats.push_back(std::move(ss));
+        }
+    return ds;
+}
+
+DraftLockResult LobbySession::draftLock(int draftId, const CharacterBuild& build, std::string* error) {
+    DraftLockResult res;
+    json::Value o = json::Value::makeObject();
+    o.set("type", "draftLock");
+    o.set("id", draftId);
+    o.set("build", serializeBuild(build));
+    const std::optional<std::string> raw = rpc(json::dump(o, false));
+    if (!raw) { res.error = "link failed"; if (error) *error = res.error; return res; }
+    const std::optional<proto::Msg> m = proto::parse(*raw);
+    if (!m) { res.error = "bad reply"; if (error) *error = res.error; return res; }
+    if (m->type == "locked") {
+        res.currentPick = m->intField("currentPick");
+        const json::Value* comp = m->body.find("complete");
+        res.status = (comp && comp->isBool() && comp->asBool()) ? DraftLockResult::Status::Complete
+                                                                : DraftLockResult::Status::Locked;
+        return res;
+    }
+    if (m->type == "cancelled") { res.status = DraftLockResult::Status::Cancelled; return res; }
+    // notReady (illegal build) or error ("not your turn" / other): surface the reason.
+    res.error = m->field("message");
+    if (error) *error = res.error;
+    res.status = m->type == "notReady" ? DraftLockResult::Status::Rejected
+                 : res.error.find("your turn") != std::string::npos
+                     ? DraftLockResult::Status::NotYourTurn
+                     : DraftLockResult::Status::Cancelled;
+    return res;
 }
 
 ReadyResult LobbySession::ready(int readyCheckId, const CharacterBuild& build, std::string* error) {
@@ -1276,6 +2043,11 @@ LobbyEvent LobbySession::poll() {
             if (std::optional<ReadyCheckInfo> rc = readyCheckFromObj(e)) {
                 ev.kind = LobbyEvent::Kind::ReadyCheck;
                 ev.readyCheck = *rc;
+            }
+        } else if (kind == "draft" && ev.kind == LobbyEvent::Kind::None) {
+            if (std::optional<DraftInfo> d = draftInfoFromObj(e)) {
+                ev.kind = LobbyEvent::Kind::Draft;
+                ev.draft = *d;
             }
         } else if (kind == "cancelled" && ev.kind == LobbyEvent::Kind::None) {
             ev.kind = LobbyEvent::Kind::Cancelled;

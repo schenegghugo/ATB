@@ -21,12 +21,23 @@ namespace tb::render {
 
 class BuildEditorScreen {
 public:
-    enum class Result { None, Fight, PlayOnline, Menu };
+    enum class Result { None, Fight, PlayOnline, Menu, Lock };
 
     // How the editor was entered (from the mode-first menu): its primary action
     // reflects the mode — Local shows "Fight", Online shows "Play Online", Edit is
-    // pure authoring (Save + Menu, no launch button).
-    enum class Mode { Local, Online, Edit };
+    // pure authoring (Save + Menu, no launch button). Draft embeds the editor inside
+    // the NvN draft: the primary action is "LOCK IN" and a per-pick countdown + scout
+    // line ride in the header (so the clock is ALWAYS visible while you author).
+    enum class Mode { Local, Online, Edit, Draft };
+
+    // Draft context (Mode::Draft only): the live per-pick countdown, a "PICK n/N"
+    // label, and a one-line scout summary of the enemy champions revealed so far. Set
+    // every frame by the DraftScreen before runFrame so the clock never goes stale.
+    void setDraftContext(float secondsLeft, std::string pickLabel, std::string scoutLine) {
+        draftSecondsLeft_ = secondsLeft;
+        draftPickLabel_ = std::move(pickLabel);
+        draftScoutLine_ = std::move(scoutLine);
+    }
 
     // `ruleset` supplies the economy (validation/budget) and teamSize (how many
     // builds per side the editor authors).
@@ -60,6 +71,11 @@ private:
     bool editingName_ = false;
     int filter_ = 0; // category filter: 0=All 1=Damage 2=Effects 3=Support 4=Summon
     std::string statusMsg_;
+
+    // Draft-mode header context (see setDraftContext).
+    float draftSecondsLeft_ = 0.0f;
+    std::string draftPickLabel_;
+    std::string draftScoutLine_;
 };
 
 } // namespace tb::render

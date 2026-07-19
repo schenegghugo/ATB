@@ -5,6 +5,7 @@
 #include "raylib.h"
 
 #include <algorithm>
+#include <cmath>
 #include <optional>
 #include <string>
 #include <vector>
@@ -349,8 +350,23 @@ BuildEditorScreen::Result BuildEditorScreen::runFrame(int screenW, int screenH, 
 
     const char* header = mode == Mode::Local    ? "LOCAL MATCH — your team"
                          : mode == Mode::Online ? "PLAY ONLINE — your team"
+                         : mode == Mode::Draft  ? "DRAFT — author your champion"
                                                 : "BUILD EDITOR";
     DrawText(header, 16, 10, 22, kText);
+
+    // Draft header: the per-pick countdown (ALWAYS visible while authoring — this is
+    // the fix for "the clock isn't shown in the editor") + a scout line of revealed foes.
+    if (mode == Mode::Draft) {
+        const int secs = static_cast<int>(std::max(0.0f, draftSecondsLeft_) + 0.999f);
+        const std::string t =
+            (draftPickLabel_.empty() ? "" : draftPickLabel_ + "  ·  ") + std::to_string(secs) + "s";
+        const int tw = MeasureText(t.c_str(), 22);
+        DrawText(t.c_str(), static_cast<int>(W / 2) - tw / 2, 10, 22, secs <= 5 ? kBad : kAccent);
+        if (!draftScoutLine_.empty()) {
+            const int sw = MeasureText(draftScoutLine_.c_str(), 13);
+            DrawText(draftScoutLine_.c_str(), static_cast<int>(W / 2) - sw / 2, 34, 13, kMuted);
+        }
+    }
 
     const BuildValidation val = validateBuild(cur(), catalog_, ruleset_.economy, ruleset_.bannedSpells);
     auto isBanned = [&](const std::string& key) {
@@ -489,8 +505,10 @@ BuildEditorScreen::Result BuildEditorScreen::runFrame(int screenW, int screenH, 
     }
 
     // --- Enemy team pickers (one slot per teamSize) -------------------------
-    DrawText("Enemy team:", 16, static_cast<int>(H) - 78, 14, kMuted);
-    {
+    // Local/Edit only: online (Online/Draft) picks your opponent server-side, so the
+    // pickers would be meaningless noise — the DraftScreen shows the real revealed foes.
+    if (mode == Mode::Local || mode == Mode::Edit) {
+        DrawText("Enemy team:", 16, static_cast<int>(H) - 78, 14, kMuted);
         float ex = 110.0f;
         for (int i = 0; i < static_cast<int>(enemyPicks_.size()); ++i) {
             const char* nm = savedNames_.empty() ? "(none)" : savedNames_[enemyPicks_[i]].c_str();
@@ -562,6 +580,9 @@ BuildEditorScreen::Result BuildEditorScreen::runFrame(int screenW, int screenH, 
     } else if (mode == Mode::Online) {
         if (button({W - 176, by, 160, 32}, "Play Online >", m, kAccent, teamValid))
             result = Result::PlayOnline;
+    } else if (mode == Mode::Draft) {
+        if (button({W - 176, by, 160, 32}, "LOCK IN >", m, kAccent, teamValid))
+            result = Result::Lock;
     }
 
     if (!statusMsg_.empty())

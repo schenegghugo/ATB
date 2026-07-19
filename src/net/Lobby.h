@@ -55,6 +55,10 @@ struct LobbyConfig {
     std::string contentHash;          // catalog pin clients must match (contentHashOf)
     AccountStore* accounts = nullptr; // required for rated play / non-guest login
     int readyCheckSec = 30;           // per-pairing ready-check window (both must READY)
+    int draftPickSec = 60;            // per-pick window in an NvN draft (timeout → auto-lock)
+    std::string version;              // server build (ATB_VERSION), echoed in the hello so a
+                                      // stale client can warn — the contentHash pins DATA, this
+                                      // flags a code/protocol mismatch (e.g. pre-team-draft clients)
 
     // Chat safety levers (4.6), applied to lobby AND correspondence chat:
     int chatMaxLen = 200;             // longer messages are rejected
@@ -94,6 +98,7 @@ struct SeekInfo {
     std::string user;
     int rating = kDefaultRating;
     MatchFormat format;
+    std::vector<std::string> team; // full party roster for a team seek (empty = 1v1)
 };
 
 struct ChallengeInfo { // an INCOMING challenge (someone challenged me)
@@ -101,6 +106,25 @@ struct ChallengeInfo { // an INCOMING challenge (someone challenged me)
     std::string from;
     int fromRating = kDefaultRating;
     MatchFormat format;
+    std::vector<std::string> team; // challenger's full party roster (empty = 1v1)
+};
+
+// --- parties (team play) -----------------------------------------------------
+// A party groups logged-in players who will fill ONE side of an NvN match. The
+// leader (members.front()) invites; each accept adds a seat, in join order. A party
+// is a POLLED board like seeks/challenges — membership is re-fetched, not pushed.
+struct PartyInfo {
+    int id = 0;                        // 0 = you are not in a party
+    std::string leader;                // members.front()
+    std::vector<std::string> members;  // leader first, then joiners, in seat order
+    [[nodiscard]] bool has() const { return id != 0; }
+};
+
+struct PartyInviteInfo { // an INCOMING party invite (someone invited me to their party)
+    int id = 0;
+    int partyId = 0;
+    std::string from;                  // the inviting leader
+    std::vector<std::string> members;  // the party's current roster (so I see who I'd join)
 };
 
 // The result of accepting (or being accepted into) a game. A LIVE pairing carries a
@@ -115,8 +139,12 @@ struct PairedInfo {
     // correspondence:
     std::string game;   // relay/lobby game id
     unsigned seed = 0;  // regenerates the arena
-    CharacterBuild player, enemy; // both builds (seat Player / Enemy)
+    CharacterBuild player, enemy; // both builds (seat Player / Enemy) — 1v1
     std::string opponent; // the other seat's username (myCorrGames listings)
+    // team play (NvN, from a draft): which champion within your faction you pilot
+    // (0..teamSize-1, orthogonal to `seat`), and both sides' full rosters by seat index.
+    int controllerSeat = 0;
+    std::vector<CharacterBuild> playerTeam, enemyTeam; // empty for 1v1
 };
 
 // A live match in progress on the server, watchable via watchPoll (Phase 5.2).
@@ -145,6 +173,56 @@ struct ReadyCheckInfo {
     int seconds = 30; // the ready window
 };
 
+// --- draft (team pre-game, NvN) ----------------------------------------------
+// One champion seat in an NvN draft: which team (faction), the index within that
+// team, and the human who controls it.
+struct DraftSeatInfo {
+    Faction faction = Faction::Player; // Player = the seek/challenge poster's team
+    int index = 0;                     // 0..teamSize-1 within the faction
+    std::string user;
+};
+
+// Two full parties have paired and now DRAFT their builds one champion at a time
+// (snake order, revealed on lock — slice 3). Delivered to every one of the 2N players
+// when the draft opens; `mySeat` indexes `seats` for the recipient.
+struct DraftInfo {
+    int id = 0;
+    MatchFormat format;
+    std::vector<DraftSeatInfo> seats; // 2*teamSize, laid out [Player 0..N-1, Enemy 0..N-1]
+    std::vector<int> pickOrder;       // snake order: indices into `seats`
+    int mySeat = -1;                  // the recipient's seat (index into `seats`)
+    [[nodiscard]] bool valid() const { return id != 0 && !seats.empty(); }
+};
+
+// A seat's live draft state: who/where + whether they've locked and (once locked, and
+// therefore REVEALED) their build. Polled via draftPoll while the draft runs.
+struct DraftSeatState {
+    Faction faction = Faction::Player;
+    int index = 0;
+    std::string user;
+    bool locked = false;
+    CharacterBuild build; // meaningful only when locked (revealed on lock)
+};
+
+// The full state of a running draft (polled). `currentPick` indexes DraftInfo::pickOrder
+// (the seat picking now); `complete` = every seat locked (→ the match can form, slice 4).
+struct DraftState {
+    std::vector<DraftSeatState> seats;
+    int currentPick = 0;
+    bool complete = false;
+    int secondsLeft = 0; // server's remaining time on the CURRENT pick (0 when complete)
+};
+
+// The reply to draftLock(): Locked (your build is in; more picks remain), Complete (you
+// were the last pick — the draft is done), Rejected (illegal build — re-pick), NotYourTurn
+// (someone else picks now — keep polling), or Cancelled (the draft is gone).
+struct DraftLockResult {
+    enum class Status { Locked, Complete, Rejected, NotYourTurn, Cancelled };
+    Status status = Status::Cancelled;
+    int currentPick = 0;
+    std::string error; // Rejected / NotYourTurn reason
+};
+
 // The reply to ready(): Waiting (you readied, opponent hasn't), Matched (both ready →
 // `paired`), Rejected (your build is illegal — re-pick), or Cancelled (timeout/decline).
 struct ReadyResult {
@@ -157,9 +235,10 @@ struct ReadyResult {
 // An async lobby event drained by poll(): someone accepted your seek/challenge
 // (ReadyCheck), both of you readied (Paired), or a pending ready check was cancelled.
 struct LobbyEvent {
-    enum class Kind { None, ReadyCheck, Paired, Cancelled };
+    enum class Kind { None, ReadyCheck, Paired, Cancelled, Draft };
     Kind kind = Kind::None;
     ReadyCheckInfo readyCheck;
+    DraftInfo draft; // valid when kind == Draft (a team seek/challenge you were in opened)
     PairedInfo paired;
     std::string message; // cancel reason
 };
@@ -176,6 +255,9 @@ public:
 
     [[nodiscard]] const AccountView& account() const { return acct_; } // rating/W/L at login
     [[nodiscard]] bool guest() const { return guest_; }
+    // The server's build version (from the login hello; empty if the server predates
+    // this field). Compare to the client's own ATB_VERSION to warn on a mismatch.
+    [[nodiscard]] const std::string& serverVersion() const { return serverVersion_; }
 
     // Open seeks (anyone may accept). Exactly one open seek per session (re-seek
     // replaces it). No build — you choose it at the ready check after pairing.
@@ -184,6 +266,11 @@ public:
     [[nodiscard]] std::optional<std::vector<SeekInfo>> listSeeks();
     // Accept an open seek → a ready check (the seek's owner learns via poll()).
     [[nodiscard]] std::optional<ReadyCheckInfo> acceptSeek(int seekId, std::string* error = nullptr);
+    // Accept a TEAM seek (format.teamSize > 1) → a DRAFT: you must lead a full party of
+    // the same size. All 2N players learn via poll() (Draft event); the acceptor gets
+    // the DraftInfo back here. (A team seek is posted with seek() while you lead a full
+    // party — the server reads your roster.)
+    [[nodiscard]] std::optional<DraftInfo> acceptSeekTeam(int seekId, std::string* error = nullptr);
 
     // Quick-match queue: auto-pair with anyone queued in the same format whose
     // rating fits the (time-widening) band — no manual accept. The resulting ready
@@ -196,7 +283,34 @@ public:
     bool challenge(const std::string& toUser, const MatchFormat& fmt, std::string* error = nullptr);
     [[nodiscard]] std::optional<std::vector<ChallengeInfo>> listChallenges(); // incoming
     [[nodiscard]] std::optional<ReadyCheckInfo> acceptChallenge(int id, std::string* error = nullptr);
+    // Accept a TEAM challenge (format.teamSize > 1) → a DRAFT (you must lead a full
+    // party of the same size). Like acceptSeekTeam but for a directed challenge.
+    [[nodiscard]] std::optional<DraftInfo> acceptChallengeTeam(int id, std::string* error = nullptr);
     bool declineChallenge(int id);
+
+    // --- parties (team play) -------------------------------------------------
+    // Invite a user to my party (auto-creating one, with me as leader, if I have
+    // none). Leader-only once a party exists. The target sees it via listPartyInvites.
+    bool partyInvite(const std::string& toUser, std::string* error = nullptr);
+    // Accept / decline an incoming invite (by its id). Accepting joins that party
+    // (leaving any current one is not implied — you must not already be in a party).
+    bool partyAccept(int inviteId, std::string* error = nullptr);
+    bool partyDecline(int inviteId);
+    // Leave my party. The leader leaving DISBANDS it for everyone.
+    bool partyLeave();
+    // My current party (id 0 / empty if I'm not in one), and invites addressed to me.
+    [[nodiscard]] std::optional<PartyInfo> partyInfo();
+    [[nodiscard]] std::optional<std::vector<PartyInviteInfo>> listPartyInvites();
+
+    // --- draft (after a team pairing) ---------------------------------------
+    // Poll a running draft's state (all seats; locked seats carry their REVEALED build).
+    // nullopt once the draft is gone (cancelled, or — slice 4 — turned into a match).
+    [[nodiscard]] std::optional<DraftState> draftPoll(int draftId);
+    // Lock your build for your seat (only legal on YOUR turn — draftPoll tells you when
+    // pickOrder[currentPick] is your seat). Locking reveals it to everyone. Rejected =
+    // illegal build (re-pick); NotYourTurn = keep polling; Complete = you were last.
+    [[nodiscard]] DraftLockResult draftLock(int draftId, const CharacterBuild& build,
+                                            std::string* error = nullptr);
 
     // --- ready check (after a pairing) --------------------------------------
     // Submit your build + READY. Waiting → poll() for the Paired/Cancelled outcome;
@@ -256,6 +370,7 @@ private:
     Connection conn_;
     AccountView acct_;
     bool guest_ = true;
+    std::string serverVersion_;
 };
 
 // A MoveChannel that carries correspondence moves over a lobby session (the server

@@ -8,12 +8,40 @@
 namespace tb::render {
 
 // The human-facing codename for the current release (shown beside the version).
-inline constexpr const char* kVersionCodename = "Build Books";
+inline constexpr const char* kVersionCodename = "The Draft";
 
 // Player-facing changelog, newest release first. Plain text, one item per line
 // (kept under ~72 cols so it fits without wrapping).
 inline constexpr const char* kPatchNotes =
-    R"(0.1.1  —  "Build Books"
+    R"(0.2.0  —  "The Draft"
+
+Real 2v2 / 3v3: team up with a partner and draft your squad face to face.
+
+PARTY UP
+  - Invite a friend to your party from the Online Home (2v2 / 3v3 rows),
+    watch your roster fill, then seek or challenge AS A TEAM. Two humans
+    a side for 2v2, three for 3v3 - each pilots their own champion.
+
+THE DRAFT (scout, then counter-build)
+  - Team games now open with a turn-by-turn DRAFT, not a blind ready
+    check: players lock their champion one at a time, in snake order.
+  - Every locked build is REVEALED to everyone, so a later pick can
+    scout the enemy and counter-build on the spot.
+  - The per-pick countdown is ALWAYS on screen while you author - no
+    more guessing how long you have. Run it out and a basic build is
+    locked for you, so the draft never stalls.
+
+FULL TEAM CONTROL
+  - Completes the 0.1.0 preview: a team match routes each champion's
+    turn to the player who controls it. On a teammate's turn you watch
+    and plan; on yours, you act.
+
+NOTE
+  - Online 2v2 / 3v3 needs this version on BOTH sides - the team draft
+    and match protocol are new. 1v1 play is unchanged.
+
+
+0.1.1  —  "Build Books"
 
 Share your builds, read every spell at a glance, and smoother casting.
 

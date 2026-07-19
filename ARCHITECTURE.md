@@ -566,6 +566,12 @@ illegal calls — networking wraps them, it doesn't rewrite them.
    (server schema-validates + hashes + caches for the lobby's lifetime), shares a
    join code, joiners pull those exact hashed files; the **ruleset** is the agreed
    format (no ad-hoc per-lobby toggles — it's all in `rules.json`).
+   *Team play (2v2 / 3v3):* a full **party** seeks/challenges as a unit; the
+   pairing opens a snake **draft** (each seat locks a champion in turn, revealed on
+   lock so later picks scout + counter-build), then a live match routes each turn to
+   the champion's controller. The engine stays 2-faction — controller identity
+   (`welcomeTeam.controllerSeat`, `MirrorSession::myUnit_`, `runAdmittedTeamMatch`'s
+   `activeConn`) rides the transport + client mirror, not `MatchRunner`.
 5. **Identity / persistence.** Lightweight accounts and a results/ratings store in
    SQLite — the `BuildRepository` + `schema.sql` seam already points here; this
    extends it with `matches` and `ratings`.

@@ -25,6 +25,7 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace tb::net::proto {
 
@@ -60,6 +61,28 @@ inline std::string welcome(Faction seat, int seed, const std::string& playerBuil
     o.set("clockSec", clockSec); // per-move idle window (0 = no clock, e.g. correspondence)
     o.set("mainSec", mainSec);   // chess bank per seat (0 = not a chess clock)
     o.set("incSec", incSec);     // chess increment per completed turn
+    return json::dump(o, false);
+}
+// Team match setup (NvN): like welcome, but carries BOTH full rosters (arrays of
+// serialized builds, by seat index) so the client mirrors the identical N-champion
+// Battle, plus which champion within its faction this client pilots (controllerSeat).
+inline std::string welcomeTeam(Faction seat, int controllerSeat, int seed,
+                               const std::vector<std::string>& playerTeam,
+                               const std::vector<std::string>& enemyTeam, int clockSec = 0,
+                               int mainSec = 0, int incSec = 0) {
+    json::Value o = json::Value::makeObject();
+    o.set("type", "welcomeTeam");
+    o.set("seat", factionName(seat));
+    o.set("controllerSeat", controllerSeat);
+    o.set("seed", seed);
+    json::Value pt = json::Value::makeArray(), et = json::Value::makeArray();
+    for (const std::string& b : playerTeam) pt.push_back(b);
+    for (const std::string& b : enemyTeam) et.push_back(b);
+    o.set("playerTeam", std::move(pt));
+    o.set("enemyTeam", std::move(et));
+    o.set("clockSec", clockSec);
+    o.set("mainSec", mainSec);
+    o.set("incSec", incSec);
     return json::dump(o, false);
 }
 inline std::string error(const std::string& message) {

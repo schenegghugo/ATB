@@ -6,6 +6,10 @@
 #include <algorithm>
 #include <string>
 
+#ifndef ATB_VERSION
+#define ATB_VERSION "dev"
+#endif
+
 namespace tb::render {
 namespace {
 
@@ -78,6 +82,8 @@ void field(Rectangle box, const char* label, std::string& value, bool& focus, Ve
 void LobbyScreen::refresh(net::LobbySession& session) {
     if (auto s = session.listSeeks()) seeks_ = std::move(*s);
     if (auto c = session.listChallenges()) challenges_ = std::move(*c);
+    if (auto pi = session.partyInfo()) party_ = std::move(*pi);
+    if (auto inv = session.listPartyInvites()) partyInvites_ = std::move(*inv);
     if (auto g = session.listGames()) games_ = std::move(*g);
     if (auto mg = session.myCorrGames()) myGames_ = std::move(*mg);
     if (auto cp = session.chatPoll(chatCursor_)) { // lobby chat (4.6)
@@ -103,12 +109,30 @@ LobbyScreen::Result LobbyScreen::runFrame(int screenW, int screenH, net::LobbySe
             queued_ = false; // a queue match consumed the slot
             return Result::ReadyCheck;
         }
+        if (ev.kind == net::LobbyEvent::Kind::Draft) { // a team seek/challenge I posted was accepted
+            draft_ = ev.draft;
+            return Result::Draft;
+        }
         refresh(session);
     }
     if (!ratedAvailable) rated_ = false;
 
     const float W = static_cast<float>(screenW);
     const float margin = 40.0f;
+
+    // LOUD version-mismatch alert. The server told us its build in the login hello; the
+    // contentHash already pins the game DATA, but not the client CODE — so a build whose
+    // version differs may not speak the same protocol (e.g. a pre-team-play client can't
+    // draft). A full-width red ribbon up top is unmissable; 1v1 may still work, hence a
+    // warning rather than a hard block.
+    const std::string& srvVer = session.serverVersion();
+    if (!srvVer.empty() && srvVer != std::string(ATB_VERSION)) {
+        DrawRectangle(0, 0, screenW, 30, Color{160, 32, 32, 255});
+        const std::string warn = "OUT OF DATE:  your client " + std::string(ATB_VERSION) +
+                                 "  !=  server " + srvVer +
+                                 "   -   update your client; online 2v2 / 3v3 may not work.";
+        DrawText(warn.c_str(), static_cast<int>(margin), 8, 16, RAYWHITE);
+    }
 
     // Header.
     const std::string who = session.guest()
@@ -149,8 +173,58 @@ LobbyScreen::Result LobbyScreen::runFrame(int screenW, int screenH, net::LobbySe
     }
     const net::MatchFormat fmt = formatFrom(preset_, rated_, teamSize_);
 
-    // Two columns.
-    y = 172.0f;
+    // --- Party panel (2v2/3v3 only): invite a partner, see the roster, accept invites.
+    // A team seek/challenge needs a FULL party of teamSize; the server enforces it.
+    const bool teamMode = teamSize_ > 1;
+    if (teamMode) {
+        const float py = 150.0f;
+        DrawText("PARTY", static_cast<int>(margin), static_cast<int>(py) - 20, 14, kMuted);
+        std::string roster;
+        for (std::size_t i = 0; i < party_.members.size(); ++i)
+            roster += (i ? ", " : "") + party_.members[i] + (i == 0 ? " (leader)" : "");
+        if (roster.empty()) roster = "(just you)";
+        const bool full = party_.has() && static_cast<int>(party_.members.size()) == teamSize_;
+        const std::string need =
+            full ? "  — full, ready to seek"
+                 : "  — need " + std::to_string(teamSize_) + " for " + std::to_string(teamSize_) +
+                       "v" + std::to_string(teamSize_) + " (invite a partner)";
+        DrawText((roster + need).c_str(), static_cast<int>(margin), static_cast<int>(py) + 6, 15,
+                 full ? kGood : kText);
+
+        field({W - margin - 320, py, 190, 30}, "", partyInvitee_, partyFocus_, m, 24);
+        if (button({W - margin - 122, py, 122, 30}, "Invite", m, kAccent)) {
+            std::string err;
+            if (partyInvitee_.empty()) status_ = "Enter a username to invite.";
+            else if (session.partyInvite(partyInvitee_, &err)) {
+                status_ = "Invited " + partyInvitee_ + " to your party.";
+                partyInvitee_.clear();
+            } else status_ = "Invite failed: " + err;
+        }
+        if (party_.has() &&
+            button({W - margin - 320 - 96, py, 88, 30}, "Leave", m, kPanel)) {
+            session.partyLeave();
+            party_ = {};
+        }
+        // One incoming invite at a time (keeps the strip compact).
+        if (!partyInvites_.empty()) {
+            const net::PartyInviteInfo& inv = partyInvites_.front();
+            const std::string label = inv.from + " invited you to a party:";
+            DrawText(label.c_str(), static_cast<int>(margin), static_cast<int>(py) + 40, 14, kAccent);
+            const float bx = margin + MeasureText(label.c_str(), 14) + 14;
+            if (button({bx, py + 36, 80, 24}, "Accept", m, kAccent)) {
+                std::string e;
+                session.partyAccept(inv.id, &e);
+                refresh(session);
+            }
+            if (button({bx + 88, py + 36, 80, 24}, "Decline", m, kPanel)) {
+                session.partyDecline(inv.id);
+                refresh(session);
+            }
+        }
+    }
+
+    // Two columns (pushed down when the party panel is showing).
+    y = teamMode ? 226.0f : 172.0f;
     const float colW = (W - 3 * margin) / 2.0f;
     const float lx = margin;
     const float rx = margin * 2 + colW;
@@ -193,7 +267,12 @@ LobbyScreen::Result LobbyScreen::runFrame(int screenW, int screenH, net::LobbySe
         if (session.account().user != s.user &&
             button({lx + colW - 92, ry + 6, 84, 28}, "Accept", m, kAccent)) {
             std::string err;
-            if (std::optional<net::ReadyCheckInfo> r = session.acceptSeek(s.id, &err)) {
+            if (s.format.teamSize > 1) { // a team seek → a draft (needs my full party)
+                if (std::optional<net::DraftInfo> r = session.acceptSeekTeam(s.id, &err)) {
+                    draft_ = *r;
+                    return Result::Draft;
+                }
+            } else if (std::optional<net::ReadyCheckInfo> r = session.acceptSeek(s.id, &err)) {
                 rc_ = *r;
                 return Result::ReadyCheck;
             }
@@ -251,7 +330,12 @@ LobbyScreen::Result LobbyScreen::runFrame(int screenW, int screenH, net::LobbySe
                  12, kMuted);
         if (button({rx + colW - 176, cy + 6, 80, 28}, "Accept", m, kAccent)) {
             std::string err;
-            if (std::optional<net::ReadyCheckInfo> r = session.acceptChallenge(c.id, &err)) {
+            if (c.format.teamSize > 1) { // a team challenge → a draft (needs my full party)
+                if (std::optional<net::DraftInfo> r = session.acceptChallengeTeam(c.id, &err)) {
+                    draft_ = *r;
+                    return Result::Draft;
+                }
+            } else if (std::optional<net::ReadyCheckInfo> r = session.acceptChallenge(c.id, &err)) {
                 rc_ = *r;
                 return Result::ReadyCheck;
             }

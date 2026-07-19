@@ -197,6 +197,132 @@ ServeResult runAdmittedMatch(Connection c0, Connection c1, const CharacterBuild&
     return res;
 }
 
+ServeResult runAdmittedTeamMatch(std::vector<Connection> conns, std::vector<CharacterBuild> builds,
+                                 int teamSize, const MatchConfig& cfg, const MatchClock& clock,
+                                 const std::function<void(const std::string&)>& spectate) {
+    ServeResult res;
+    const int n = teamSize;
+    const int total = 2 * n;
+    if (static_cast<int>(conns.size()) != total || static_cast<int>(builds.size()) != total) {
+        res.error = "team match: conn/build count mismatch";
+        return res;
+    }
+    auto toWatchers = [&](const std::string& msg) { if (spectate) spectate(msg); };
+    auto idx = [](Faction f) { return f == Faction::Player ? 0 : 1; };
+    // Seat layout: [Player 0..n-1] then [Enemy 0..n-1]. Map (faction, controller) → conn.
+    auto connIndex = [&](Faction f, int ctrl) { return f == Faction::Player ? ctrl : n + ctrl; };
+    std::vector<CharacterBuild> playerTeam(builds.begin(), builds.begin() + n);
+    std::vector<CharacterBuild> enemyTeam(builds.begin() + n, builds.end());
+
+    const unsigned seed = std::random_device{}() % 1000000000u + 1u;
+    std::vector<std::string> pStr, eStr;
+    for (const CharacterBuild& b : playerTeam) pStr.push_back(serializeBuild(b));
+    for (const CharacterBuild& b : enemyTeam) eStr.push_back(serializeBuild(b));
+    // Hand every seat its welcome (its faction + which champion it pilots + both rosters).
+    for (int s = 0; s < total; ++s) {
+        const Faction f = s < n ? Faction::Player : Faction::Enemy;
+        const int ctrl = s < n ? s : s - n;
+        const std::string w = proto::welcomeTeam(f, ctrl, static_cast<int>(seed), pStr, eStr,
+                                                 clock.perMoveSec, clock.mainSec, clock.incSec);
+        conns[static_cast<std::size_t>(s)].send(w);
+        if (s == 0) toWatchers(w); // spectators mirror from the Player-0 setup (team spectate: later)
+    }
+
+    Battle battle = buildMatch(cfg.ruleset, playerTeam, enemyTeam, cfg.catalog, seed, cfg.creatures);
+    // controllers[faction][i] = EntityId of that faction's i-th champion (routing key).
+    const std::vector<EntityId> controllers[2] = {championSeats(battle, Faction::Player),
+                                                  championSeats(battle, Faction::Enemy)};
+    MatchRunner runner(std::move(battle), Seat::Human, Seat::Human);
+
+    auto broadcast = [&](const std::string& msg) {
+        bool ok = true;
+        for (Connection& c : conns) ok = c.send(msg) && ok;
+        return ok;
+    };
+    // Which conn pilots the currently active champion (of `awaiting` faction).
+    auto activeConn = [&](Faction awaiting) -> int {
+        const EntityId active = runner.battle().activeUnit();
+        const std::vector<EntityId>& seats = controllers[idx(awaiting)];
+        for (int i = 0; i < static_cast<int>(seats.size()); ++i)
+            if (seats[i] == active) return connIndex(awaiting, i);
+        return -1;
+    };
+    // Forfeit `idle`'s whole team: the opposing faction wins.
+    auto forfeit = [&](Faction idle) {
+        const Faction winner = opposing(idle);
+        res.winner = winner;
+        res.ok = true;
+        res.error = "forfeit (idle clock / disconnect)";
+        const std::string end = proto::endMsg(winner, /*forfeit=*/true);
+        broadcast(end);
+        toWatchers(end);
+        res.finalSnapshot = serializeSnapshot(runner.snapshot());
+    };
+
+    double bank[2] = {static_cast<double>(clock.mainSec), static_cast<double>(clock.mainSec)};
+    using Clock = std::chrono::steady_clock;
+    for (int guard = 0; guard < 40000 && !runner.finished(); ++guard) {
+        const std::optional<Faction> awaiting = runner.awaitingSeat();
+        if (!awaiting) { res.error = "no seat awaited but match not finished"; return res; }
+        const int act = activeConn(*awaiting);
+        if (act < 0) { res.error = "active champion has no controller"; return res; }
+        Connection& active = conns[static_cast<std::size_t>(act)];
+        const auto turnStart = Clock::now();
+        const double windowSec = clock.chess()          ? bank[idx(*awaiting)]
+                                 : clock.perMoveSec > 0 ? clock.perMoveSec
+                                                        : 36000.0;
+        const auto deadline = turnStart + std::chrono::duration_cast<Clock::duration>(
+                                              std::chrono::duration<double>(windowSec));
+        bool moved = false;
+        while (!moved && !runner.finished()) {
+            // Relay chat from any NON-active seat that has a frame waiting.
+            for (int s = 0; s < total; ++s) {
+                if (s == act) continue;
+                Connection& c = conns[static_cast<std::size_t>(s)];
+                if (!c.waitReadable(0)) continue;
+                const std::optional<std::string> raw = c.recv();
+                if (!raw) continue;
+                const std::optional<proto::Msg> cm = proto::parse(*raw);
+                const Faction from = s < n ? Faction::Player : Faction::Enemy;
+                if (cm && cm->type == "chat") broadcast(proto::chatMsg(cm->field("text"), from));
+            }
+            const long msLeft =
+                std::chrono::duration_cast<std::chrono::milliseconds>(deadline - Clock::now()).count();
+            if (msLeft <= 0) { forfeit(*awaiting); return res; }
+            if (!active.waitReadable(static_cast<int>(std::min<long>(msLeft, 200)))) continue;
+            const std::optional<std::string> raw = active.recv();
+            if (!raw) { forfeit(*awaiting); return res; } // active pilot dropped → team forfeits
+            const std::optional<proto::Msg> m = proto::parse(*raw);
+            if (!m) continue;
+            if (m->type == "chat") { broadcast(proto::chatMsg(m->field("text"), *awaiting)); continue; }
+            if (m->type != "intent") continue;
+            const Parse<Intent> in = parseIntent(m->field("intent"));
+            if (!in.ok) continue;
+            runner.submit(*awaiting, in.value); // ownership + legality enforced by the runner
+            std::string msg;
+            if (clock.chess()) {
+                double& b = bank[idx(*awaiting)];
+                b = std::max(0.0, b - std::chrono::duration<double>(Clock::now() - turnStart).count());
+                if (runner.awaitingSeat() != awaiting) b += clock.incSec;
+                msg = proto::applied(*awaiting, in.value, bank[0], bank[1]);
+            } else {
+                msg = proto::applied(*awaiting, in.value);
+            }
+            if (!broadcast(msg)) { res.error = "broadcast failed (disconnect)"; return res; }
+            toWatchers(msg);
+            moved = true;
+        }
+    }
+
+    broadcast(proto::endMsg());
+    toWatchers(proto::endMsg());
+    res.ok = runner.finished();
+    res.winner = runner.battle().winner();
+    res.finalSnapshot = serializeSnapshot(runner.snapshot());
+    if (!res.ok) res.error = "match did not finish within bound";
+    return res;
+}
+
 ServeResult serveOneMatch(Listener& listener, const MatchConfig& cfg, int readTimeoutSec) {
     std::optional<Connection> c0 = listener.accept();
     std::optional<Connection> c1 = listener.accept();
