@@ -48,8 +48,21 @@ ClientResult playClient(const std::string& host, uint16_t port, const std::strin
             return r;
         }
         if (ms->awaitingMe() && !sentThisTurn) {
-            for (const Intent& in : policy(ms->seat(), snapshotOf(ms->battle())))
-                if (!ms->send(in)) { r.error = "sending intent failed"; return r; }
+            // Submit the turn one intent at a time, absorbing each intent's
+            // authoritative echo before sending the next. A single intent can end the
+            // turn (endTurn) or the whole match (a killing cast); once it has, the
+            // server closes the link, so we must STOP rather than write into a dead
+            // socket — which would otherwise surface as a spurious "sending intent
+            // failed" and fail an already-won match (a load-dependent race).
+            for (const Intent& in : policy(ms->seat(), snapshotOf(ms->battle()))) {
+                if (ms->finished() || !ms->awaitingMe()) break; // a prior intent ended it
+                if (!ms->send(in)) {
+                    if (ms->finished()) break; // link dropped because the match just ended — clean finish
+                    r.error = "sending intent failed";
+                    return r;
+                }
+                ms->pump(readTimeoutSec * 1000); // stay in lockstep before the next intent
+            }
             sentThisTurn = true;
         } else {
             // Wait for (and apply) the server's authoritative intent stream.
