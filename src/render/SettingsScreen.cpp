@@ -38,7 +38,7 @@ SettingsScreen::Result SettingsScreen::runFrame(int screenW, int screenH, const 
     const float x = 48.0f;
 
     DrawText("SETTINGS", static_cast<int>(x), 44, 26, ui::kText);
-    DrawText("Pick a UI theme and sprite pack — applied live, saved to settings.json.",
+    DrawText("Pick a UI theme and sprite pack - applied live, saved to settings.json.",
              static_cast<int>(x), 76, 13, ui::kMuted);
 
     float y = 116.0f;
@@ -52,7 +52,7 @@ SettingsScreen::Result SettingsScreen::runFrame(int screenW, int screenH, const 
     Result result = Result::None;
 
     // UI scale — the resizable-board control (saved to settings.json, applied live).
-    DrawText("UI SCALE  (board size — saved)", static_cast<int>(x), static_cast<int>(y), 15,
+    DrawText("UI SCALE  (board size - saved)", static_cast<int>(x), static_cast<int>(y), 15,
              ui::kAccent);
     {
         Rectangle minus{x + 260, y - 6, 34, 28}, plus{x + 386, y - 6, 34, 28};

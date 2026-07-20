@@ -57,24 +57,14 @@ std::string formatTag(const net::MatchFormat& f) {
     return s;
 }
 
-// A labeled single-line text field (click to focus, edits when focused).
+// A labeled single-line text field (click to focus, full text-zone editing when
+// focused — see ui::editableField).
 void field(Rectangle box, const char* label, std::string& value, bool& focus, Vector2 m,
            std::size_t maxLen = 24) {
     if (label && *label)
         DrawText(label, static_cast<int>(box.x), static_cast<int>(box.y) - 18, 14, kMuted);
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) focus = hovered(box, m);
-    if (focus) {
-        int key = GetCharPressed();
-        while (key > 0) {
-            if (key >= 32 && key < 127 && value.size() < maxLen) value.push_back(static_cast<char>(key));
-            key = GetCharPressed();
-        }
-        if (IsKeyPressed(KEY_BACKSPACE) && !value.empty()) value.pop_back();
-    }
-    DrawRectangleRec(box, focus ? kPanelHot : kPanel);
-    DrawRectangleLinesEx(box, 1.0f, focus ? kAccent : kLine);
-    std::string shown = value + (focus ? "_" : "");
-    DrawText(shown.c_str(), static_cast<int>(box.x) + 8, static_cast<int>(box.y) + 9, 16, kText);
+    ui::editableField(box, value, focus, m, {.maxLen = maxLen});
 }
 
 } // namespace
@@ -185,8 +175,8 @@ LobbyScreen::Result LobbyScreen::runFrame(int screenW, int screenH, net::LobbySe
         if (roster.empty()) roster = "(just you)";
         const bool full = party_.has() && static_cast<int>(party_.members.size()) == teamSize_;
         const std::string need =
-            full ? "  — full, ready to seek"
-                 : "  — need " + std::to_string(teamSize_) + " for " + std::to_string(teamSize_) +
+            full ? "  - full, ready to seek"
+                 : "  - need " + std::to_string(teamSize_) + " for " + std::to_string(teamSize_) +
                        "v" + std::to_string(teamSize_) + " (invite a partner)";
         DrawText((roster + need).c_str(), static_cast<int>(margin), static_cast<int>(py) + 6, 15,
                  full ? kGood : kText);
@@ -243,7 +233,7 @@ LobbyScreen::Result LobbyScreen::runFrame(int screenW, int screenH, net::LobbySe
             std::string err;
             if (session.queueJoin(fmt, &err)) {
                 queued_ = true;
-                status_ = "In queue — pairing widens over time…";
+                status_ = "In queue - pairing widens over time...";
             } else {
                 status_ = "Queue rejected: " + err;
             }
@@ -251,7 +241,7 @@ LobbyScreen::Result LobbyScreen::runFrame(int screenW, int screenH, net::LobbySe
     }
     if (button({lx + colW - 150, y - 4, 150, 28}, "Create seek", m, kAccent)) {
         std::string err;
-        if (session.seek(fmt, &err)) status_ = "Seek posted — waiting for an opponent…";
+        if (session.seek(fmt, &err)) status_ = "Seek posted - waiting for an opponent...";
         else status_ = "Seek rejected: " + err;
         refresh(session);
     }

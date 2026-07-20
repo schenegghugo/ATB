@@ -92,7 +92,8 @@ struct ViewState {
     bool showChat = false;
     const std::vector<net::ChatLine>* chatLog = nullptr; // the running transcript
     Faction localSeat = Faction::Player;                 // colour our own lines
-    std::string chatDraft;                               // text being typed
+    std::string chatDraft;                               // text being typed (display fallback)
+    std::string* chatDraftEdit = nullptr;                // live buffer the widget edits in place
     bool chatFocused = false;                            // input has keyboard focus
 };
 

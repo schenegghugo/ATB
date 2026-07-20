@@ -15,7 +15,7 @@ std::string formatTag(const net::MatchFormat& f) {
                     : f.time == net::MatchFormat::Time::PerMove
                         ? (std::to_string(f.perMoveSec) + "s / move")
                         : (std::to_string(f.mainSec / 60) + " min + " + std::to_string(f.incSec) + "s");
-    return s + (f.rated ? "  ·  rated" : "  ·  casual");
+    return s + (f.rated ? "  |  rated" : "  |  casual");
 }
 } // namespace
 
@@ -76,7 +76,7 @@ ReadyCheckScreen::Result ReadyCheckScreen::runFrame(int screenW, int screenH,
     Result result = Result::None;
     const float by = 356.0f;
     if (readied_) {
-        const char* w = "Waiting for your opponent…";
+        const char* w = "Waiting for your opponent...";
         DrawText(w, static_cast<int>(cx - MeasureText(w, 20) / 2), static_cast<int>(by), 20, kGood);
         if (button({cx - 90, by + 40, 180, 40}, "Cancel", m, kPanel)) {
             session.cancelReady(rc_.id);
@@ -92,7 +92,7 @@ ReadyCheckScreen::Result ReadyCheckScreen::runFrame(int screenW, int screenH,
                 case net::ReadyResult::Status::Waiting: readied_ = true; break;
                 case net::ReadyResult::Status::Cancelled: result = Result::Cancelled; break;
                 case net::ReadyResult::Status::Rejected:
-                    status_ = "Build illegal for this format: " + err + " — Edit build.";
+                    status_ = "Build illegal for this format: " + err + " - Edit build.";
                     break;
             }
         }

@@ -103,7 +103,7 @@ ThemeLoad loadThemeFromString(const std::string& text) {
 
     if (const json::Value* colors = root.find("colors")) {
         if (!colors->isObject()) {
-            e.push_back("colors: expected an object of key → \"#RRGGBB(AA)\"");
+            e.push_back("colors: expected an object of key -> \"#RRGGBB(AA)\"");
         } else {
             for (const json::Value::Member& m : colors->asObject()) {
                 const KeySlot* slot = nullptr;

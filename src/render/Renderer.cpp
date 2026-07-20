@@ -2,6 +2,7 @@
 
 #include "Animator.h"
 #include "SpritePack.h"
+#include "Ui.h"
 
 #include "raylib.h"
 
@@ -330,16 +331,25 @@ void drawCombatLog(const Layout& l, const Battle& battle, const ViewState& view)
             const std::string s = (mine ? "You: " : "Them: ") + cl.text;
             DrawText(s.c_str(), r.x0 + 8, top + i * lineH, 13, mine ? kZoneOk : kText);
         }
-        // Input box.
-        DrawRectangle(r.input.x, r.input.y, r.input.w, r.input.h,
-                      view.chatFocused ? Color{44, 50, 66, 255} : Color{24, 28, 38, 255});
-        DrawRectangleLines(r.input.x, r.input.y, r.input.w, r.input.h,
-                           view.chatFocused ? kZoneOk : kGridLine);
-        const std::string shown =
-            (view.chatDraft.empty() && !view.chatFocused) ? std::string("Press Enter or click to chat…")
-                                                          : view.chatDraft + (view.chatFocused ? "_" : "");
-        DrawText(shown.c_str(), r.input.x + 6, r.input.y + 7, 14,
-                 view.chatDraft.empty() && !view.chatFocused ? kTextDim : kText);
+        // Input box — full text-zone editing (select/copy/paste/arrows) shared with
+        // the menu fields. Edits the live draft buffer in place; falls back to a
+        // static draw when no editable buffer was wired in (e.g. replays).
+        const Rectangle inputBox{static_cast<float>(r.input.x), static_cast<float>(r.input.y),
+                                 static_cast<float>(r.input.w), static_cast<float>(r.input.h)};
+        if (view.chatDraftEdit) {
+            ui::editableField(inputBox, *view.chatDraftEdit, view.chatFocused, GetMousePosition(),
+                              {.maxLen = 200, .fontSize = 14, .pad = 6,
+                               .placeholder = "Press Enter or click to chat..."});
+        } else {
+            DrawRectangle(r.input.x, r.input.y, r.input.w, r.input.h,
+                          view.chatFocused ? Color{44, 50, 66, 255} : Color{24, 28, 38, 255});
+            DrawRectangleLines(r.input.x, r.input.y, r.input.w, r.input.h,
+                               view.chatFocused ? kZoneOk : kGridLine);
+            const std::string shown =
+                view.chatDraft.empty() ? std::string("Press Enter or click to chat...") : view.chatDraft;
+            DrawText(shown.c_str(), r.input.x + 6, r.input.y + 7, 14,
+                     view.chatDraft.empty() ? kTextDim : kText);
+        }
     }
 
     // Combat log.

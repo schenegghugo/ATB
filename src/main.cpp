@@ -82,6 +82,17 @@ using namespace tb;
 
 namespace {
 
+// Quarter-turns (0..3, clockwise) that rotate cardinal `from` onto cardinal `to` — the
+// `rotation` a Line/Cone cast needs so its heading lands on `to` given a caster→target
+// base of `from` (the core applies rotateQuarters(base, rotation)). 0 if unresolvable
+// (e.g. a zero `from`). Lets the aim preview lock an ABSOLUTE heading independent of the
+// mouse-derived base, while still speaking the core's base-relative `rotation`.
+int quartersBetween(Vec2i from, Vec2i to) {
+    for (int q = 0; q < 4; ++q)
+        if (rotateQuarters(from, q) == to) return q;
+    return 0;
+}
+
 enum class AppState { Menu, Editor, FlightCheck, Connect, Lobby, ReadyCheck, Draft, Waiting, Battle, Settings, Paused, PatchNotes };
 
 // The in-game pause menu (Esc anywhere) links out to the project page.
@@ -295,7 +306,7 @@ int main() {
         const render::ThemeLoad tl =
             dir.empty() ? render::ThemeLoad{} : render::loadThemeFromFile(path);
         if (!tl.ok) {
-            settingsStatus = "Theme '" + name + "' failed to load — see the log.";
+            settingsStatus = "Theme '" + name + "' failed to load - see the log.";
             TraceLog(LOG_WARNING, "Theme '%s' is invalid — palette unchanged:", path.c_str());
             for (const std::string& e : tl.errors) TraceLog(LOG_WARNING, "  - %s", e.c_str());
             return false;
@@ -371,7 +382,7 @@ int main() {
         }
         const std::string dir = render::siblingDir("packs");
         if (dir.empty() || !loadPackFromDir(dir + "/" + name)) {
-            settingsStatus = "Pack '" + name + "' failed to load — see the log.";
+            settingsStatus = "Pack '" + name + "' failed to load - see the log.";
             return false;
         }
         return true;
@@ -410,7 +421,11 @@ int main() {
     // (Dofus-style): with none selected, left-click moves; select a spell to reveal
     // its castable tiles, then left-click an eligible tile to cast.
     std::optional<int> selectedSpell;
-    int spellRotation = 0;         // wheel-driven 90° turns for a Line spell (Shelter walls)
+    // The LOCKED aim heading for a Line/Cone spell (Shelter walls): nullopt until you
+    // first wheel, then an absolute compass direction the wheel turns — so nudging the
+    // mouse to reposition no longer swings the heading. Converted to the core's
+    // base-relative `rotation` per frame via quartersBetween (see below).
+    std::optional<Vec2i> aimHeading;
     // Which battle-layout grip is being dragged (board corner / column dividers).
     enum class LayoutDrag { None, Board, Clock, Chat } layoutDrag = LayoutDrag::None;
     // Two-click portal: the placed entry tile awaiting an exit (nullopt = not placing).
@@ -474,11 +489,11 @@ int main() {
         pendingDecoy.reset();
         animator.reset();
         selectedSpell.reset();
-        spellRotation = 0;
+        aimHeading.reset();
         logScroll = 0;
         faceNameP.clear(); // online entry points set these right after; local → build names
         faceNameE.clear();
-        status = "Player turn — left-click to move; pick a spell (click or 1-9) then left-click a green tile to cast; Tab=editor.";
+        status = "Player turn - left-click to move; pick a spell (click or 1-9) then left-click a green tile to cast; Tab=editor.";
         state = AppState::Battle;
     };
 
@@ -579,7 +594,7 @@ int main() {
                 status = "Decoy cast cancelled.";
             } else if (state == AppState::Battle && selectedSpell) {
                 selectedSpell.reset(); // deselect the aimed spell → back to move mode
-                status = "Spell deselected — left-click to move.";
+                status = "Spell deselected - left-click to move.";
             } else if (state == AppState::Paused) {
                 state = pauseReturn; // Esc closes the pause menu
             } else if (state == AppState::Settings) {
@@ -714,7 +729,7 @@ int main() {
                 SetWindowSize(std::max(layout.screenWidth(ag), 1180),
                               std::max(layout.screenHeight(ag), 720));
                 settingsStatus = savePrefsToFile(prefs, "settings.json")
-                                     ? TextFormat("UI scale %.0f%% — saved.", prefs.uiScale * 100.0f)
+                                     ? TextFormat("UI scale %.0f%% - saved.", prefs.uiScale * 100.0f)
                                      : "UI scale set (couldn't write settings.json).";
             }
             continue;
@@ -793,7 +808,7 @@ int main() {
                 // would otherwise freeze the UI for the whole TCP timeout.
                 const render::ConnectScreen::Params& pr = connect.params();
                 parseHostPort(pr.host, lobbyHost, lobbyPort);
-                connect.setStatus("Connecting…");
+                connect.setStatus("Connecting...");
                 auto pc = std::make_shared<PendingConnect>();
                 std::thread([pc, host = lobbyHost, port = lobbyPort,
                              hash = net::contentHashOf(session.catalog), user = pr.user,
@@ -902,7 +917,7 @@ int main() {
                         spectating = true;
                         faceNameP = g.userP; // spectate names are already faction-aligned
                         faceNameE = g.userE;
-                        status = "SPECTATING " + g.userP + " vs " + g.userE + " — Tab returns to the lobby.";
+                        status = "SPECTATING " + g.userP + " vs " + g.userE + " - Tab returns to the lobby.";
                     } else {
                         lobbyScreen.setStatus("Can't watch that game (its log is unavailable).");
                     }
@@ -984,7 +999,7 @@ int main() {
             onlineMatch = false;
             animator.reset();
             selectedSpell.reset();
-            spellRotation = 0;
+            aimHeading.reset();
             logScroll = 0;
             status = "New arena. Player turn.";
         }
@@ -1027,18 +1042,12 @@ int main() {
             const render::Rect ci = render::chatInputRect(layout, source->battle().grid(), geo);
             if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
                 chatFocused = ci.contains(GetMouseX(), GetMouseY());
-            if (chatFocused) {
-                int k = GetCharPressed();
-                while (k > 0) {
-                    if (k >= 32 && k < 127 && chatDraft.size() < 200)
-                        chatDraft.push_back(static_cast<char>(k));
-                    k = GetCharPressed();
-                }
-                if (IsKeyPressed(KEY_BACKSPACE) && !chatDraft.empty()) chatDraft.pop_back();
-                if (IsKeyPressed(KEY_ENTER) && !chatDraft.empty()) {
-                    source->sendChat(chatDraft);
-                    chatDraft.clear();
-                }
+            // Typing / selection / clipboard are handled by the shared text-zone
+            // widget when the renderer draws the input box (it edits chatDraft in
+            // place via view.chatDraftEdit). Only submit is handled here.
+            if (chatFocused && IsKeyPressed(KEY_ENTER) && !chatDraft.empty()) {
+                source->sendChat(chatDraft);
+                chatDraft.clear();
             }
         } else {
             chatFocused = false;
@@ -1126,10 +1135,10 @@ int main() {
             if (hoveredSpell >= 0 && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                 if (selectedSpell == hoveredSpell) {
                     selectedSpell.reset();
-                    status = "Spell deselected — left-click to move.";
+                    status = "Spell deselected - left-click to move.";
                 } else {
                     selectedSpell = hoveredSpell;
-                    status = TextFormat("Selected %s — left-click a green tile to cast.",
+                    status = TextFormat("Selected %s - left-click a green tile to cast.",
                                         source->battle().unit(me).spells[*selectedSpell].name.c_str());
                 }
             } else if (hoveredValid && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
@@ -1145,7 +1154,7 @@ int main() {
                         if (!portalPending) {
                             if (source->battle().canCast(me, *selectedSpell, hovered)) {
                                 portalPending = hovered;
-                                status = "Portal entry placed — left-click the exit tile (Esc cancels).";
+                                status = "Portal entry placed - left-click the exit tile (Esc cancels).";
                             } else {
                                 status = "Can't open a portal there.";
                             }
@@ -1161,13 +1170,19 @@ int main() {
                             status = "Pick a walkable exit within the portal's reach (Esc cancels).";
                         }
                     } else {
-                        const net::Intent in = net::Intent::cast(*selectedSpell, hovered, spellRotation);
+                        // Realize the locked aim heading as the core's base-relative
+                        // rotation for THIS target (nullopt heading → 0 = follow the mouse).
+                        const Vec2i basePos = source->battle().unit(me).pos;
+                        const int rot = aimHeading
+                            ? quartersBetween(cardinalStep(basePos, hovered), *aimHeading)
+                            : 0;
+                        const net::Intent in = net::Intent::cast(*selectedSpell, hovered, rot);
                         // A decoy cast commits to a hidden choice up-front (CR.6) — prompt
                         // for it instead of submitting straight away.
                         if (source->needsDecoyChoice(in)) {
                             pendingDecoy = in;
                             selectedSpell.reset(); // aim locked; the a/b choice commits it
-                            status = "Decoy: commit your secret — stay the ORIGINAL or swap to the TWIN.";
+                            status = "Decoy: commit your secret - stay the ORIGINAL or swap to the TWIN.";
                         } else {
                             // A cast deselects the spell (Dofus-style: back to move mode),
                             // but only when it actually fires — a rejected click keeps it
@@ -1179,20 +1194,23 @@ int main() {
                     }
                 }
             }
-            // Selecting a different spell drops any accumulated aim rotation.
-            if (selectedSpell != selBefore) spellRotation = 0;
+            // Selecting a different spell drops the locked aim heading.
+            if (selectedSpell != selBefore) aimHeading.reset();
 
-            // Mouse wheel rotates a selected Line spell's footprint (Shelter walls) in
-            // 90° steps while aiming over the board — the core takes spellRotation mod 4.
-            // Consuming it here keeps the wheel from also scrolling the combat log.
+            // Mouse wheel sets a Line spell's heading (Shelter walls). The FIRST notch
+            // locks the current mouse-derived heading; each further notch turns it 90°.
+            // Once locked, moving the mouse only REPOSITIONS the wall — the heading holds
+            // (quartersBetween re-derives the core rotation per target). Consuming the
+            // wheel here keeps it from also scrolling the combat log.
             const bool rotatable = selectedSpell &&
                 source->battle().unit(me).spells[*selectedSpell].shape == TargetShape::Line;
             if (rotatable && hoveredValid && wheelDelta != 0) {
-                spellRotation += wheelDelta;
+                const Vec2i base = cardinalStep(source->battle().unit(me).pos, hovered);
+                if (!aimHeading) aimHeading = base;                   // lock the current heading
+                aimHeading = rotateQuarters(*aimHeading, wheelDelta); // then turn it
                 wheelConsumed = true;
-                status = TextFormat("%s facing: %d",
-                                    source->battle().unit(me).spells[*selectedSpell].name.c_str(),
-                                    ((spellRotation % 4) + 4) % 4);
+                status = TextFormat("%s facing locked - wheel turns it, mouse just moves it",
+                                    source->battle().unit(me).spells[*selectedSpell].name.c_str());
             }
 
             // Right-click is the quick cancel: drop a half-placed portal first, else
@@ -1203,7 +1221,7 @@ int main() {
                     status = "Portal cancelled.";
                 } else if (selectedSpell) {
                     selectedSpell.reset();
-                    status = "Spell deselected — left-click to move.";
+                    status = "Spell deselected - left-click to move.";
                 }
             }
 
@@ -1259,6 +1277,7 @@ int main() {
             view.chatLog = &source->chatLog();
             view.localSeat = source->localSeat();
             view.chatDraft = chatDraft;
+            view.chatDraftEdit = &chatDraft; // widget edits this live buffer in place
             view.chatFocused = chatFocused;
         }
         if (playerControl) {
@@ -1297,8 +1316,12 @@ int main() {
                 }
                 if (!portalPending && hoveredValid) {
                     view.spellCastable = source->battle().canCast(me, sel, hovered);
-                    view.spellZone =
-                        source->battle().affectedTiles(u.spells[sel], u.pos, hovered, spellRotation);
+                    // Same locked-heading → base-relative rotation the cast will use, so
+                    // the previewed footprint is exactly what lands.
+                    const int rot = aimHeading
+                        ? quartersBetween(cardinalStep(u.pos, hovered), *aimHeading)
+                        : 0;
+                    view.spellZone = source->battle().affectedTiles(u.spells[sel], u.pos, hovered, rot);
                 }
             }
         }
@@ -1326,11 +1349,11 @@ int main() {
             Rectangle b{static_cast<float>(W) / 2 + 10, static_cast<float>(H) / 2 - 20, 280, 46};
             Rectangle c{static_cast<float>(W) / 2 - 90, static_cast<float>(H) / 2 + 44, 180, 36};
             std::optional<char> choice;
-            if (render::ui::button(a, "A — stay the ORIGINAL", mp, render::ui::kPanel)) choice = 'a';
-            if (render::ui::button(b, "B — swap to the TWIN", mp, render::ui::kPanel)) choice = 'b';
+            if (render::ui::button(a, "A - stay the ORIGINAL", mp, render::ui::kPanel)) choice = 'a';
+            if (render::ui::button(b, "B - swap to the TWIN", mp, render::ui::kPanel)) choice = 'b';
             if (choice) {
                 if (auto s = source->submitWithChoice(*pendingDecoy, *choice)) status = *s;
-                else status = "Decoy committed — your choice stays hidden until the reveal.";
+                else status = "Decoy committed - your choice stays hidden until the reveal.";
                 pendingDecoy.reset();
             } else if (render::ui::button(c, "Cancel", mp, render::ui::kPanel)) {
                 pendingDecoy.reset();

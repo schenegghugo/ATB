@@ -348,9 +348,9 @@ BuildEditorScreen::Result BuildEditorScreen::runFrame(int screenW, int screenH, 
     const float rightW = 300.0f;            // fixed right column (stats + budget)
     const float rightX = W - rightW - pad;  // everything left of this is the grid
 
-    const char* header = mode == Mode::Local    ? "LOCAL MATCH — your team"
-                         : mode == Mode::Online ? "PLAY ONLINE — your team"
-                         : mode == Mode::Draft  ? "DRAFT — author your champion"
+    const char* header = mode == Mode::Local    ? "LOCAL MATCH - your team"
+                         : mode == Mode::Online ? "PLAY ONLINE - your team"
+                         : mode == Mode::Draft  ? "DRAFT - author your champion"
                                                 : "BUILD EDITOR";
     DrawText(header, 16, 10, 22, kText);
 
@@ -359,7 +359,7 @@ BuildEditorScreen::Result BuildEditorScreen::runFrame(int screenW, int screenH, 
     if (mode == Mode::Draft) {
         const int secs = static_cast<int>(std::max(0.0f, draftSecondsLeft_) + 0.999f);
         const std::string t =
-            (draftPickLabel_.empty() ? "" : draftPickLabel_ + "  ·  ") + std::to_string(secs) + "s";
+            (draftPickLabel_.empty() ? "" : draftPickLabel_ + "  |  ") + std::to_string(secs) + "s";
         const int tw = MeasureText(t.c_str(), 22);
         DrawText(t.c_str(), static_cast<int>(W / 2) - tw / 2, 10, 22, secs <= 5 ? kBad : kAccent);
         if (!draftScoutLine_.empty()) {
@@ -377,20 +377,8 @@ BuildEditorScreen::Result BuildEditorScreen::runFrame(int screenW, int screenH, 
     // --- Name field (top-right) edits the current slot ----------------------
     Rectangle nameRect{rightX, 10, rightW, 30};
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) editingName_ = hovered(nameRect, m);
-    if (editingName_) {
-        int key = GetCharPressed();
-        while (key > 0) {
-            if (key >= 32 && key < 127 && cur().name.size() < 16)
-                cur().name.push_back(static_cast<char>(key));
-            key = GetCharPressed();
-        }
-        if (IsKeyPressed(KEY_BACKSPACE) && !cur().name.empty()) cur().name.pop_back();
-        if (IsKeyPressed(KEY_ENTER)) editingName_ = false;
-    }
-    DrawRectangleRec(nameRect, editingName_ ? kPanelHot : kPanel);
-    DrawRectangleLinesEx(nameRect, 1.0f, editingName_ ? kAccent : kLine);
-    DrawText(TextFormat("Name: %s%s", cur().name.c_str(), editingName_ ? "_" : ""),
-             static_cast<int>(nameRect.x) + 8, static_cast<int>(nameRect.y) + 8, 16, kText);
+    if (editingName_ && IsKeyPressed(KEY_ENTER)) editingName_ = false;
+    ui::editableField(nameRect, cur().name, editingName_, m, {.maxLen = 16, .prefix = "Name: "});
 
     // --- Player team slot tabs (author one champion at a time) --------------
     DrawText("Your team:", 16, 44, 14, kMuted);
@@ -571,7 +559,7 @@ BuildEditorScreen::Result BuildEditorScreen::runFrame(int screenW, int screenH, 
     if (button(resetBtn, "Reset", m, kPanel, val.spent > 0)) {
         cur().spellIds.clear();
         cur().stats = {};
-        statusMsg_ = "Build reset — all points refunded.";
+        statusMsg_ = "Build reset - all points refunded.";
     }
 
     // The launch button reflects the entered mode; Edit mode has none.

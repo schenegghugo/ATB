@@ -48,10 +48,10 @@ MainMenuScreen::Result MainMenuScreen::runFrame(int screenW, int screenH, const 
     }
 
     const char* ver = (version && *version) ? version : "dev";
-    DrawText(TextFormat("%s  —  no account needed for local/custom play", ver), 16,
+    DrawText(TextFormat("%s  -  no account needed for local/custom play", ver), 16,
              static_cast<int>(H) - 26, 13, ui::kMuted);
     // Echo the version + release codename under the title, centred on the tagline.
-    const char* stamp = TextFormat("%s  ·  \"%s\"", ver, kVersionCodename);
+    const char* stamp = TextFormat("%s  |  \"%s\"", ver, kVersionCodename);
     DrawText(stamp, static_cast<int>((W - MeasureText(stamp, 14)) / 2),
              static_cast<int>(H * 0.18f) + 78, 14, ui::kAccent);
     return result;

@@ -7,7 +7,7 @@
 // posted (submit); update() pulls the opponent's moves each frame (sync) and, once
 // the game finishes, exchanges the decoy-reveals and submits the scoresheet to the
 // lobby for ranking — all behind the same render path as a live/local match. When
-// it is the opponent's turn the HUD shows a "waiting…" status (a correspondence
+// it is the opponent's turn the HUD shows a "waiting..." status (a correspondence
 // game may be resumed later; the server holds the log).
 //
 #include "MatchSource.h"
@@ -69,10 +69,10 @@ public:
         session_->sync();
         if (!session_->finished())
             return session_->awaitingMe() ? std::nullopt
-                                          : std::optional<std::string>("Waiting for your opponent…");
+                                          : std::optional<std::string>("Waiting for your opponent...");
         // Finished: reconcile the decoy reveals, then submit the scoresheet once.
         if (!submitted_) {
-            if (!session_->finalize()) return std::optional<std::string>("Finishing — exchanging results…");
+            if (!session_->finalize()) return std::optional<std::string>("Finishing - exchanging results...");
             const net::SubmitResult r =
                 lobby_ ? lobby_->submitScore(game_, seat_, session_->notation()) : net::SubmitResult{};
             submitted_ = true;
@@ -106,11 +106,11 @@ private:
         using S = net::SubmitResult::Status;
         switch (r.status) {
             case S::Ranked:
-                return r.winner.empty() ? "Game over — draw (ranked)."
-                                        : ("Game over — " + r.winner + " wins (ranked).");
-            case S::Pending: return "Game over — submitted; waiting for your opponent to submit.";
+                return r.winner.empty() ? "Game over - draw (ranked)."
+                                        : ("Game over - " + r.winner + " wins (ranked).");
+            case S::Pending: return "Game over - submitted; waiting for your opponent to submit.";
             case S::Casual: return "Game over (casual).";
-            case S::Rejected: return "Game over — result rejected: " + r.error;
+            case S::Rejected: return "Game over - result rejected: " + r.error;
         }
         return "Game over.";
     }

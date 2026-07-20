@@ -1,5 +1,6 @@
 #include "ConnectScreen.h"
 
+#include "Ui.h"
 #include "raylib.h"
 
 #include <array>
@@ -39,23 +40,8 @@ bool button(Rectangle r, const char* label, Vector2 m, Color base, Color fg = kT
 int field(Rectangle box, const char* label, std::string& value, int idx, int focus, Vector2 m,
           bool secret) {
     DrawText(label, static_cast<int>(box.x), static_cast<int>(box.y) - 18, 14, kMuted);
-    const bool focused = focus == idx;
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && hovered(box, m)) focus = idx;
-
-    if (focused) {
-        int key = GetCharPressed();
-        while (key > 0) {
-            if (key >= 32 && key < 127 && value.size() < 48) value.push_back(static_cast<char>(key));
-            key = GetCharPressed();
-        }
-        if (IsKeyPressed(KEY_BACKSPACE) && !value.empty()) value.pop_back();
-    }
-    DrawRectangleRec(box, focused ? kPanelHot : kPanel);
-    DrawRectangleLinesEx(box, 1.0f, focused ? kAccent : kLine);
-
-    std::string shown = secret ? std::string(value.size(), '*') : value;
-    if (focused) shown += "_";
-    DrawText(shown.c_str(), static_cast<int>(box.x) + 8, static_cast<int>(box.y) + 9, 16, kText);
+    ui::editableField(box, value, focus == idx, m, {.maxLen = 48, .secret = secret});
     return focus;
 }
 
@@ -70,7 +56,7 @@ ConnectScreen::Result ConnectScreen::runFrame(int screenW, int screenH) {
     const float x = (W - panelW) / 2.0f;
     float y = 90.0f;
 
-    DrawText("LOG IN — ONLINE HOME", static_cast<int>(x), 44, 26, kText);
+    DrawText("LOG IN - ONLINE HOME", static_cast<int>(x), 44, 26, kText);
     DrawText("Log in to the lobby to seek + challenge. Blank username = guest (casual only).",
              static_cast<int>(x), 74, 13, kMuted);
 

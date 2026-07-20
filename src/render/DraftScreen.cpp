@@ -67,10 +67,10 @@ void DraftScreen::drawBoard(int screenW, int screenH) const {
                 sub = state_.seats[static_cast<std::size_t>(s)].build.name;
                 sc = kGood;
             } else if (s == curSeat) {
-                sub = "PICKING…";
+                sub = "PICKING...";
                 sc = kAccent;
             } else {
-                sub = "— hidden —";
+                sub = "- hidden -";
             }
             DrawText(sub.c_str(), static_cast<int>(x) + 10, static_cast<int>(y) + 24, 13, sc);
             y += 50.0f;
@@ -145,13 +145,13 @@ DraftScreen::Result DraftScreen::runFrame(int screenW, int screenH, net::LobbySe
 
     std::string sub;
     if (waitingPaired_ || state_.complete) {
-        sub = "Draft complete — starting the match…";
+        sub = "Draft complete - starting the match...";
     } else if (state_.currentPick >= 0 && state_.currentPick < static_cast<int>(d_.pickOrder.size())) {
         const int seat = d_.pickOrder[static_cast<std::size_t>(state_.currentPick)];
         const std::string who = d_.seats[static_cast<std::size_t>(seat)].user;
-        sub = "Scouting — waiting for " + who + " (" + factionName(d_.seats[seat].faction) + ") to pick…";
+        sub = "Scouting - waiting for " + who + " (" + factionName(d_.seats[seat].faction) + ") to pick...";
     } else {
-        sub = "Waiting for the draft to start…";
+        sub = "Waiting for the draft to start...";
     }
     DrawText(sub.c_str(), static_cast<int>(cx - MeasureText(sub.c_str(), 18) / 2), 96, 18, kMuted);
 

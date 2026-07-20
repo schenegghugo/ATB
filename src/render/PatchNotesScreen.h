@@ -8,12 +8,35 @@
 namespace tb::render {
 
 // The human-facing codename for the current release (shown beside the version).
-inline constexpr const char* kVersionCodename = "The Draft";
+inline constexpr const char* kVersionCodename = "Fine Print";
 
 // Player-facing changelog, newest release first. Plain text, one item per line
 // (kept under ~72 cols so it fits without wrapping).
 inline constexpr const char* kPatchNotes =
-    R"(0.2.0  —  "The Draft"
+    R"(0.2.1  -  "Fine Print"
+
+Every text box is now a real text field, cleaner on-screen text, and a
+Shelter wall that holds its aim.
+
+TEXT FIELDS (select, copy, paste - the works)
+  - Click to place the cursor, drag or Shift+arrows to select a run, and
+    double-click to select everything. Copy / cut / paste with the usual
+    Ctrl+C / Ctrl+X / Ctrl+V.
+  - Arrow keys, Home / End and Ctrl+arrow word-jumps move the cursor;
+    Delete and Backspace remove the selection or a character (or a whole
+    word with Ctrl).
+  - Works everywhere you type: login, lobby, chat and build names.
+
+FIXES
+  - Shelter wall aiming holds its facing now. The first mouse-wheel notch
+    LOCKS the wall's direction; each notch after turns it 90 degrees.
+    Moving the mouse only slides the wall into place - it no longer spins
+    as you reposition, and the preview matches where the wall really lands.
+  - On-screen text no longer shows stray "?" marks: dashes, ellipses and
+    dot separators that leaned on non-ASCII now render properly.
+
+
+0.2.0  -  "The Draft"
 
 Real 2v2 / 3v3: team up with a partner and draft your squad face to face.
 
@@ -41,7 +64,7 @@ NOTE
     and match protocol are new. 1v1 play is unchanged.
 
 
-0.1.1  —  "Build Books"
+0.1.1  -  "Build Books"
 
 Share your builds, read every spell at a glance, and smoother casting.
 
@@ -69,7 +92,7 @@ FIXES
     knock your bombs through a portal onto the enemy backline.
 
 
-0.1.0  —  "Team Play"
+0.1.0  -  "Team Play"
 
 Reworked controls, damage you can read at a glance, a terrain fix, and the
 first online groundwork for 2v2 / 3v3.
@@ -100,7 +123,7 @@ NOTE
     from 0.0.2 won't verify against 0.1.0 - hence the version jump.
 
 
-0.0.2  —  "Elemental Surfaces"
+0.0.2  -  "Elemental Surfaces"
 
 Divinity / BG3-style elemental surfaces you paint onto the floor and combine.
 
@@ -130,7 +153,7 @@ UNDER THE HOOD
   - The AI avoids harmful surfaces and values burning / stunning foes.
 
 
-0.0.1  —  first public build
+0.0.1  -  first public build
 
   Ranked & custom play, correspondence PvP, replays, spectating, sprite packs,
   UI theming, and an adaptive minimax AI.)";

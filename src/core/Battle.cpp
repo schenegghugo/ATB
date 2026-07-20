@@ -10,22 +10,7 @@ namespace {
 
 constexpr int kSummonCap = 2; // max living summons per team
 
-// Reduce an arbitrary delta to a single cardinal step (axis with larger span).
-Vec2i cardinalStep(Vec2i from, Vec2i to) {
-    int dx = to.x - from.x;
-    int dy = to.y - from.y;
-    if (std::abs(dx) >= std::abs(dy)) return Vec2i{dx == 0 ? 0 : (dx > 0 ? 1 : -1), 0};
-    return Vec2i{0, dy > 0 ? 1 : -1};
-}
-
-// Rotate a delta by `quarters` × 90° clockwise (screen space, y-down): each turn
-// maps (x, y) -> (-y, x). `quarters` is taken mod 4 (negatives welcome), so any
-// integer works — the caller (Shelter) feeds an unbounded wheel counter.
-Vec2i rotateQuarters(Vec2i d, int quarters) {
-    int q = ((quarters % 4) + 4) % 4;
-    for (int i = 0; i < q; ++i) d = Vec2i{-d.y, d.x};
-    return d;
-}
+// cardinalStep + rotateQuarters now live in Grid.h (shared with the GUI aim preview).
 
 } // namespace
 
