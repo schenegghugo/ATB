@@ -1197,11 +1197,11 @@ int main() {
             // Selecting a different spell drops the locked aim heading.
             if (selectedSpell != selBefore) aimHeading.reset();
 
-            // Mouse wheel sets a Line spell's heading (Shelter walls). The FIRST notch
-            // locks the current mouse-derived heading; each further notch turns it 90°.
-            // Once locked, moving the mouse only REPOSITIONS the wall — the heading holds
-            // (quartersBetween re-derives the core rotation per target). Consuming the
-            // wheel here keeps it from also scrolling the combat log.
+            // Mouse wheel turns a Line spell's heading (Shelter walls) 90° per notch.
+            // The first notch also LOCKS the heading (off the current mouse-derived base),
+            // so from then on moving the mouse only REPOSITIONS the wall — the heading
+            // holds (quartersBetween re-derives the core rotation per target). Consuming
+            // the wheel here keeps it from also scrolling the combat log.
             const bool rotatable = selectedSpell &&
                 source->battle().unit(me).spells[*selectedSpell].shape == TargetShape::Line;
             if (rotatable && hoveredValid && wheelDelta != 0) {
